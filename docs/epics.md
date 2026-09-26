@@ -2492,3 +2492,42 @@ what is due; editing a past skip beyond undoing it.
 
 - `PATCH /api/savings/types/{id}`: rename, set or clear `goal_amount` / `goal_date`.
 - `needed_per_month`, rounded up, from the current budget month through the goal's.
+
+## Epic 35: Plan, entries and savings, connected
+
+Asked for: "if I'm spending in entries, it should be part of the budget in the savings".
+Scoped in two rounds (options and rejections in `LOG.md`). All four links were chosen:
+the Plan page shows actuals; an expense can be paid from a pot; an expense category can
+name a default pot; and what a closed month left over is proposed as a deposit.
+
+Rules chosen: a pot-funded expense counts **both** as spending (totals, category budget)
+and as a withdrawal from the pot. A pot that cannot cover it refuses the whole write, reusing
+AD-50's `409 savings_balance_negative`. The withdrawal belongs to the entry: editing the
+entry moves it, deleting the entry removes it, and Savings shows it read-only. A category's
+pot pre-fills the entry form and the entry can override it. The leftover is proposed on the
+dashboard with a pot picker, never recorded on its own.
+
+**Explicitly out:** splitting one expense across several pots; recording anything
+automatically; re-linking past entries; income paid into a pot.
+
+### Story 35.1: The plan shows what each budget has spent
+
+- The Plan page's budget table gains a Spent column for the current **budget month**
+  (Epic 20): spent, what is left or by how much it is over, and the dashboard's progress bar.
+- The figures are `GET /api/dashboard/summary`'s own (AD-22). No new endpoint, no schema.
+- Pots already show the month's progress against their target (Story 34.2); unchanged.
+
+### Story 35.2: An expense paid from a pot
+
+- `savings_contributions.entry_id`, composite FK to `entries` with `ON DELETE CASCADE`,
+  unique; only a withdrawal may carry it. The entry and its withdrawal are one write.
+
+### Story 35.3: A category's default pot
+
+- `categories.default_savings_type_id`, composite FK, `ON DELETE SET NULL (column)`.
+  Expense categories only. Pre-fills the entry form; never rewrites existing entries.
+
+### Story 35.4: What a month left over
+
+- `income − expenses − net savings` of a closed budget month; pot-funded spending cancels
+  out. A dashboard card proposes it as a deposit into a chosen pot, or is dismissed.

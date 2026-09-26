@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
-import type { Budget, Category } from "../api/types";
+import type { Budget, BudgetVsActual, Category } from "../api/types";
+import { useOptionalAuth } from "../auth/AuthContext";
+import { ProgressBar } from "../charts/ProgressBar";
 import { RecurringCard } from "../components/RecurringCard";
 import { SavingsCard } from "../components/SavingsCard";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
-import { isNonNegativeMoney, normalizeMoney } from "../money";
+import { isNonNegativeMoney, normalizeMoney, progress, subtractMoney, toCents } from "../money";
+import { budgetMonth, monthLabel, monthRangeLabel } from "../months";
 import { useMoney } from "../useMoney";
 import { useT, type Translate } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
@@ -15,29 +18,34 @@ import { useLoad } from "../useLoad";
 const NOTHING = {
   categories: [] as Category[],
   budgets: [] as Budget[],
+  spent: [] as BudgetVsActual[],
 };
 
 /** Savings and budgets: what the user intends, and what they have actually put aside. */
 export function PlanPage() {
   const money = useMoney();
   const t = useT();
+  const startDay = useOptionalAuth()?.user?.budget_start_day ?? 1;
+  // Epic 35.1: the plan shows what the current budget month has actually spent against
+  // each budget. The figures are the dashboard's own (AD-22), not a second computation.
+  const month = budgetMonth(startDay);
   // Failures of the budget card's own actions, shown inside it: at the top of the page
   // they landed above the fold, and a refused amount looked like a dead button. The
   // savings card keeps its own (SavingsCard). The load's failure is `failure`.
   const [error, setError] = useState<string | null>(null);
 
   const {
-    data: { categories, budgets },
+    data: { categories, budgets, spent },
     loading,
     failure,
     reload: load,
   } = useLoad(
     () =>
-      Promise.all([api.listCategories("expense"), api.listBudgets()]).then(
-        ([categories, budgets]) => ({ categories, budgets }),
+      Promise.all([api.listCategories("expense"), api.listBudgets(), api.summary(month)]).then(
+        ([categories, budgets, summary]) => ({ categories, budgets, spent: summary.budgets }),
       ),
     NOTHING,
-    [],
+    [month],
     "plan.couldNotLoad",
   );
 
@@ -45,6 +53,11 @@ export function PlanPage() {
     const lookup = new Map(budgets.map((b) => [b.category_id, b.monthly_amount]));
     return (id: string) => lookup.get(id) ?? "";
   }, [budgets]);
+
+  const spentFor = useMemo(() => {
+    const lookup = new Map(spent.map((row) => [row.category_id, row.actual]));
+    return (id: string) => lookup.get(id) ?? "0.00";
+  }, [spent]);
 
   async function guard(action: () => Promise<unknown>, fallback: MessageKey) {
     setError(null);
@@ -84,6 +97,11 @@ export function PlanPage() {
           <p className="hint" style={{ marginTop: 0 }}>
             {t("plan.budgetsHint")}
           </p>
+          <p className="hint">
+            {t("plan.spentThisMonth", {
+              range: monthRangeLabel(month, startDay, t) || monthLabel(month, t),
+            })}
+          </p>
           {categories.length === 0 ? (
             <Empty>{t("plan.noCategories")}</Empty>
           ) : (
@@ -95,6 +113,7 @@ export function PlanPage() {
                     <th className="num">
                       {t("plan.colMonthlyBudget", { symbol: money.symbol })}
                     </th>
+                    <th className="num">{t("dash.colSpent", { symbol: money.symbol })}</th>
                     <th />
                   </tr>
                 </thead>
@@ -105,6 +124,7 @@ export function PlanPage() {
                       name={category.name}
                       t={t}
                       initial={budgetFor(category.id)}
+                      spent={spentFor(category.id)}
                       onSave={(value) => saveBudget(category.id, value)}
                       onDelete={() =>
                         guard(
@@ -128,6 +148,7 @@ function AmountRow({
   name,
   t,
   initial,
+  spent,
   onSave,
   onDelete,
 }: {
@@ -136,6 +157,8 @@ function AmountRow({
   // savings type, and a hook call per row buys nothing the parent has not already got.
   t: Translate;
   initial: string;
+  /** What the current budget month has spent in this category, "0.00" if nothing. */
+  spent: string;
   onSave: (value: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }) {
@@ -146,6 +169,11 @@ function AmountRow({
     setValue(initial);
     setDirty(false);
   }, [initial]);
+
+  const money = useMoney();
+  // Measured against the saved budget, not the draft in the box: the bar moves on Save.
+  const budget = initial === "" ? null : initial;
+  const over = budget !== null && toCents(spent) > toCents(budget);
 
   return (
     <tr>
@@ -161,6 +189,24 @@ function AmountRow({
             setValue(event.target.value);
             setDirty(true);
           }}
+        />
+      </td>
+      <td className="num" data-label={t("dash.colSpentShort")}>
+        <span style={over ? { color: "var(--spend-ink)" } : undefined}>
+          {money.plain(spent)}
+        </span>
+        {budget !== null && (
+          <span className="hint">
+            {" "}
+            {over
+              ? t("plan.overBy", { amount: money.plain(subtractMoney(spent, budget)) })
+              : t("plan.leftOf", { amount: money.plain(subtractMoney(budget, spent)) })}
+          </span>
+        )}
+        <ProgressBar
+          percent={progress(spent, budget)}
+          over={over}
+          label={t("dash.budgetUsed", { name })}
         />
       </td>
       <td>

@@ -25,6 +25,12 @@ export const plan = {
     en: "Monthly budget ({symbol})",
     fr: "Budget mensuel ({symbol})",
   },
+  "plan.spentThisMonth": {
+    en: "Spent is what {range} has cost so far.",
+    fr: "Dépensé : ce que {range} a coûté jusqu’ici.",
+  },
+  "plan.leftOf": { en: "· {amount} left", fr: "· reste {amount}" },
+  "plan.overBy": { en: "· {amount} over", fr: "· {amount} de dépassement" },
   "plan.colMonthly": { en: "Monthly", fr: "Mensuel" },
   "plan.monthlyAmountFor": {
     en: "Monthly amount for {name}",
