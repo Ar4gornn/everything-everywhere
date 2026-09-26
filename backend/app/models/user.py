@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
-from sqlalchemy import Boolean, DateTime, Integer, String, text
+from sqlalchemy import Boolean, DateTime, Integer, String, Time, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -44,4 +44,10 @@ class User(TimestampedMixin, Base):
     # guards against a Python None ever reaching it as JSON `null`.
     preferences: Mapped[dict] = mapped_column(
         JSONB(none_as_null=True), nullable=False, server_default=text("'{}'::jsonb")
+    )
+    # Epic 36 (AD-52): the person's IANA zone (null = the host's clock) and the local hour
+    # from which the day's digest may be sent.
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    digest_time: Mapped[time] = mapped_column(
+        Time, nullable=False, server_default=text("'19:00'::time")
     )

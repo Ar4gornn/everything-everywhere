@@ -1,7 +1,12 @@
-"""Send each person their daily digest of what needs doing (Epic 18).
+"""Send each person their daily digest of what needs doing (Epic 18, Epic 36).
 
-    python notify.py            # send to everyone who has something waiting
+    python notify.py            # send to everyone whose digest time has come
     python notify.py --dry-run  # print what would be sent, send nothing
+
+Run it **every 15 minutes** (``*/15 * * * *``). Each account chooses the local hour its
+digest may go and the zone that hour is in (AD-52); a run sends to the devices whose local
+time has reached it and that have not been told on their local today. A run at any other
+moment sends nothing, which is what makes a frequent schedule safe.
 
 Run by cron on the host, **not** by the API. A push has to be sent on a schedule, and this
 deployment is one container: an in-process scheduler would die with it, run twice with two
@@ -12,13 +17,12 @@ Connects as the runtime role, one tenant at a time, so every read obeys row-leve
 exactly as a request does — a notifier that bypassed RLS could tell one person what is in
 another's fridge.
 
-Sends at most one notification per device per day. A reminder that arrives every hour is a
-reminder nobody reads.
+Sends at most one notification per device per (local) day. A reminder that arrives every
+hour is a reminder nobody reads.
 """
 
 import argparse
 import datetime as dt
-import json
 import os
 import pathlib
 import sys
@@ -64,9 +68,10 @@ def main() -> int:
         return 0
 
     from app.core.db import tenant_session
+    from app.services import auth as auth_service
     from app.services import push as push_service
 
-    today = dt.date.today()
+    now = dt.datetime.now(dt.UTC)
     owner = create_engine(owner_url())
     with owner.connect() as conn:
         user_ids = list(conn.execute(text("SELECT id FROM users ORDER BY created_at")).scalars())
@@ -75,62 +80,57 @@ def main() -> int:
     sent = skipped = dropped = 0
     for user_id in user_ids:
         with tenant_session(user_id) as session:
-            subscriptions = push_service.list_subscriptions(session, user_id)
-            if not subscriptions:
-                continue
-            digest = push_service.digest(session, user_id)
-            if digest.empty:
-                continue
-
-            payload = json.dumps(
-                {"title": digest.title, "body": digest.body, "url": "/"},
-                ensure_ascii=False,
+            s, k, d = run_for(
+                session, user_id, now, settings, push_service, auth_service, dry_run=args.dry_run
             )
-            for subscription in subscriptions:
-                if subscription.notified_on == today:
-                    skipped += 1
-                    continue
-                if args.dry_run:
-                    print(f"would send to {subscription.endpoint[:48]}…: {digest.body}")
-                    sent += 1
-                    continue
-                if _send(settings, subscription, payload):
-                    push_service.mark_notified(session, subscription.id, today)
-                    sent += 1
-                else:
-                    push_service.forget(session, subscription.endpoint)
-                    dropped += 1
+            sent, skipped, dropped = sent + s, skipped + k, dropped + d
 
-    print(f"sent {sent}, skipped {skipped} already told today, dropped {dropped} dead")
+    print(f"sent {sent}, skipped {skipped} not due yet or already told, dropped {dropped} dead")
     return 0
 
 
-def _send(settings, subscription, payload: str) -> bool:
-    """True if it went, False if the subscription is dead and should be forgotten."""
-    from pywebpush import WebPushException, webpush
+def run_for(session, user_id, now, settings, push_service, auth_service, *, dry_run=False):
+    """One account's share of a run: (sent, skipped, dropped). Split out so the tests can
+    drive the whole decision — due or not, which local day, what is marked — without cron."""
+    subscriptions = push_service.list_subscriptions(session, user_id)
+    if not subscriptions:
+        return 0, 0, 0
+    profile = auth_service.read_profile(session, user_id)
+    if profile is None:  # pragma: no cover — listed a moment ago by the owner role
+        return 0, 0, 0
 
-    try:
-        webpush(
-            subscription_info={
-                "endpoint": subscription.endpoint,
-                "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth},
-            },
-            data=payload,
-            vapid_private_key=settings.vapid_private_key,
-            vapid_claims={"sub": settings.vapid_subject},
-            ttl=60 * 60 * 12,
+    due = [
+        subscription
+        for subscription in subscriptions
+        if push_service.is_due(
+            timezone=profile.timezone,
+            digest_time=profile.digest_time,
+            notified_on=subscription.notified_on,
+            now=now,
         )
-        return True
-    except WebPushException as exc:
-        # 404 and 410 are the push service saying this endpoint is gone for good — an
-        # uninstalled app, a cleared browser. Anything else may be temporary, so the
-        # subscription is kept and the next run tries again.
-        status = getattr(exc, "status_code", None) or getattr(exc.response, "status_code", None)
-        if status in (404, 410):
-            print(f"dropping dead subscription ({status})", file=sys.stderr)
-            return False
-        print(f"push failed ({status}): {exc}", file=sys.stderr)
-        return True
+    ]
+    if not due:
+        return 0, len(subscriptions), 0
+
+    today = push_service.local_now(profile.timezone, now).date()
+    digest = push_service.digest(session, user_id, today=today)
+    if digest.empty:
+        return 0, 0, 0
+
+    sent = dropped = 0
+    payload = digest.payload()
+    for subscription in due:
+        if dry_run:
+            print(f"would send to {subscription.endpoint[:48]}…: {digest.body}")
+            sent += 1
+            continue
+        if push_service.send(settings, subscription, payload):
+            push_service.mark_notified(session, subscription.id, today)
+            sent += 1
+        else:
+            push_service.forget(session, subscription.endpoint)
+            dropped += 1
+    return sent, len(subscriptions) - len(due), dropped
 
 
 if __name__ == "__main__":

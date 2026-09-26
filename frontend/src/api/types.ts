@@ -56,6 +56,12 @@ export interface User {
    * 0025; read it through `preferencesOf`, which falls back to the app as it was.
    */
   preferences?: Preferences;
+  /**
+   * Epic 36 (AD-52): the IANA zone the account's day is counted in, and the local hour the
+   * daily digest may arrive. Null zone: the server's clock. Absent from an older server.
+   */
+  timezone?: string | null;
+  digest_time?: string;
 }
 
 /** Epic 33 (AD-49): what can be switched off. Off hides the UI; the data stays. */
@@ -90,8 +96,12 @@ export interface Layout {
   cards: { id: CardId; on: boolean }[];
 }
 
+/** Epic 36 (AD-52): what the daily digest may talk about. */
+export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings";
+
 export interface Preferences {
   modules: Record<ModuleId, boolean>;
+  notifications: Record<NotificationKind, boolean>;
   phone: Layout;
   desktop: Layout;
 }
@@ -172,6 +182,8 @@ export interface SavingsType {
   name: string;
   goal_amount?: Money | null;
   goal_date?: string | null;
+  /** Epic 36: false keeps it out of the daily digest. Absent from an older server. */
+  notify?: boolean;
   created_at: string;
 }
 
@@ -209,6 +221,8 @@ export interface Pot {
   goal_amount: Money | null;
   goal_date: string | null;
   needed_per_month: Money | null;
+  /** Epic 36: false keeps the pot out of the daily digest. Absent from an older server. */
+  notify?: boolean;
 }
 
 export interface SavingsOverview {
@@ -310,6 +324,8 @@ export interface InventoryItem {
   /** AD-30: computed in SQL from quantity and restock_below; never stored. */
   needs_restock: boolean;
   restocked_at: string | null;
+  /** Epic 36: false keeps it out of the daily digest; the page still lists it. */
+  notify?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -355,6 +371,8 @@ export interface RecurringTemplate {
   /** Opt-in: create the entry without asking. Off by default, deliberately. */
   auto: boolean;
   paused: boolean;
+  /** Epic 36: false keeps it out of the daily digest. */
+  notify?: boolean;
   next_due: string;
   created_at: string;
 }
@@ -435,6 +453,25 @@ export interface PushStatus {
   /** False when the instance has no VAPID keys: the toggle is hidden rather than broken. */
   enabled: boolean;
   devices: number;
+}
+
+/** Tonight's digest, as the server would compose it now (Epic 36). */
+export interface PushPreview {
+  empty: boolean;
+  title: string;
+  /** Already in the account's language: the digest is the one server-written prose. */
+  body: string | null;
+  url: string;
+  local_date: string;
+  digest_time: string;
+  timezone: string | null;
+}
+
+/** A row kept out of the digest, for the muted list in Settings. */
+export interface MutedRow {
+  kind: "stock" | "recurring" | "savings";
+  id: string;
+  name: string;
 }
 
 /** A weight, as a two-place decimal string. Null for a bodyweight set — 0 would be a weight. */

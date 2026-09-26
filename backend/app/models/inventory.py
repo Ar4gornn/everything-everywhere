@@ -9,6 +9,7 @@ import decimal
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -71,6 +72,9 @@ class InventoryItem(Base):
     cost: Mapped[decimal.Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     restocked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Epic 36 (AD-52): false keeps this item out of the daily digest; the restock card still
+    # lists it.
+    notify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

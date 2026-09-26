@@ -973,6 +973,54 @@ security-definer function
   savings fields became `SignedMoney` for it (they were non-negative, and a withdrawal month
   would have been a 500). The export gains a `kind` column before `amount`.
 
+### AD-52 — The person chooses what the digest says and when; it is still one push a day
+
+- **Binds:** `services/push.py` (the digest), `notify.py`, the preferences' `notifications`
+  key, the `notify` flag on savings types, recurring templates and inventory items,
+  `users.timezone` / `users.digest_time`, the Settings notifications section.
+- **Extends:** AD-34 (cron, runtime role, read-only), AD-30 (one predicate per question),
+  AD-49 (sparse preferences resolved on read), AD-19 (named-column grants on `users`).
+- **Numbered 52:** AD-51 is left to Epic 35 (plan ↔ entries), on its own branch.
+- **Prevents:** three failures.
+
+  **The all-or-nothing switch.** Before this, a person who did not want to hear about one
+  noisy stock item could only switch notifications off for the device, and lost the recurring
+  and habit reminders with it. Control is now two levels, both opt-*out* of what already
+  existed and opt-*in* to what is new: a switch per **kind** (`stock`, `recurring`,
+  `habits` on; `due_tomorrow`, `savings` off — the digest keeps meaning "something is
+  exceptional"), stored sparse in `preferences.notifications`, and a `notify` flag per
+  **item** (default true) on the three tables whose rows the digest names. Habits keep their
+  own `remind`, opt-in since Epic 26. A module switched off (AD-49) silences its kind
+  whatever the kind's switch says. Muting never touches the page: the restock card still
+  lists a muted item; only the push stays quiet.
+
+  **A digest at the host's midnight.** "Today" was `date.today()` on the host, so a person
+  eight hours away had their day's digest cut at the wrong hour and their habits judged
+  against the wrong date. The account now holds an IANA `timezone` (filled by the browser
+  when empty, validated against `zoneinfo`) and a `digest_time` (default 19:00). Cron runs
+  every 15 minutes; a device is sent to when the person's **local** time has reached
+  `digest_time` and its `notified_on` is before the **local** today. Every date the digest
+  reasons about — habits due, recurring due tomorrow, a goal's distance — is that local
+  today. A null timezone keeps the old behaviour (host time), so nothing changes for an
+  account that never opened Settings.
+
+  **A test that lies, or a test that spams.** "Send test" goes to the caller's own device
+  only (the endpoint must be one of theirs), ignores and does not write `notified_on` — a
+  test must not eat the evening's digest — and is limited to one per device per minute by a
+  `tested_at` column, not an in-process counter that forgets on restart. It is the one push
+  sent from inside a request, and it is sent **after** the rate-limit write commits: an
+  explicit click is the exception AD-34 allows, not a schedule. The preview is the same
+  `Digest` read-only, so the two cannot disagree.
+
+  The two new clauses are defined once. **Due tomorrow**: an active recurring template
+  (`paused` false, not past `end_on`) whose `next_due` is local tomorrow. **Savings
+  behind**: a pot with a goal amount and date, the date 0-30 days ahead, and a balance below
+  the straight line from the pot's creation to the goal — `goal × elapsed / total` — using the
+  same signed balance as the overview (AD-50). A goal already past is not nagged about.
+
+  Each clause carries its page; the push opens the first clause's page (`/inventory`,
+  `/`, `/plan`, `/habits`), not always `/`.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -1143,6 +1191,7 @@ Everything Everywhere/
 | Notes — text or a sketch, drafts on the device, shortcuts | `api/notes.py`, `services/notes.py`, migration 0024, `frontend/src/notes/`, `NotesPage.tsx`, `NotePage.tsx`, `public/manifest.webmanifest` | AD-48, AD-8, AD-30, AD-31, AD-24 |
 | Preferences — modules, tab order, dashboard cards, per layout | `services/preferences.py`, `api/auth.py`, migration 0025 | AD-49, AD-19, AD-24, AD-44 |
 | Savings pots — balances, withdrawals, goals, what is due | `api/savings.py`, `services/savings.py`, migration 0026, `frontend/src/components/SavingsCard.tsx` | AD-50, AD-10, AD-11, AD-18, AD-24 |
+| Notification control — kinds, muted items, local send time, preview, test | `services/push.py`, `api/push.py`, `notify.py`, migration 0028 | AD-52, AD-34, AD-30, AD-49, AD-19 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred

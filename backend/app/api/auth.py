@@ -14,6 +14,7 @@ from app.schemas.auth import (
     Credentials,
     CurrencyUpdate,
     LanguageUpdate,
+    NotificationScheduleUpdate,
     PasswordChange,
     PasswordConfirm,
     PreferencesUpdate,
@@ -319,6 +320,16 @@ def set_budget_start_day(
 ) -> auth_service.UserRow:
     """No 409 here, unlike the currency: this re-groups rows, it never relabels one."""
     return auth_service.set_budget_start_day(session, user_id, payload.budget_start_day)
+
+
+@router.patch("/me/notification-schedule", response_model=UserOut)
+def set_notification_schedule(
+    payload: NotificationScheduleUpdate, user_id: CurrentUserId, session: DbSession
+) -> auth_service.UserRow:
+    """Epic 36 (AD-52). The client sends the browser's zone when the account has none."""
+    return auth_service.set_notification_schedule(
+        session, user_id, timezone=payload.timezone, digest_time=payload.digest_time
+    )
 
 
 @router.patch("/me/tutorial", response_model=UserOut)

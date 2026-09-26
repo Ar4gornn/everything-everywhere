@@ -122,7 +122,7 @@ def update_template(
         ledger.resolve_category(
             session, user_id, category_id=fields["category_id"], kind=template.kind
         )
-    for key in ("amount", "note", "auto", "paused", "end_on", "category_id"):
+    for key in ("amount", "note", "auto", "paused", "end_on", "category_id", "notify"):
         if key in fields:
             setattr(template, key, fields[key])
     if template.end_on is not None and template.end_on < template.start_on:

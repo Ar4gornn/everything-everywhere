@@ -11,13 +11,14 @@ columns.
 """
 
 import uuid
-from datetime import datetime
+import zoneinfo
+from datetime import datetime, time
 
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors import NotFound
+from app.core.errors import Invalid, NotFound
 from app.core.security import hash_password, verify_password
 from app.models.savings import DEFAULT_SAVINGS_TYPES, SavingsType
 from app.models.user import User
@@ -47,6 +48,8 @@ class UserRow:
         tutorial_completed: bool,
         tutorial_skipped_at: datetime | None,
         preferences: object,
+        timezone: str | None,
+        digest_time: time,
     ) -> None:
         self.id = id
         self.email = email
@@ -59,6 +62,8 @@ class UserRow:
         self.tutorial_skipped_at = tutorial_skipped_at
         # Resolved here, so every response that carries a user carries it complete.
         self.preferences = preferences_service.resolve(preferences)
+        self.timezone = timezone
+        self.digest_time = digest_time
 
 
 def _read_user(session: Session, user_id: uuid.UUID) -> UserRow | None:
@@ -74,6 +79,8 @@ def _read_user(session: Session, user_id: uuid.UUID) -> UserRow | None:
             User.tutorial_completed,
             User.tutorial_skipped_at,
             User.preferences,
+            User.timezone,
+            User.digest_time,
         ).where(User.id == user_id)
     ).one_or_none()
     return None if row is None else UserRow(*row)
@@ -267,6 +274,35 @@ def set_currency(session: Session, user_id: uuid.UUID, currency: str) -> UserRow
         raise CurrencyLocked
 
     session.execute(update(User).where(User.id == user_id).values(currency=currency))
+    session.flush()
+    updated = _read_user(session, user_id)
+    if updated is None:  # pragma: no cover
+        raise NotFound("No such account")
+    return updated
+
+
+def check_timezone(name: str) -> None:
+    """A real IANA zone, or ``422 invalid_timezone``. ``zoneinfo`` is the judge rather than
+    a list kept here, so a zone added to the tz database is accepted the day it ships."""
+    try:
+        zoneinfo.ZoneInfo(name)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError) as exc:
+        raise Invalid(f"{name!r} is not a time zone this server knows", "invalid_timezone") from exc
+
+
+def set_notification_schedule(
+    session: Session, user_id: uuid.UUID, *, timezone: str | None, digest_time: time
+) -> UserRow:
+    """Epic 36 (AD-52): the zone "today" is counted in, and the local hour from which the
+    day's digest may go. Never locked: it moves when a push arrives, not what anything is."""
+    if timezone is not None:
+        check_timezone(timezone)
+    current = _read_user(session, user_id)
+    if current is None:
+        raise NotFound("No such account")
+    session.execute(
+        update(User).where(User.id == user_id).values(timezone=timezone, digest_time=digest_time)
+    )
     session.flush()
     updated = _read_user(session, user_id)
     if updated is None:  # pragma: no cover

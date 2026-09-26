@@ -20,6 +20,7 @@ import {
 import type { Currency, Language, PreferencesPatch, User } from "../api/types";
 import { PreferenceSaver, preferencesOf } from "../layout/preferences";
 import { clearAllDrafts } from "../notes/drafts";
+import { deviceZone } from "../push";
 
 interface AuthState {
   user: User | null;
@@ -51,9 +52,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // account signs in, lands on nobody: `onChange` only touches the user it was made for.
   const saver = useRef<{ owner: string; saver: PreferenceSaver } | null>(null);
 
+  // Epic 36 (AD-52): an account with no zone is given this browser's, once per session, so
+  // "today" and the digest's hour mean the person's day rather than the server's. `null`
+  // only — `undefined` is a server that predates the column, and a zone already chosen is
+  // never overwritten from a device that happens to be travelling.
+  const zoneFilled = useRef<Set<string>>(new Set());
+
   /** Every user that comes from the server goes through here, so the saver hears it too. */
   const adopt = useCallback((found: User) => {
     setUser(found);
+    const zone = deviceZone();
+    if (found.timezone === null && zone && !zoneFilled.current.has(found.id)) {
+      zoneFilled.current.add(found.id);
+      const owner = found.id;
+      void api
+        .setNotificationSchedule({ timezone: zone, digest_time: found.digest_time ?? "19:00" })
+        .then(
+          (updated) =>
+            setUser((current) =>
+              current && current.id === owner
+                ? { ...current, timezone: updated.timezone, digest_time: updated.digest_time }
+                : current,
+            ),
+          () => undefined,
+        );
+    }
     const prefs = preferencesOf(found);
     if (saver.current?.owner === found.id) {
       saver.current.saver.confirm(prefs);

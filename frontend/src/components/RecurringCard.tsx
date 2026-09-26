@@ -17,6 +17,7 @@ import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
+import { NotifyBell, usePushEnabled } from "./NotifyBell";
 import { useToast } from "./Toast";
 
 /**
@@ -35,6 +36,7 @@ const NOTHING = {
 
 export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
   const money = useMoney();
+  const pushOn = usePushEnabled();
   const t = useT();
   const toast = useToast();
 
@@ -367,6 +369,20 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                   </td>
                   <td>
                     <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                      {pushOn && template.notify !== undefined && (
+                        <NotifyBell
+                          on={template.notify}
+                          name={template.note || nameOf(template.category_id)}
+                          disabled={busy === template.id}
+                          onToggle={(next) =>
+                            void run(
+                              template.id,
+                              () => api.updateTemplate(template.id, { notify: next }),
+                              "notify.couldNotSave",
+                            )
+                          }
+                        />
+                      )}
                       <button
                         type="button"
                         className="quiet"

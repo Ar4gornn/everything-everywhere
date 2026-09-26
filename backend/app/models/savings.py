@@ -3,6 +3,7 @@ import decimal
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -33,6 +34,8 @@ class SavingsType(TimestampedMixin, Base):
     # Epic 34 (AD-50): an optional goal. A date needs an amount; the CHECK says so.
     goal_amount: Mapped[decimal.Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     goal_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    # Epic 36 (AD-52): false keeps this pot out of the daily digest; the page is unchanged.
+    notify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
 
 class SavingsContribution(TimestampedMixin, Base):

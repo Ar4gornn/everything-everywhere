@@ -232,15 +232,19 @@ service can reach — and restart the API. Each person then turns notifications 
 in Settings.
 
 Sending is a cron job on the host, not a scheduler inside the API: this is one container, and
-an in-process scheduler would die with it and double up if a second ever ran. Once a day is
-plenty:
+an in-process scheduler would die with it and double up if a second ever ran. Run it every
+15 minutes — each person picks the hour their digest arrives, in their own time zone, and a run
+sends only to those whose hour has come:
 
 ```bash
-0 8 * * *  cd /srv/everything-everywhere/backend && python notify.py
+*/15 * * * *  cd /srv/everything-everywhere/backend && python notify.py
 ```
 
-It sends at most one notification per device per day, nothing at all to someone with nothing
-waiting, and never creates an entry. `python notify.py --dry-run` shows what it would send.
+It sends at most one notification per device per local day, nothing at all to someone with
+nothing waiting, and never creates an entry. What it may mention — low stock, waiting and
+upcoming recurring entries, savings goals falling behind, habits — and which items stay quiet
+is each person's choice in Settings, where "Send test" checks a device on the spot.
+`python notify.py --dry-run` shows what a run would send.
 
 ### When someone forgets their password
 

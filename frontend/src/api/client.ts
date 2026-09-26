@@ -47,7 +47,9 @@ import type {
   PendingEntry,
   Period,
   PreferencesPatch,
+  PushPreview,
   PushStatus,
+  MutedRow,
   Purchase,
   PurchaseResult,
   Quantity,
@@ -603,6 +605,22 @@ export const api = {
       body: JSON.stringify({ endpoint }),
     }),
 
+  /** Epic 36: tonight's digest, read-only. Answers even when push is off. */
+  pushPreview: () => request<PushPreview>("/api/push/preview"),
+
+  pushMuted: () => items(request<Page<MutedRow>>("/api/push/muted")),
+
+  /** One push to this device now. 429 within a minute of the last; 410 if it is gone. */
+  pushTest: (endpoint: string) =>
+    request<void>("/api/push/test", { method: "POST", body: JSON.stringify({ endpoint }) }),
+
+  /** Epic 36: the zone the account's day is counted in, and the digest's local hour. */
+  setNotificationSchedule: (schedule: { timezone: string | null; digest_time: string }) =>
+    request<User>("/api/auth/me/notification-schedule", {
+      method: "PATCH",
+      body: JSON.stringify(schedule),
+    }),
+
   listVendors: () => items(request<Page<Vendor>>("/api/vendors")),
 
   createVendor: (name: string) =>
@@ -643,7 +661,12 @@ export const api = {
   /** Rename, or set/clear the goal. An omitted field is left alone; `null` clears it. */
   updateSavingsType: (
     id: string,
-    patch: { name?: string; goal_amount?: Money | null; goal_date?: string | null },
+    patch: {
+      name?: string;
+      goal_amount?: Money | null;
+      goal_date?: string | null;
+      notify?: boolean;
+    },
   ) =>
     request<SavingsType>(`/api/savings/types/${id}`, {
       method: "PATCH",
@@ -722,7 +745,10 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  updateTemplate: (id: string, patch: Partial<Omit<TemplateInput, "category_name">>) =>
+  updateTemplate: (
+    id: string,
+    patch: Partial<Omit<TemplateInput, "category_name">> & { notify?: boolean },
+  ) =>
     request<RecurringTemplate>(`/api/recurring/templates/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
@@ -792,7 +818,7 @@ export const api = {
     }),
 
   // space_name is a create-time convenience only; a move names the space by id.
-  updateItem: (id: string, patch: Partial<Omit<ItemInput, "space_name">>) =>
+  updateItem: (id: string, patch: Partial<Omit<ItemInput, "space_name">> & { notify?: boolean }) =>
     request<InventoryItem>(`/api/inventory/items/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),

@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from app.models.ledger import EntryKind
 from app.models.recurring import Cadence
@@ -44,6 +44,16 @@ class TemplateUpdate(BaseModel):
     paused: bool | None = None
     end_on: dt.date | None = None
     category_id: uuid.UUID | None = None
+    # Epic 36 (AD-52): false keeps this row out of the daily digest. Strict, and never null:
+    # "off" or null would otherwise be read as a choice nobody made.
+    notify: StrictBool | None = None
+
+    @field_validator("notify")
+    @classmethod
+    def _notify_not_null(cls, value: bool | None) -> bool:
+        if value is None:
+            raise ValueError("notify is true or false, never null")
+        return value
 
 
 class TemplateOut(BaseModel):
@@ -59,6 +69,7 @@ class TemplateOut(BaseModel):
     end_on: dt.date | None
     auto: bool
     paused: bool
+    notify: bool
     next_due: dt.date
     created_at: dt.datetime
 

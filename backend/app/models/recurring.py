@@ -72,6 +72,8 @@ class RecurringTemplate(Base):
     auto: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     paused: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     next_due: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    # Epic 36 (AD-52): false keeps this template out of the daily digest.
+    notify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
