@@ -368,7 +368,7 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                     {template.paused ? "—" : template.next_due}
                   </td>
                   <td>
-                    <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                       {pushOn && template.notify !== undefined && (
                         <NotifyBell
                           on={template.notify}

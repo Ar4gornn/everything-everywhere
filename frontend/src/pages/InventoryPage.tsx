@@ -665,7 +665,7 @@ export function InventoryPage() {
                               )}
                             </td>
                             <td>
-                              <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                              <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                                 {pushOn && item.notify !== undefined && (
                                   <NotifyBell
                                     on={item.notify}

@@ -3254,7 +3254,15 @@ button.bell[aria-pressed="false"] {
 
 .stack-checks {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+}
+
+/* `label` is a grid app-wide (field over input), so `.check`'s row direction has nothing to
+   act on; here the box sits beside its words, which is what a list of switches reads as. */
+.stack-checks .check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .digest-preview {
