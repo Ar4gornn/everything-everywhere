@@ -1008,9 +1008,12 @@ security-definer function
   only (the endpoint must be one of theirs), ignores and does not write `notified_on` — a
   test must not eat the evening's digest — and is limited to one per device per minute by a
   `tested_at` column, not an in-process counter that forgets on restart. It is the one push
-  sent from inside a request, and it is sent **after** the rate-limit write commits: an
-  explicit click is the exception AD-34 allows, not a schedule. The preview is the same
-  `Digest` read-only, so the two cannot disagree.
+  sent from inside a request — an explicit click is the exception AD-34 allows, not a
+  schedule — and it is sent only after the subscription row is locked `FOR UPDATE` and
+  stamped, so two quick clicks queue and the second is a 429. A dead device (404/410 from
+  the push service) is forgotten and answered `410 push_device_gone`, returned rather than
+  raised so the forget is committed. The preview is the same `Digest` read-only, so the two
+  cannot disagree.
 
   The two new clauses are defined once. **Due tomorrow**: an active recurring template
   (`paused` false, not past `end_on`) whose `next_due` is local tomorrow. **Savings
