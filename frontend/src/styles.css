@@ -1509,8 +1509,13 @@ tr.history td {
     white-space: normal;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    /* Wraps rather than overflowing: an amount, its hint and a 90px bar do not fit
+       beside a French label at 320px. The label's auto margin keeps it on the left;
+       whatever wraps lines up on the right, under the value it belongs to. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    column-gap: 12px;
+    row-gap: 4px;
   }
 
   table.stacked td::before {
@@ -1520,6 +1525,7 @@ tr.history td {
     letter-spacing: 0.05em;
     text-transform: uppercase;
     flex: 0 0 auto;
+    margin-right: auto;
   }
 
   /* A cell with no label is an actions cell; let it fill the row. */
@@ -1530,6 +1536,16 @@ tr.history td {
   table.stacked td:not([data-label]) {
     justify-content: flex-end;
     padding-top: 8px;
+  }
+
+  /* Action rows are `nowrap` inline so a desktop cell stays one line. On a phone
+     card that row is right-aligned, so a French row wider than the card ran off
+     the LEFT edge and "Bientôt épuisé" could not be tapped. The inline style is
+     why this needs !important. */
+  table.stacked td > .row {
+    flex-wrap: wrap !important;
+    justify-content: flex-end;
+    min-width: 0;
   }
 
   table.stacked td.num {
@@ -1806,7 +1822,14 @@ tr.history td {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  /* A French action row beside a title overflowed the card at 320px; it wraps
+     under the title instead, still on the right. */
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.card-head > :last-child:not(:first-child) {
+  margin-left: auto;
 }
 
 .card-toggle {

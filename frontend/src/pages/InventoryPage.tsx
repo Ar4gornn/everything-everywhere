@@ -466,8 +466,10 @@ export function InventoryPage() {
               title={space.name}
               actions={
                 renaming === space.id ? (
-                  <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                  <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                     <input
+                      // Without a basis the buttons squeezed this to 25px on a phone.
+                      style={{ flex: "1 1 8rem", minWidth: 0 }}
                       aria-label={t("stock.renameSpaceAria")}
                       value={renameDraft}
                       onChange={(event) => setRenameDraft(event.target.value)}
