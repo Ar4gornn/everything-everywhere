@@ -505,11 +505,14 @@ export function InventoryPage() {
     <>
       <ErrorBanner message={error ?? failure} />
 
+      {/* The page's name first, as on every other page: under the shopping list it read as
+          the heading of the filters beside it. */}
+      <h1 style={{ fontSize: 18, margin: "0 0 16px" }}>{t("stock.title")}</h1>
+
       {/* Above the spaces: what to buy is the thing you act on, the shelves are reference. */}
       <ShoppingList onChanged={() => void load()} />
 
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>{t("stock.title")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: 16, marginTop: 16 }}>
         <label style={{ flex: "1 1 160px", maxWidth: 240 }}>
           {t("entries.search")}
           <input
