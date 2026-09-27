@@ -6,6 +6,7 @@ import { GymPage } from "./GymPage";
 import { AuthProvider } from "../auth/AuthContext";
 import { ToastProvider } from "../components/Toast";
 import type { Exercise, Routine } from "../api/types";
+import { onAPhone } from "../test/phone";
 
 // GymPage reads the account's weight unit, so it needs the auth context.
 function render(ui: React.ReactElement) {
@@ -36,7 +37,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function mockApi(overrides: { sets?: unknown[] } = {}) {
+function mockApi(overrides: { sets?: unknown[]; workouts?: unknown[] } = {}) {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
@@ -79,7 +80,7 @@ function mockApi(overrides: { sets?: unknown[] } = {}) {
         sets: overrides.sets ?? [],
       });
     }
-    if (url.includes("/api/gym/workouts")) return json({ items: [] });
+    if (url.includes("/api/gym/workouts")) return json({ items: overrides.workouts ?? [] });
     return json({ items: [] });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -211,5 +212,89 @@ describe("GymPage", () => {
     // noopener so the opened page cannot reach back through window.opener.
     expect(link.getAttribute("rel")).toContain("noopener");
     expect(document.querySelector("iframe")).toBeNull();
+  });
+});
+
+describe("GymPage on a phone (Story 38.2)", () => {
+  onAPhone();
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  const set = (id: string, name: string, reps: number, weight: string | null) => ({
+    id,
+    exercise_id: name,
+    exercise_name: name,
+    position: 0,
+    reps,
+    weight,
+  });
+
+  it("lists a session's sets under a heading per run of one exercise", async () => {
+    const user = userEvent.setup();
+    mockApi({
+      sets: [
+        set("s1", "Bench press", 8, "60.00"),
+        set("s2", "Bench press", 6, "62.50"),
+        set("s3", "Pull-up", 10, null),
+        set("s4", "Bench press", 5, "60.00"),
+      ],
+    });
+    render(<GymPage />);
+    await user.click(await screen.findByRole("button", { name: "Start empty" }));
+
+    const sets = await screen.findByRole("group", { name: "Sets" });
+    expect(screen.queryByRole("table", { name: "Sets" })).toBeNull();
+    const headings = within(sets)
+      .getAllByRole("heading", { level: 3 })
+      .map((h) => h.textContent);
+    expect(headings).toEqual(["Bench press", "Pull-up", "Bench press"]);
+
+    const [bench] = within(sets).getAllByRole("region", { name: "Bench press" });
+    const second = within(bench as HTMLElement).getByRole("button", { name: /Set 2/ });
+    expect(second).toHaveTextContent("6 × 62.50 kg");
+    expect(within(sets).getByRole("region", { name: "Pull-up" })).toHaveTextContent(
+      "10 × bodyweight",
+    );
+
+    expect(screen.queryByRole("button", { name: "Delete set of Bench press" })).toBeNull();
+    await user.click(second);
+    expect(screen.getByRole("button", { name: "Delete set of Bench press" })).toBeInTheDocument();
+  });
+
+  it("draws a recent session as its day and routine, with Open and Delete on opening", async () => {
+    const user = userEvent.setup();
+    mockApi({
+      workouts: [{ id: "w9", routine_id: "r1", performed_on: "2026-09-05", note: null }],
+    });
+    render(<GymPage />);
+
+    const recent = await screen.findByRole("list", { name: "Recent sessions" });
+    const head = within(recent).getByRole("button", { name: /5 September/ });
+    expect(head).toHaveTextContent("Push day");
+    await user.click(head);
+    expect(screen.getByRole("button", { name: "Open session of 2026-09-05" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete session of 2026-09-05" }),
+    ).toBeInTheDocument();
+  });
+
+  it("draws a routine's exercises with their target, and the video and Remove on opening", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<GymPage />);
+    await user.click(await screen.findByRole("button", { name: "Edit Push day" }));
+
+    const lines = await screen.findByRole("list", { name: "Push day exercises" });
+    const head = within(lines).getByRole("button", { name: /Bench press/ });
+    expect(head).toHaveTextContent("4×8");
+    await user.click(head);
+    expect(within(lines).getByRole("link", { name: "video" })).toHaveAttribute(
+      "rel",
+      "noopener noreferrer",
+    );
+    expect(
+      screen.getByRole("button", { name: "Remove Bench press from Push day" }),
+    ).toBeInTheDocument();
   });
 });

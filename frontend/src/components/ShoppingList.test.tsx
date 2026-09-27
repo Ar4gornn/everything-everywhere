@@ -1,10 +1,11 @@
-import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ShoppingList } from "./ShoppingList";
 import { ToastProvider } from "./Toast";
 import type { ShoppingList as List } from "../api/types";
+import { onAPhone } from "../test/phone";
 
 function render(ui: React.ReactElement) {
   return rtlRender(<ToastProvider>{ui}</ToastProvider>);
@@ -190,5 +191,55 @@ describe("ShoppingList", () => {
     );
     render(<ShoppingList />);
     await waitFor(() => expect(screen.queryByRole("table")).toBeNull());
+  });
+});
+
+describe("ShoppingList on a phone (Story 38.2)", () => {
+  onAPhone();
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("draws one row per item, and Bought records the suggested amounts from the row", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi();
+    render(<ShoppingList />);
+
+    const rows = await screen.findByRole("list", { name: "Shopping list" });
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(within(rows).getByRole("button", { name: /^Milk/ })).toHaveTextContent("3 × 1.20");
+    // The inputs are one tap away, not on the row.
+    expect(screen.queryByLabelText("How many Milk")).toBeNull();
+
+    // Batteries have no cost, so no category is needed: a plain restock of the suggestion.
+    await user.click(screen.getByRole("button", { name: "Bought Batteries" }));
+    await waitFor(() => expect(purchases(fetchMock)).toHaveLength(1));
+    expect(purchases(fetchMock)[0]).toMatchObject({ quantity: 2 });
+  });
+
+  it("opens to the quantity and cost, with the desktop's names", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<ShoppingList />);
+
+    await user.click(await screen.findByRole("button", { name: /^Batteries/ }));
+    expect(screen.getByLabelText("How many Batteries")).toHaveValue("2");
+    expect(screen.getByLabelText("What Batteries cost")).toHaveValue("");
+  });
+
+  it("shows on the closed row the cost that Bought will record", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<ShoppingList />);
+
+    const head = await screen.findByRole("button", { name: /^Milk/ });
+    expect(head).toHaveTextContent("3.60");
+    await user.click(head);
+    const cost = screen.getByLabelText("What Milk cost");
+    await user.clear(cost);
+    await user.type(cost, "4,1");
+    await user.click(head);
+    expect(head).toHaveTextContent("4.10");
+    expect(head).not.toHaveTextContent("3.60");
   });
 });

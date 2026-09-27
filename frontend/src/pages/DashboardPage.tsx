@@ -23,7 +23,8 @@ import { QuoteCard } from "../components/QuoteCard";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { CARD_MODULE, useModules } from "../layout/modules";
-import { useCurrentLayout } from "../layout/useLayout";
+import { ListRow, useOpenRow } from "../components/ListRow";
+import { useCurrentLayout, useLayout } from "../layout/useLayout";
 import { progress, subtractMoney, toChartNumber, toCents } from "../money";
 import { useMoney } from "../useMoney";
 import { useT } from "../i18n";
@@ -80,6 +81,18 @@ function groups(order: CardId[]): CardId[][] {
     else result.push([id]);
   }
   return result;
+}
+
+/** The way from an expanded phone row to the category's own page. */
+function CategoryLink({ id, label }: { id: string; label: string }) {
+  return (
+    <Link to={`/categories/${id}`} className="card-link">
+      <span>{label}</span>
+      <span className="chevron" aria-hidden="true">
+        ›
+      </span>
+    </Link>
+  );
 }
 
 export function DashboardPage() {
@@ -244,6 +257,15 @@ export function DashboardPage() {
 
   const spaceName = (id: string) => spaces.find((space) => space.id === id)?.name ?? "";
 
+  // AD-53: a phone draws these lists as rows, one open at a time per list.
+  const phone = useLayout() === "phone";
+  const [openBudget, toggleBudget] = useOpenRow();
+  const [openCategory, toggleCategory] = useOpenRow();
+  // The budgets card lists every category spent in or budgeted (AD-22), so on a phone it
+  // can carry the trends — but only when it is actually drawn with rows in it.
+  const budgetsCarryTrends =
+    period === "month" && shown("budgets") && (summary?.budgets.length ?? 0) > 0;
+
   // How many categories are over budget: the one number worth keeping visible when the
   // section is folded away, because it is the only one that asks you to do something.
   const overspent = useMemo(
@@ -402,6 +424,67 @@ export function DashboardPage() {
         >
           {summary.budgets.length === 0 ? (
             <Empty>{t("dash.noBudgets")}</Empty>
+          ) : phone ? (
+            <ul className="list-rows" aria-label={t("dash.budgetVsActual")}>
+              {summary.budgets.map((row) => {
+                const over = row.budget !== null && toCents(row.actual) > toCents(row.budget);
+                // The trend this card carries on a phone, where it replaces the categories
+                // card (AD-53). Absent when trends were not asked for or had no spending.
+                const series = trends?.expense_by_category.find(
+                  (s) => s.category_id === row.category_id,
+                );
+                return (
+                  <ListRow
+                    key={row.category_id}
+                    title={row.category_name}
+                    amount={money.plain(row.actual)}
+                    amountTone={over ? "over" : undefined}
+                    bar={
+                      row.budget === null ? (
+                        <span className="hint">{t("rows.noBudget")}</span>
+                      ) : (
+                        <>
+                          <ProgressBar
+                            percent={progress(row.actual, row.budget)}
+                            over={over}
+                            label={t("dash.budgetUsed", { name: row.category_name })}
+                          />
+                          <span className="hint">
+                            {t("rows.of", { amount: money.plain(row.budget) })}
+                          </span>
+                        </>
+                      )
+                    }
+                    open={openBudget === row.category_id}
+                    onToggle={() => toggleBudget(row.category_id)}
+                    details={
+                      <>
+                        {row.budget !== null && (
+                          <p className="hint" style={{ margin: 0 }}>
+                            {over
+                              ? t("rows.over", {
+                                  amount: money.plain(subtractMoney(row.actual, row.budget)),
+                                })
+                              : t("rows.left", {
+                                  amount: money.plain(subtractMoney(row.budget, row.actual)),
+                                })}
+                          </p>
+                        )}
+                        {series && trends && (
+                          <Sparkline
+                            values={series.values}
+                            months={trends.months}
+                            label={series.category_name}
+                            peak={seriesPeak}
+                          />
+                        )}
+                        <CategoryLink id={row.category_id} label={t("rows.openCategory")} />
+                      </>
+                    }
+                  />
+                );
+              })}
+            </ul>
           ) : (
             <TableWrap>
               <table className="stacked" aria-label={t("dash.budgetVsActual")}>
@@ -474,6 +557,33 @@ export function DashboardPage() {
         >
           {summary.savings.length === 0 ? (
             <Empty>{t("dash.noSavings")}</Empty>
+          ) : phone ? (
+            <ul className="list-rows" aria-label={t("dash.savingsProgress")}>
+              {summary.savings.map((row) => (
+                // Nothing to open: the pot's detail lives on the Plan page.
+                <ListRow
+                  key={row.savings_type_id}
+                  title={row.savings_type_name}
+                  amount={money.plain(row.actual)}
+                  bar={
+                    row.target === null ? (
+                      <span className="hint">{t("rows.noTarget")}</span>
+                    ) : (
+                      <>
+                        <ProgressBar
+                          percent={progress(row.actual, row.target)}
+                          over={false}
+                          label={t("dash.targetReached", { name: row.savings_type_name })}
+                        />
+                        <span className="hint">
+                          {t("rows.of", { amount: money.plain(row.target) })}
+                        </span>
+                      </>
+                    )
+                  }
+                />
+              ))}
+            </ul>
           ) : (
             <TableWrap>
               <table className="stacked" aria-label={t("dash.savingsProgress")}>
@@ -550,7 +660,10 @@ export function DashboardPage() {
         </Card>
       ),
     categories: () =>
-      trends && (
+      trends &&
+      // On a phone the budgets card carries each category's trend (AD-53), so this one
+      // would repeat it. It still draws when budgets is not there to carry it.
+      !(phone && budgetsCarryTrends) && (
         <Card
           title={t("dash.expenseByCategory")}
           collapseKey="dashboard.categories"
@@ -560,6 +673,29 @@ export function DashboardPage() {
         >
           {trends.expense_by_category.length === 0 ? (
             <Empty>{t("dash.nothingSpent")}</Empty>
+          ) : phone ? (
+            <ul className="list-rows" aria-label={t("dash.expenseByCategory")}>
+              {trends.expense_by_category.map((series) => (
+                <ListRow
+                  key={series.category_id}
+                  title={series.category_name}
+                  amount={money.plain(series.values[series.values.length - 1] ?? "0.00")}
+                  open={openCategory === series.category_id}
+                  onToggle={() => toggleCategory(series.category_id)}
+                  details={
+                    <>
+                      <Sparkline
+                        values={series.values}
+                        months={trends.months}
+                        label={series.category_name}
+                        peak={seriesPeak}
+                      />
+                      <CategoryLink id={series.category_id} label={t("rows.openCategory")} />
+                    </>
+                  }
+                />
+              ))}
+            </ul>
           ) : (
             <TableWrap>
               <table className="stacked" aria-label={t("dash.expenseByCategory")}>

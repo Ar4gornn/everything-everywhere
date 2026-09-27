@@ -6,11 +6,13 @@ import { useOptionalAuth } from "../auth/AuthContext";
 import type { Category, Entry, Trends, UnitPrices, VendorPrices } from "../api/types";
 import { RateChart } from "../charts/RateChart";
 import { Sparkline } from "../charts/Sparkline";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useT } from "../i18n";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { useLayout } from "../layout/useLayout";
 import { useDates } from "../useDates";
 import { addMonths, budgetMonth } from "../months";
 import { toChartNumber } from "../money";
@@ -46,6 +48,8 @@ export function CategoryPage() {
   // whole page for want of context is worse than falling back to the calendar month.
   const startDay = useOptionalAuth()?.user?.budget_start_day ?? 1;
   const toast = useToast();
+  const phone = useLayout() === "phone";
+  const [openEntry, toggleEntry] = useOpenRow();
 
   const [month, setMonth] = useState(() => budgetMonth(startDay));
   // Failures of the page's own actions. The load's failure is `failure`, from the hook.
@@ -119,6 +123,12 @@ export function CategoryPage() {
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount), 0).toFixed(2);
   const quantified = entries.some((entry) => entry.quantity !== null);
 
+  const deleteButton = (entry: Entry) => (
+    <button type="button" className="quiet" onClick={() => void remove(entry)}>
+      {t("action.delete")}
+    </button>
+  );
+
   if (loading && !category) return <p className="empty">{t("state.loading")}</p>;
 
   return (
@@ -163,38 +173,56 @@ export function CategoryPage() {
           collapseKey="category.vendors"
           summary={t("category.vendorRows", { count: vendorPrices.vendors.length })}
         >
-          <TableWrap>
-            <table className="stacked" aria-label={t("category.byVendor")}>
-              <thead>
-                <tr>
-                  <th>{t("category.colVendor")}</th>
-                  <th className="num">{t("dash.colSpent", { symbol: money.symbol })}</th>
-                  <th className="num">{t("category.colPerUnit")}</th>
-                  <th className="num">{t("category.entries")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vendorPrices.vendors.map((row) => (
-                  <tr key={`${row.vendor_id}-${row.unit ?? "none"}`}>
-                    <td data-label={t("category.colVendor")}>{row.vendor_name}</td>
-                    <td className="num" data-label={t("dash.colSpentShort")}>
-                      {money.plain(row.spent)}
-                    </td>
-                    <td className="num" data-label={t("category.colPerUnit")}>
-                      {row.unit_price === null ? (
-                        <span className="hint">—</span>
-                      ) : (
-                        `${row.unit_price} /${row.unit}`
-                      )}
-                    </td>
-                    <td className="num" data-label={t("category.entries")}>
-                      {row.entries}
-                    </td>
+          {phone ? (
+            <ul className="list-rows" aria-label={t("category.byVendor")}>
+              {vendorPrices.vendors.map((row) => (
+                <ListRow
+                  key={`${row.vendor_id}-${row.unit ?? "none"}`}
+                  title={row.vendor_name}
+                  meta={[
+                    row.unit_price === null ? null : `${row.unit_price} /${row.unit}`,
+                    t.n("rows.entries", row.entries),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  amount={money.plain(row.spent)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <TableWrap>
+              <table className="stacked" aria-label={t("category.byVendor")}>
+                <thead>
+                  <tr>
+                    <th>{t("category.colVendor")}</th>
+                    <th className="num">{t("dash.colSpent", { symbol: money.symbol })}</th>
+                    <th className="num">{t("category.colPerUnit")}</th>
+                    <th className="num">{t("category.entries")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
+                </thead>
+                <tbody>
+                  {vendorPrices.vendors.map((row) => (
+                    <tr key={`${row.vendor_id}-${row.unit ?? "none"}`}>
+                      <td data-label={t("category.colVendor")}>{row.vendor_name}</td>
+                      <td className="num" data-label={t("dash.colSpentShort")}>
+                        {money.plain(row.spent)}
+                      </td>
+                      <td className="num" data-label={t("category.colPerUnit")}>
+                        {row.unit_price === null ? (
+                          <span className="hint">—</span>
+                        ) : (
+                          `${row.unit_price} /${row.unit}`
+                        )}
+                      </td>
+                      <td className="num" data-label={t("category.entries")}>
+                        {row.entries}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
           <p className="hint" style={{ marginTop: 8 }}>
             {t("category.vendorHint", { months: TREND_MONTHS })}
           </p>
@@ -262,6 +290,37 @@ export function CategoryPage() {
             </button>
             .
           </Empty>
+        ) : phone ? (
+          <ul className="list-rows" aria-label={t("category.tableAria")}>
+            {entries.map((entry) => (
+              <ListRow
+                key={entry.id}
+                title={dates.day(entry.occurred_on)}
+                meta={[
+                  entry.quantity && entry.unit
+                    ? `${formatQuantity(entry.quantity)} ${entry.unit}`
+                    : null,
+                  entry.unit_price && entry.unit ? formatRate(entry.unit_price, entry.unit) : null,
+                  entry.note,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                amount={money.plain(entry.amount)}
+                open={openEntry === entry.id}
+                onToggle={() => toggleEntry(entry.id)}
+                details={
+                  <>
+                    {entry.note && (
+                      <p className="wrap" style={{ margin: 0 }}>
+                        {entry.note}
+                      </p>
+                    )}
+                    <div className="row">{deleteButton(entry)}</div>
+                  </>
+                }
+              />
+            ))}
+          </ul>
         ) : (
           <TableWrap>
             <table className="stacked" aria-label={t("category.tableAria")}>
@@ -296,15 +355,7 @@ export function CategoryPage() {
                     <td className="wrap" data-label={t("field.note")}>
                       {entry.note ?? ""}
                     </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="quiet"
-                        onClick={() => void remove(entry)}
-                      >
-                        {t("action.delete")}
-                      </button>
-                    </td>
+                    <td>{deleteButton(entry)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -13,6 +13,7 @@ import {
   type Unit,
   type Vendor,
 } from "../api/types";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useTutorial } from "../components/Tutorial/useTutorial";
@@ -36,6 +37,7 @@ import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
+import { useLayout } from "../layout/useLayout";
 import { budgetMonth, shiftMonth, todayIso } from "../months";
 
 const NOTHING = {
@@ -44,6 +46,31 @@ const NOTHING = {
   vendors: [] as Vendor[],
   pots: [] as Pot[],
 };
+
+/** An entry being edited in place, as the inputs hold it. */
+type Draft = {
+  amount: string;
+  occurred_on: string;
+  category_id: string;
+  note: string;
+  quantity: string;
+  unit: Unit | "";
+  savings_type_id: string;
+};
+
+/**
+ * Consecutive entries of the same day, in the order served (newest first). Grouping only
+ * neighbours keeps that order even if a server ever sorts by something else.
+ */
+function byDay(entries: Entry[]): [string, Entry[]][] {
+  const groups: [string, Entry[]][] = [];
+  for (const entry of entries) {
+    const last = groups.at(-1);
+    if (last && last[0] === entry.occurred_on) last[1].push(entry);
+    else groups.push([entry.occurred_on, [entry]]);
+  }
+  return groups;
+}
 
 export function EntriesPage() {
   const money = useMoney();
@@ -95,15 +122,10 @@ export function EntriesPage() {
   // same markup turns into a sensible form without needing focus trapping, escape
   // handling and scroll locking to be got right.
   const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{
-    amount: string;
-    occurred_on: string;
-    category_id: string;
-    note: string;
-    quantity: string;
-    unit: Unit | "";
-    savings_type_id: string;
-  } | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  // AD-53: on a phone the list is rows grouped by day, one open at a time.
+  const phone = useLayout() === "phone";
+  const [openEntry, toggleEntry] = useOpenRow();
 
   const {
     data: { entries, categories, vendors, pots },
@@ -150,6 +172,24 @@ export function EntriesPage() {
     const lookup = new Map(pots.map((pot) => [pot.savings_type_id, pot.name]));
     return (id: string) => lookup.get(id) ?? "—";
   }, [pots]);
+
+  const vendorOf = useMemo(() => {
+    const lookup = new Map(vendors.map((vendor) => [vendor.id, vendor.name]));
+    return (id: string | null) => (id ? (lookup.get(id) ?? "") : "");
+  }, [vendors]);
+
+  /** A phone row's quiet second line: where, what for, at what rate. Empty parts drop out. */
+  function metaOf(entry: Entry): string {
+    return [
+      vendorOf(entry.vendor_id),
+      entry.note ?? "",
+      entry.quantity && entry.unit && entry.unit_price
+        ? formatRate(entry.unit_price, entry.unit)
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
 
   /** Epic 35.3: the default pot of the expense category this name resolves to, or "". */
   function defaultPotFor(name: string) {
@@ -344,6 +384,126 @@ export function EntriesPage() {
     } catch (caught) {
       setError(errorMessage(t, caught, "entries.couldNotSaveChange"));
     }
+  }
+
+  /** The one edit form: a table row on a desktop, inside the open row on a phone. */
+  function editRow(entry: Entry, draft: Draft) {
+    return (
+      <tr key={entry.id}>
+        <td data-label={t("field.date")}>
+          <input
+            type="date"
+            aria-label={t("entries.editDate")}
+            value={draft.occurred_on}
+            onChange={(event) =>
+              setDraft({ ...draft, occurred_on: event.target.value })
+            }
+          />
+        </td>
+        {/* Kind is shown, never edited. It is bound to the category by a
+            single foreign key (AD-7), so changing it would have to move the
+            entry to a different category at the same time. Delete and re-add
+            is the honest path, and the API refuses it for the same reason. */}
+        <td
+          data-label={t("entries.kind")}
+          style={{
+            color: entry.kind === "income" ? "var(--accent-ink)" : "var(--spend-ink)",
+          }}
+        >
+          {t(`kind.${entry.kind}` as MessageKey)}
+        </td>
+        <td data-label={t("field.category")}>
+          <select
+            aria-label={t("entries.editCategory")}
+            value={draft.category_id}
+            onChange={(event) =>
+              setDraft({ ...draft, category_id: event.target.value })
+            }
+          >
+            {categories
+              // Same kind only. The database refuses a mismatch anyway, so
+              // offering one would just be a 404 waiting to happen.
+              .filter((category) => category.kind === entry.kind)
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+          </select>
+        </td>
+        <td className="num" data-label={t("entries.colAmountShort")}>
+          <input
+            className="num"
+            inputMode="decimal"
+            aria-label={t("entries.editAmount")}
+            value={draft.amount}
+            onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+          />
+          {entry.kind === "expense" && (
+            <div className="row" style={{ flexWrap: "nowrap", gap: 6, marginTop: 6 }}>
+              <input
+                className="num"
+                inputMode="decimal"
+                placeholder={t("entries.quantityShort")}
+                aria-label={t("entries.editQuantity")}
+                value={draft.quantity}
+                onChange={(event) =>
+                  setDraft({ ...draft, quantity: event.target.value })
+                }
+              />
+              <select
+                aria-label={t("entries.editUnit")}
+                value={draft.unit}
+                onChange={(event) =>
+                  setDraft({ ...draft, unit: event.target.value as Unit | "" })
+                }
+              >
+                <option value="">—</option>
+                {UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {entry.kind === "expense" && (pots.length > 0 || draft.savings_type_id) && (
+            <select
+              aria-label={t("entries.editPaidFrom")}
+              style={{ marginTop: 6 }}
+              value={draft.savings_type_id}
+              onChange={(event) =>
+                setDraft({ ...draft, savings_type_id: event.target.value })
+              }
+            >
+              <option value="">{t("entries.paidFromNone")}</option>
+              {potOptions()}
+            </select>
+          )}
+        </td>
+        <td className="wrap" data-label={t("field.note")}>
+          <input
+            aria-label={t("entries.editNote")}
+            value={draft.note}
+            onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+          />
+        </td>
+        <td>
+          <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+            <button type="button" onClick={() => void saveEdit(entry)}>
+              {t("action.save")}
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => setEditing(null)}
+            >
+              {t("action.cancel")}
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
   }
 
   async function remove(entry: Entry) {
@@ -666,6 +826,81 @@ export function EntriesPage() {
               ? t("entries.noneMatching", { search: search.trim() })
               : t("entries.noneForFilter")}
           </Empty>
+        ) : phone ? (
+          <div data-tour="entries-rows">
+            {byDay(entries).map(([day, rows]) => (
+              <section key={day} aria-label={dates.dayAcrossYears(day)}>
+                <h3 className="list-day">{dates.dayAcrossYears(day)}</h3>
+                <ul className="list-rows">
+                  {rows.map((entry) =>
+                    editing === entry.id && draft ? (
+                      // The desktop's edit row, stacked as a card: one edit form, not two.
+                      <li key={entry.id} className="list-row open">
+                        <table className="stacked" aria-label={t("action.edit")}>
+                          <tbody>{editRow(entry, draft)}</tbody>
+                        </table>
+                      </li>
+                    ) : (
+                      <ListRow
+                        key={entry.id}
+                        title={
+                          <>
+                            {nameOf(entry.category_id)}
+                            {entry.savings_type_id && (
+                              <span className="tag">
+                                {t("entries.fromPot", { pot: potName(entry.savings_type_id) })}
+                              </span>
+                            )}
+                          </>
+                        }
+                        meta={metaOf(entry)}
+                        amount={`${entry.kind === "income" ? "+" : "−"}${money.plain(entry.amount)}`}
+                        amountTone={entry.kind === "income" ? "in" : undefined}
+                        open={openEntry === entry.id}
+                        onToggle={() => toggleEntry(entry.id)}
+                        details={
+                          <>
+                            {entry.note && (
+                              <p className="wrap" style={{ margin: 0 }}>
+                                {entry.note}
+                              </p>
+                            )}
+                            <div className="row" style={{ gap: 6 }}>
+                              <Link to={`/categories/${entry.category_id}`} className="chip">
+                                {nameOf(entry.category_id)}
+                              </Link>
+                              <button
+                                type="button"
+                                className="quiet"
+                                onClick={() => beginEdit(entry)}
+                                aria-label={t("entries.editRow", {
+                                  amount: entry.amount,
+                                  date: entry.occurred_on,
+                                })}
+                              >
+                                {t("action.edit")}
+                              </button>
+                              <button
+                                type="button"
+                                className="quiet"
+                                onClick={() => void remove(entry)}
+                                aria-label={t("entries.deleteRow", {
+                                  amount: entry.amount,
+                                  date: entry.occurred_on,
+                                })}
+                              >
+                                {t("action.delete")}
+                              </button>
+                            </div>
+                          </>
+                        }
+                      />
+                    ),
+                  )}
+                </ul>
+              </section>
+            ))}
+          </div>
         ) : (
           <TableWrap tour="entries-rows">
             <table className="stacked" aria-label={t("entries.title")}>
@@ -684,120 +919,7 @@ export function EntriesPage() {
               <tbody>
                 {entries.map((entry) =>
                   editing === entry.id && draft ? (
-                    <tr key={entry.id}>
-                      <td data-label={t("field.date")}>
-                        <input
-                          type="date"
-                          aria-label={t("entries.editDate")}
-                          value={draft.occurred_on}
-                          onChange={(event) =>
-                            setDraft({ ...draft, occurred_on: event.target.value })
-                          }
-                        />
-                      </td>
-                      {/* Kind is shown, never edited. It is bound to the category by a
-                          single foreign key (AD-7), so changing it would have to move the
-                          entry to a different category at the same time. Delete and re-add
-                          is the honest path, and the API refuses it for the same reason. */}
-                      <td
-                        data-label={t("entries.kind")}
-                        style={{
-                          color: entry.kind === "income" ? "var(--accent-ink)" : "var(--spend-ink)",
-                        }}
-                      >
-                        {t(`kind.${entry.kind}` as MessageKey)}
-                      </td>
-                      <td data-label={t("field.category")}>
-                        <select
-                          aria-label={t("entries.editCategory")}
-                          value={draft.category_id}
-                          onChange={(event) =>
-                            setDraft({ ...draft, category_id: event.target.value })
-                          }
-                        >
-                          {categories
-                            // Same kind only. The database refuses a mismatch anyway, so
-                            // offering one would just be a 404 waiting to happen.
-                            .filter((category) => category.kind === entry.kind)
-                            .map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.name}
-                              </option>
-                            ))}
-                        </select>
-                      </td>
-                      <td className="num" data-label={t("entries.colAmountShort")}>
-                        <input
-                          className="num"
-                          inputMode="decimal"
-                          aria-label={t("entries.editAmount")}
-                          value={draft.amount}
-                          onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
-                        />
-                        {entry.kind === "expense" && (
-                          <div className="row" style={{ flexWrap: "nowrap", gap: 6, marginTop: 6 }}>
-                            <input
-                              className="num"
-                              inputMode="decimal"
-                              placeholder={t("entries.quantityShort")}
-                              aria-label={t("entries.editQuantity")}
-                              value={draft.quantity}
-                              onChange={(event) =>
-                                setDraft({ ...draft, quantity: event.target.value })
-                              }
-                            />
-                            <select
-                              aria-label={t("entries.editUnit")}
-                              value={draft.unit}
-                              onChange={(event) =>
-                                setDraft({ ...draft, unit: event.target.value as Unit | "" })
-                              }
-                            >
-                              <option value="">—</option>
-                              {UNITS.map((u) => (
-                                <option key={u} value={u}>
-                                  {u}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                        {entry.kind === "expense" && (pots.length > 0 || draft.savings_type_id) && (
-                          <select
-                            aria-label={t("entries.editPaidFrom")}
-                            style={{ marginTop: 6 }}
-                            value={draft.savings_type_id}
-                            onChange={(event) =>
-                              setDraft({ ...draft, savings_type_id: event.target.value })
-                            }
-                          >
-                            <option value="">{t("entries.paidFromNone")}</option>
-                            {potOptions()}
-                          </select>
-                        )}
-                      </td>
-                      <td className="wrap" data-label={t("field.note")}>
-                        <input
-                          aria-label={t("entries.editNote")}
-                          value={draft.note}
-                          onChange={(event) => setDraft({ ...draft, note: event.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
-                          <button type="button" onClick={() => void saveEdit(entry)}>
-                            {t("action.save")}
-                          </button>
-                          <button
-                            type="button"
-                            className="quiet"
-                            onClick={() => setEditing(null)}
-                          >
-                            {t("action.cancel")}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    editRow(entry, draft)
                   ) : (
                     <tr key={entry.id}>
                       <td data-label={t("field.date")}>{entry.occurred_on}</td>
