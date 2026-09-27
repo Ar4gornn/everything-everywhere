@@ -102,4 +102,21 @@ describe("SignInPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Incorrect email or recovery code");
     expect(screen.getByLabelText("Recovery code")).toBeInTheDocument();
   });
+
+  it("opens on registration with the code from an invite link, and drops it from the URL", () => {
+    mockApi();
+    window.history.replaceState(null, "", "/?invite=abc-DEF_123&x=1");
+    render(<SignInPage />);
+
+    expect((screen.getByLabelText("Invite code") as HTMLInputElement).value).toBe("abc-DEF_123");
+    expect(screen.getByRole("button", { name: "Create account" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?x=1");
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("opens on sign-in without an invite link", () => {
+    mockApi();
+    render(<SignInPage />);
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
 });

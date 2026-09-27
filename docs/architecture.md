@@ -1076,6 +1076,33 @@ security-definer function
   Each clause carries its page; the push opens the first clause's page (`/inventory`,
   `/`, `/plan`, `/habits`), not always `/`.
 
+### AD-54 — An admin may issue invites from the app, through one audited function; the API still cannot INSERT one
+
+- **Binds:** `users.is_admin`, `invites.created_by`, `invite_issue()` (migration 0031),
+  `api/admin.py`, `services/invites.py`, `backend/admin.py`, `pages/InvitesPage.tsx`,
+  `components/InvitesCard.tsx`, the `?invite=` link read by `SignInPage`.
+- **Extends:** Story 7.1 (invites are hashed, single-use, expiring), AD-19 (named-column
+  grants on `users`; a SECURITY DEFINER function as the one narrow door), AD-8 (404, never 403).
+- **Decision:** an account flagged `is_admin` issues invites from the web client. The flag is
+  readable by the runtime role and writable only by the owner (`admin.py grant <email>`). The
+  runtime role still has no INSERT on `invites`: minting goes through `invite_issue(hash, note,
+  days)`, which refuses unless the transaction's tenant is an admin, bounds the days to 1-90,
+  and records the issuer. Revoking is a plain UPDATE (expires the invite now), because the
+  runtime role already holds UPDATE to spend one and a function would guard nothing more.
+  Every `/api/admin/*` route answers 404 to a non-admin. The plaintext code is returned once,
+  by the create, and becomes a message with a link `/?invite=CODE`; the sign-in page opens on
+  registration with it filled in and removes it from the address bar.
+- **What this gives up, stated plainly.** Before, a compromised API process could not mint
+  an invite at all. Now it can, by setting its tenant to an admin's id. That guarantee was
+  already thin — the same process can impersonate any tenant and read every row (RLS binds
+  the role, and the role is the API's) — so the worst new outcome is "an attacker creates
+  an account", strictly smaller than what that compromise already grants. `invite.py` stays
+  as the owner-side path and still works with no admin at all.
+- **Rejected:** every user inviting with a quota (a stolen account spends it; nobody asked
+  for viral growth); a local-only tool (keeps the old guarantee, loses "from my phone");
+  code and link as separate lines (safer URL hygiene, one more paste for every invitee —
+  the code is single-use and expiring, and the page strips it from the URL on arrival).
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -1249,6 +1276,7 @@ Everything Everywhere/
 | An expense paid from a pot, a category's default pot | `services/ledger.py` (`set_default_pot`), `services/savings.py` (`set_entry_withdrawal`), migrations 0027 and 0029, `frontend/src/pages/EntriesPage.tsx`, `PlanPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
 | What a closed month left over | `services/dashboard.py` (`leftover`, `dismiss_leftover`), migration 0030, `frontend/src/components/LeftoverCard.tsx`, `DashboardPage.tsx` | AD-51, AD-50, AD-49, AD-10 |
 | Notification control — kinds, muted items, local send time, preview, test | `services/push.py`, `api/push.py`, `notify.py`, migration 0028 (after 0030) | AD-52, AD-34, AD-30, AD-49, AD-19 |
+| Invites from the app — admin flag, issue, list, revoke, sign-up link | `api/admin.py`, `services/invites.py`, migration 0031, `backend/admin.py`, `frontend/src/pages/InvitesPage.tsx` | AD-54, AD-19, AD-8 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
+    admin,
     auth,
     books,
     budgets,
@@ -141,6 +142,7 @@ app.include_router(recipes.foods_router)
 app.include_router(recipes.meals_router)
 app.include_router(books.router)
 app.include_router(notes.router)
+app.include_router(admin.router)
 
 
 @app.get("/health", tags=["meta"])

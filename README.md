@@ -219,6 +219,16 @@ The code is printed once and stored only as a hash; there is no way to recover i
 another if it is lost. Send it over something private — anyone holding it can create one account.
 `invite.py list` shows what has been issued and whether it was used.
 
+Or issue them from the app. Make your own account an admin once:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm migrate python admin.py grant you@example.com
+```
+
+Settings then shows **Invite someone**. The page mints a code, and writes a message holding a
+sign-up link (`/?invite=CODE`) that you can copy or share. It also lists every invite with its state,
+and lets you revoke an open one.
+
 ### Notifications
 
 Optional, and off until it is configured. Generate a key pair on the server:

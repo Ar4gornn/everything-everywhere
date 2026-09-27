@@ -10,6 +10,7 @@ same reason it does not contain a readable password.
 
 import hashlib
 import hmac
+import secrets
 import uuid
 from datetime import UTC, datetime
 
@@ -92,3 +93,78 @@ def consume(session: Session, *, code: str, user_id: uuid.UUID) -> None:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+# --- Issuing from the web client (AD-54) -------------------------------------------------
+
+#: The bounds `invite_issue` enforces too; kept here so the request is refused as a 422
+#: with the client's own words before the database is asked.
+MIN_DAYS = 1
+MAX_DAYS = 90
+
+
+class IssuedInvite:
+    """The one moment the plaintext code exists outside the person who receives it."""
+
+    def __init__(self, id: uuid.UUID, code: str, note: str | None, expires_at: datetime):
+        self.id = id
+        self.code = code
+        self.note = note
+        self.expires_at = expires_at
+
+
+def new_code() -> str:
+    """160 bits, exactly as `backend/invite.py` mints them."""
+    return secrets.token_urlsafe(20)
+
+
+def issue(session: Session, *, note: str | None, days: int) -> IssuedInvite:
+    """Mint one invite through `invite_issue`, which refuses unless the tenant is an admin.
+
+    The caller has already checked; the function checks again because the grant is the
+    guarantee and the route is only the courtesy.
+    """
+    code = new_code()
+    invite_id = session.execute(
+        text("SELECT invite_issue(:h, :note, :days)"),
+        {"h": hash_code(code), "note": note, "days": days},
+    ).scalar_one()
+    row = session.execute(
+        text("SELECT note, expires_at FROM invites WHERE id = :id"), {"id": invite_id}
+    ).one()
+    return IssuedInvite(invite_id, code, row.note, row.expires_at)
+
+
+def list_all(session: Session) -> list:
+    """Every invite, newest first. Never the hash: it is no use to anyone reading a list."""
+    return list(
+        session.execute(
+            text(
+                """
+                SELECT id, note, created_at, expires_at, used_at,
+                       CASE WHEN used_at IS NOT NULL THEN 'used'
+                            WHEN expires_at <= now() THEN 'expired'
+                            ELSE 'open' END AS state
+                  FROM invites
+                 ORDER BY created_at DESC
+                """
+            )
+        ).all()
+    )
+
+
+def revoke(session: Session, *, invite_id: uuid.UUID) -> bool:
+    """End an unused invite now. False if there was nothing open to end.
+
+    Expiring it rather than deleting it keeps the list honest about what was issued, and
+    `verify`/`consume` already refuse an expired code, so nothing else has to learn a new
+    state.
+    """
+    result = session.execute(
+        text(
+            "UPDATE invites SET expires_at = now() "
+            "WHERE id = :id AND used_at IS NULL AND expires_at > now()"
+        ),
+        {"id": str(invite_id)},
+    )
+    return result.rowcount == 1
