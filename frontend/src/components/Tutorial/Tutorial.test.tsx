@@ -207,6 +207,10 @@ describe("the guided tour", () => {
     await screen.findByRole("dialog");
     await user.keyboard("{Enter}");
     await screen.findByText("Step 2 of 5");
+    // The entry step lands on /entries?add=1, whose page focuses Amount in an effect. If
+    // that runs after the focus below, Escape goes to the field and nothing is skipped.
+    const form = await screen.findByRole("form", { name: "Record an entry" });
+    await waitFor(() => expect(within(form).getByLabelText("Amount")).toHaveFocus());
     dialog().focus();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
