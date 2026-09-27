@@ -97,68 +97,64 @@ export function PlanPage() {
 
       <RecurringCard />
 
-      <div className="columns">
-        <div>
-          <SavingsCard />
-        </div>
+      <SavingsCard />
 
-        <Card title={t("plan.budgets")} tour="budgets">
-          <ErrorBanner message={error} />
-          <p className="hint" style={{ marginTop: 0 }}>
-            {t("plan.budgetsHint")}
-          </p>
-          {pots.length > 0 && <p className="hint">{t("plan.defaultPotHint")}</p>}
-          <p className="hint">
-            {t("plan.spentThisMonth", {
-              range: monthRangeLabel(month, startDay, t) || monthLabel(month, t),
-            })}
-          </p>
-          {categories.length === 0 ? (
-            <Empty>{t("plan.noCategories")}</Empty>
-          ) : (
-            <TableWrap>
-              <table className="stacked">
-                <thead>
-                  <tr>
-                    <th>{t("dash.colCategory")}</th>
-                    <th className="num">
-                      {t("plan.colMonthlyBudget", { symbol: money.symbol })}
-                    </th>
-                    <th className="num">{t("dash.colSpent", { symbol: money.symbol })}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {categories.map((category) => (
-                    <AmountRow
-                      key={category.id}
-                      name={category.name}
-                      t={t}
-                      initial={budgetFor(category.id)}
-                      spent={spentFor(category.id)}
-                      pots={pots}
-                      potId={category.default_savings_type_id ?? ""}
-                      onPot={(potId) =>
-                        guard(
-                          () => api.setCategoryPot(category.id, potId || null),
-                          "plan.couldNotSavePot",
-                        )
-                      }
-                      onSave={(value) => saveBudget(category.id, value)}
-                      onDelete={() =>
-                        guard(
-                          () => api.deleteCategory(category.id),
-                          "plan.couldNotDeleteCategory",
-                        )
-                      }
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
-          )}
-        </Card>
-      </div>
+      <Card title={t("plan.budgets")} tour="budgets">
+        <ErrorBanner message={error} />
+        <p className="hint" style={{ marginTop: 0 }}>
+          {t("plan.budgetsHint")}
+        </p>
+        {pots.length > 0 && <p className="hint">{t("plan.defaultPotHint")}</p>}
+        <p className="hint">
+          {t("plan.spentThisMonth", {
+            range: monthRangeLabel(month, startDay, t) || monthLabel(month, t),
+          })}
+        </p>
+        {categories.length === 0 ? (
+          <Empty>{t("plan.noCategories")}</Empty>
+        ) : (
+          <TableWrap>
+            <table className="stacked">
+              <thead>
+                <tr>
+                  <th>{t("dash.colCategory")}</th>
+                  <th className="num">
+                    {t("plan.colMonthlyBudget", { symbol: money.symbol })}
+                  </th>
+                  <th className="num">{t("dash.colSpent", { symbol: money.symbol })}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((category) => (
+                  <AmountRow
+                    key={category.id}
+                    name={category.name}
+                    t={t}
+                    initial={budgetFor(category.id)}
+                    spent={spentFor(category.id)}
+                    pots={pots}
+                    potId={category.default_savings_type_id ?? ""}
+                    onPot={(potId) =>
+                      guard(
+                        () => api.setCategoryPot(category.id, potId || null),
+                        "plan.couldNotSavePot",
+                      )
+                    }
+                    onSave={(value) => saveBudget(category.id, value)}
+                    onDelete={() =>
+                      guard(
+                        () => api.deleteCategory(category.id),
+                        "plan.couldNotDeleteCategory",
+                      )
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Card>
     </>
   );
 }
