@@ -221,14 +221,15 @@ another if it is lost. Send it over something private — anyone holding it can 
 
 ### Notifications
 
-Optional, and off until it is configured. Generate a key pair:
+Optional, and off until it is configured. Generate a key pair on the server:
 
 ```bash
-cd backend && ./.venv/Scripts/python.exe vapid.py
+docker compose -f docker-compose.prod.yml run --rm --no-deps notify python vapid.py
 ```
 
 Paste the three lines it prints into `.env` — `VAPID_SUBJECT` must be a real address a push
-service can reach — and restart the API. Each person then turns notifications on per device
+service can reach — and recreate the API with
+`docker compose -f docker-compose.prod.yml up -d api`. Each person then turns notifications on per device
 in Settings.
 
 Sending is a cron job on the host, not a scheduler inside the API: this is one container, and
@@ -236,11 +237,13 @@ an in-process scheduler would die with it and double up if a second ever ran. On
 plenty:
 
 ```bash
-0 8 * * *  cd /srv/everything-everywhere/backend && python notify.py
+0 8 * * *  cd /srv/everything-everywhere && docker compose -f docker-compose.prod.yml run --rm notify
 ```
 
-It sends at most one notification per device per day, nothing at all to someone with nothing
-waiting, and never creates an entry. `python notify.py --dry-run` shows what it would send.
+It runs in a container because the database publishes no port, so a host-side Python would
+have nothing to connect to. It sends at most one notification per device per day, nothing at
+all to someone with nothing waiting, and never creates an entry. Append
+`python notify.py --dry-run` to the command to see what it would send.
 
 ### When someone forgets their password
 

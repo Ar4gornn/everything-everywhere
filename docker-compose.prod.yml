@@ -81,10 +81,13 @@ services:
       REGISTRATION_MODE: "invite"
       LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-8}
       LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
-      # Empty unless set: push is off on an instance that was never given keys, and the
-      # API only ever reads the public one — notify.py, run from cron on the host, is what
-      # holds the private key and does the sending (AD-34).
+      # Empty unless set: push is off on an instance that was never given keys. All three
+      # are passed because settings.push_enabled requires all three — with only the public
+      # key and subject here, the API answered 503 forever and the Settings toggle never
+      # appeared, however .env was filled in. The API never sends; the notify job below
+      # does (AD-34).
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       # Same origin in production, so the browser never makes a cross-origin request and
       # there is no allowlist to get wrong.
@@ -104,6 +107,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # The daily push digest (Epic 18, AD-34). Not started by `up`: the "ops" profile keeps it
+  # out, and cron on the host runs it once a day:
+  #
+  #   docker compose -f docker-compose.prod.yml run --rm notify
+  #
+  # It runs in a container rather than from a host Python because the database publishes no
+  # port — a host-side notify.py has nothing to connect to. Owner credentials only to list
+  # the users; every read of their data is as the runtime role under their tenancy.
+  notify:
+    build: ./backend
+    profiles: ["ops"]
+    restart: "no"
+    logging: *default-logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${DB_OWNER}:${DB_OWNER_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql+psycopg://${DB_APP_USER}:${DB_APP_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+    command: ["python", "notify.py"]
 
   web:
     build:
