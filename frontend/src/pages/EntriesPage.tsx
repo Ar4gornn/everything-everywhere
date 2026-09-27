@@ -75,6 +75,9 @@ export function EntriesPage() {
   // AD-51: the pot an expense is paid from. Cleared after every write, so one trip paid
   // from the holiday pot does not quietly pay for the next week's groceries too.
   const [potId, setPotId] = useState("");
+  // Epic 35.3: whether the pot was picked by hand. Until it is, the category's default
+  // pot follows the category box; once it is, the category no longer overrides it.
+  const [potChosen, setPotChosen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // AD-29: the optional "how much of what" section. Any two of amount, quantity and unit
@@ -148,6 +151,17 @@ export function EntriesPage() {
     return (id: string) => lookup.get(id) ?? "—";
   }, [pots]);
 
+  /** Epic 35.3: the default pot of the expense category this name resolves to, or "". */
+  function defaultPotFor(name: string) {
+    const wanted = name.trim().toLowerCase();
+    const category = categories.find(
+      (c) => c.kind === "expense" && c.name.trim().toLowerCase() === wanted,
+    );
+    const pot = category?.default_savings_type_id;
+    // A pot the overview does not list (deleted since) cannot be offered by the select.
+    return pot && pots.some((p) => p.savings_type_id === pot) ? pot : "";
+  }
+
   function potOptions() {
     return pots.map((pot) => (
       <option key={pot.savings_type_id} value={pot.savings_type_id}>
@@ -185,6 +199,7 @@ export function EntriesPage() {
 
   function onCategoryNameChange(value: string) {
     setCategoryName(value);
+    if (kind === "expense" && !potChosen) setPotId(defaultPotFor(value));
     // Pre-fill the unit this category was last quantified in. Only for an expense, only
     // when the section is untouched, and never after it was dismissed for this entry.
     if (kind === "expense" && !unitDismissed && !unit && !quantity) {
@@ -235,7 +250,10 @@ export function EntriesPage() {
       if (quantified && unit) rememberUnit(categoryName, unit);
       setAmount("");
       setNote("");
-      setPotId("");
+      // AD-51: a pot picked by hand is not remembered. The category's default is shown
+      // again, visibly, since the category box keeps its name for the next entry.
+      setPotId(kind === "expense" ? defaultPotFor(categoryName) : "");
+      setPotChosen(false);
       clearQuantity();
       setUnitDismissed(false);
       await load();
@@ -375,10 +393,13 @@ export function EntriesPage() {
                 setKind(next);
                 // Only an expense buys something. Drop the section rather than send a
                 // payload the API would refuse.
+                setPotChosen(false);
                 if (next === "income") {
                   clearQuantity();
                   setShowQuantity(false);
                   setPotId("");
+                } else {
+                  setPotId(defaultPotFor(categoryName));
                 }
               }}
             >
@@ -462,7 +483,10 @@ export function EntriesPage() {
               <select
                 aria-label={t("entries.paidFrom")}
                 value={potId}
-                onChange={(event) => setPotId(event.target.value)}
+                onChange={(event) => {
+                  setPotId(event.target.value);
+                  setPotChosen(true);
+                }}
               >
                 <option value="">{t("entries.paidFromNone")}</option>
                 {potOptions()}

@@ -88,6 +88,30 @@ def resolve_category(
     return category
 
 
+def set_default_pot(
+    session: Session,
+    user_id: uuid.UUID,
+    category_id: uuid.UUID,
+    *,
+    savings_type_id: uuid.UUID | None,
+) -> Category:
+    """Epic 35.3 (AD-51): the pot an expense category pre-fills. Touches no entry."""
+    category = session.execute(
+        select(Category).where(Category.user_id == user_id, Category.id == category_id)
+    ).scalar_one_or_none()
+    if category is None:
+        raise NotFound("No category with that id")
+    if savings_type_id is not None:
+        if category.kind is not EntryKind.expense:
+            # The CHECK would refuse it too, as a 500; this is AD-51's code, as a 422.
+            raise Invalid("only an expense can be paid from a pot", "savings_expense_only")
+        # AD-8: prove the pot is the caller's; the composite key would say so as a 500.
+        savings.require_type(session, user_id, savings_type_id)
+    category.default_savings_type_id = savings_type_id
+    session.flush()
+    return category
+
+
 def delete_category(session: Session, user_id: uuid.UUID, category_id: uuid.UUID) -> None:
     try:
         result = session.execute(

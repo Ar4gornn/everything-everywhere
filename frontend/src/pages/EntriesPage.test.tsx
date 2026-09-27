@@ -62,9 +62,13 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function mockApi(pots: (typeof holiday)[] = [], rows: unknown[] = entries) {
+function mockApi(
+  pots: (typeof holiday)[] = [],
+  rows: unknown[] = entries,
+  cats: unknown[] = categories,
+) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.includes("/api/categories")) return json({ items: categories });
+    if (url.includes("/api/categories")) return json({ items: cats });
     if (url.includes("/api/savings/overview")) return json(overview(pots));
     if (url.includes("/api/entries") && init?.method === "POST") {
       return json({ ...entries[0], id: "e2" }, 201);
@@ -190,6 +194,68 @@ describe("EntriesPage", () => {
 
     await user.selectOptions(within(form).getByLabelText("Kind"), "income");
     expect(within(form).queryByLabelText("Paid from")).not.toBeInTheDocument();
+  });
+
+  // Epic 35.3: a category's default pot fills in "Paid from"; the entry can override it.
+  const travel = { id: "c3", kind: "expense" as const, name: "Travel", created_at: "" };
+
+  it("fills in the category's default pot, and sends it", async () => {
+    const fetchMock = mockApi([holiday], entries, [
+      ...categories,
+      { ...travel, default_savings_type_id: "p1" },
+    ]);
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+    await screen.findByRole("table", { name: "Entries" });
+
+    const form = screen.getByRole("form", { name: "Record an entry" });
+    await user.type(within(form).getByLabelText("Amount"), "45.50");
+    await user.type(within(form).getByLabelText("Category"), "travel");
+    expect(within(form).getByLabelText("Paid from")).toHaveValue("p1");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(JSON.parse(String(posted?.[1]?.body)).savings_type_id).toBe("p1");
+    });
+    // The category box keeps "travel", so its default is offered again, visibly.
+    await waitFor(() => expect(within(form).getByLabelText("Paid from")).toHaveValue("p1"));
+  });
+
+  it("drops the default when the category no longer matches", async () => {
+    mockApi([holiday], entries, [...categories, { ...travel, default_savings_type_id: "p1" }]);
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+    await screen.findByRole("table", { name: "Entries" });
+
+    const form = screen.getByRole("form", { name: "Record an entry" });
+    const category = within(form).getByLabelText("Category");
+    await user.type(category, "Travel");
+    expect(within(form).getByLabelText("Paid from")).toHaveValue("p1");
+    await user.type(category, "s");
+    expect(within(form).getByLabelText("Paid from")).toHaveValue("");
+  });
+
+  it("lets the entry override the default, and keeps the choice while typing", async () => {
+    const fetchMock = mockApi([holiday], entries, [
+      ...categories,
+      { ...travel, default_savings_type_id: "p1" },
+    ]);
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+    await screen.findByRole("table", { name: "Entries" });
+
+    const form = screen.getByRole("form", { name: "Record an entry" });
+    await user.type(within(form).getByLabelText("Amount"), "45.50");
+    await user.selectOptions(within(form).getByLabelText("Paid from"), "");
+    await user.type(within(form).getByLabelText("Category"), "Travel");
+    expect(within(form).getByLabelText("Paid from")).toHaveValue("");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(JSON.parse(String(posted?.[1]?.body))).not.toHaveProperty("savings_type_id");
+    });
   });
 
   it("marks an expense paid from a pot, and can stop paying from it", async () => {

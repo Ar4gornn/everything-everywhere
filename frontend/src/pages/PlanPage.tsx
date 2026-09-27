@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
-import type { Budget, BudgetVsActual, Category } from "../api/types";
+import type { Budget, BudgetVsActual, Category, Pot } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { ProgressBar } from "../charts/ProgressBar";
 import { RecurringCard } from "../components/RecurringCard";
@@ -19,6 +19,7 @@ const NOTHING = {
   categories: [] as Category[],
   budgets: [] as Budget[],
   spent: [] as BudgetVsActual[],
+  pots: [] as Pot[],
 };
 
 /** Savings and budgets: what the user intends, and what they have actually put aside. */
@@ -35,15 +36,24 @@ export function PlanPage() {
   const [error, setError] = useState<string | null>(null);
 
   const {
-    data: { categories, budgets, spent },
+    data: { categories, budgets, spent, pots },
     loading,
     failure,
     reload: load,
   } = useLoad(
     () =>
-      Promise.all([api.listCategories("expense"), api.listBudgets(), api.summary(month)]).then(
-        ([categories, budgets, summary]) => ({ categories, budgets, spent: summary.budgets }),
-      ),
+      Promise.all([
+        api.listCategories("expense"),
+        api.listBudgets(),
+        api.summary(month),
+        // Epic 35.3: for each category's default pot.
+        api.savingsOverview().then((overview) => overview.pots),
+      ]).then(([categories, budgets, summary, pots]) => ({
+        categories,
+        budgets,
+        spent: summary.budgets,
+        pots,
+      })),
     NOTHING,
     [month],
     "plan.couldNotLoad",
@@ -97,6 +107,7 @@ export function PlanPage() {
           <p className="hint" style={{ marginTop: 0 }}>
             {t("plan.budgetsHint")}
           </p>
+          {pots.length > 0 && <p className="hint">{t("plan.defaultPotHint")}</p>}
           <p className="hint">
             {t("plan.spentThisMonth", {
               range: monthRangeLabel(month, startDay, t) || monthLabel(month, t),
@@ -125,6 +136,14 @@ export function PlanPage() {
                       t={t}
                       initial={budgetFor(category.id)}
                       spent={spentFor(category.id)}
+                      pots={pots}
+                      potId={category.default_savings_type_id ?? ""}
+                      onPot={(potId) =>
+                        guard(
+                          () => api.setCategoryPot(category.id, potId || null),
+                          "plan.couldNotSavePot",
+                        )
+                      }
                       onSave={(value) => saveBudget(category.id, value)}
                       onDelete={() =>
                         guard(
@@ -149,6 +168,9 @@ function AmountRow({
   t,
   initial,
   spent,
+  pots,
+  potId,
+  onPot,
   onSave,
   onDelete,
 }: {
@@ -159,6 +181,10 @@ function AmountRow({
   initial: string;
   /** What the current budget month has spent in this category, "0.00" if nothing. */
   spent: string;
+  pots: Pot[];
+  /** Epic 35.3: the category's default pot, "" for none. Saved as soon as it changes. */
+  potId: string;
+  onPot: (potId: string) => Promise<void>;
   onSave: (value: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }) {
@@ -177,7 +203,25 @@ function AmountRow({
 
   return (
     <tr>
-      <td data-label={t("field.name")}>{name}</td>
+      <td data-label={t("field.name")}>
+        {name}
+        {(pots.length > 0 || potId) && (
+          <select
+            aria-label={t("plan.defaultPotFor", { name })}
+            // A bare select in the name column shrank to "No…"; a floor keeps its words.
+            style={{ display: "block", marginTop: 6, minWidth: "7rem" }}
+            value={potId}
+            onChange={(event) => void onPot(event.target.value)}
+          >
+            <option value="">{t("plan.noDefaultPot")}</option>
+            {pots.map((pot) => (
+              <option key={pot.savings_type_id} value={pot.savings_type_id}>
+                {pot.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </td>
       <td className="num" data-label={t("plan.colMonthly")}>
         <input
           className="num"

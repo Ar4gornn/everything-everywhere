@@ -5,7 +5,7 @@ from fastapi import APIRouter, Response, status
 from app.core.deps import CurrentUserId, DbSession
 from app.models.ledger import EntryKind
 from app.schemas.common import Page
-from app.schemas.ledger import CategoryCreate, CategoryOut
+from app.schemas.ledger import CategoryCreate, CategoryOut, CategoryUpdate
 from app.services import ledger
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
@@ -29,6 +29,16 @@ def create_category(
     # same category — which is what makes the create-by-name path on entries safe.
     category = ledger.get_or_create_category(
         session, user_id, kind=payload.kind, name=payload.name
+    )
+    return CategoryOut.model_validate(category)
+
+
+@router.patch("/{category_id}", response_model=CategoryOut)
+def update_category(
+    category_id: uuid.UUID, payload: CategoryUpdate, user_id: CurrentUserId, session: DbSession
+) -> CategoryOut:
+    category = ledger.set_default_pot(
+        session, user_id, category_id, savings_type_id=payload.default_savings_type_id
     )
     return CategoryOut.model_validate(category)
 

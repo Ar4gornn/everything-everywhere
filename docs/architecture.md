@@ -1005,6 +1005,15 @@ security-definer function
   `null` removes it, an absent key leaves it. The Entries form clears the choice after each
   write, as a remembered pot would silently pay for the next entry too.
 
+  **A category's default pot (Story 35.3)** is a form default and nothing more.
+  `categories.default_savings_type_id` is composite to `savings_types (user_id, id)`,
+  `ON DELETE SET NULL (default_savings_type_id)`, with a CHECK that only an expense category
+  carries it (migration 0029). The entry endpoints never read it: an entry sent without a
+  pot is paid from nothing, whatever its category says, so setting or clearing a default
+  rewrites no entry and writes no withdrawal. The Entries form fills "Paid from" from it and
+  shows the choice, which is why re-offering it after a write does not break the rule above:
+  what is remembered is visible and belongs to the category, not to the last entry.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -1175,7 +1184,7 @@ Everything Everywhere/
 | Notes — text or a sketch, drafts on the device, shortcuts | `api/notes.py`, `services/notes.py`, migration 0024, `frontend/src/notes/`, `NotesPage.tsx`, `NotePage.tsx`, `public/manifest.webmanifest` | AD-48, AD-8, AD-30, AD-31, AD-24 |
 | Preferences — modules, tab order, dashboard cards, per layout | `services/preferences.py`, `api/auth.py`, migration 0025 | AD-49, AD-19, AD-24, AD-44 |
 | Savings pots — balances, withdrawals, goals, what is due | `api/savings.py`, `services/savings.py`, migration 0026, `frontend/src/components/SavingsCard.tsx` | AD-50, AD-10, AD-11, AD-18, AD-24 |
-| An expense paid from a pot | `services/ledger.py`, `services/savings.py` (`set_entry_withdrawal`), migration 0027, `frontend/src/pages/EntriesPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
+| An expense paid from a pot, a category's default pot | `services/ledger.py` (`set_default_pot`), `services/savings.py` (`set_entry_withdrawal`), migrations 0027 and 0029, `frontend/src/pages/EntriesPage.tsx`, `PlanPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred

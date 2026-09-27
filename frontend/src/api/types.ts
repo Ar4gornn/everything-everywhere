@@ -114,6 +114,8 @@ export interface Category {
   id: string;
   kind: EntryKind;
   name: string;
+  /** Epic 35.3: pre-fills "Paid from". Absent from servers older than Epic 35. */
+  default_savings_type_id?: string | null;
   created_at: string;
 }
 

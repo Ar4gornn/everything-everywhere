@@ -2535,6 +2535,15 @@ automatically; re-linking past entries; income paid into a pot.
 
 - `categories.default_savings_type_id`, composite FK, `ON DELETE SET NULL (column)`.
   Expense categories only. Pre-fills the entry form; never rewrites existing entries.
+- Migration `0029` (after `0027`; Epic 36 holds `0028` on its own branch). A CHECK keeps it
+  off income categories.
+- `PATCH /api/categories/{id}` with `{"default_savings_type_id": <pot> | null}`, the key
+  required; an income category is `422 savings_expense_only`, another account's pot or
+  category a 404. `CategoryOut` carries it. The server never reads it when writing an entry.
+- Plan page: each budget row has a pot choice under the category's name, saved on change.
+- Entries: typing a category that has a default pot fills in "Paid from"; a pot picked by
+  hand wins over the category until the entry is written. After a write the category's
+  default is shown again, since the category box keeps its name.
 
 ### Story 35.4: What a month left over
 

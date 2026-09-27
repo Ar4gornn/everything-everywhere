@@ -25,7 +25,17 @@ class CategoryOut(BaseModel):
     id: uuid.UUID
     kind: EntryKind
     name: str
+    #: Epic 35.3: pre-fills "Paid from" on the entry form. Expense categories only.
+    default_savings_type_id: uuid.UUID | None = None
     created_at: dt.datetime
+
+
+class CategoryUpdate(BaseModel):
+    """Epic 35.3: set the default pot, or clear it with ``null``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    default_savings_type_id: uuid.UUID | None
 
 
 _QUANTITY_TOGETHER = "quantity and unit go together: send both, or neither"

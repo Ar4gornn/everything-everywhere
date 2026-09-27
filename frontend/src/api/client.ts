@@ -479,6 +479,13 @@ export const api = {
       body: JSON.stringify({ name, kind }),
     }),
 
+  /** Epic 35.3: the pot an expense category pre-fills; null clears it. */
+  setCategoryPot: (id: string, savingsTypeId: string | null) =>
+    request<Category>(`/api/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ default_savings_type_id: savingsTypeId }),
+    }),
+
   deleteCategory: (id: string) =>
     request<void>(`/api/categories/${id}`, { method: "DELETE" }),
 

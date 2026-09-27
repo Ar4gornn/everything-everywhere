@@ -32,6 +32,16 @@ export const plan = {
   "plan.leftOf": { en: "· {amount} left", fr: "· reste {amount}" },
   "plan.overBy": { en: "· {amount} over", fr: "· {amount} de dépassement" },
   "plan.colMonthly": { en: "Monthly", fr: "Mensuel" },
+  "plan.defaultPotHint": {
+    en: "A category’s pot fills in “Paid from” on its next expenses. Past entries stay as they are.",
+    fr: "L’enveloppe d’une catégorie remplit « Payé depuis » pour ses prochaines dépenses. Les entrées passées ne changent pas.",
+  },
+  "plan.defaultPotFor": { en: "Default pot for {name}", fr: "Enveloppe par défaut pour {name}" },
+  "plan.noDefaultPot": { en: "No pot", fr: "Sans enveloppe" },
+  "plan.couldNotSavePot": {
+    en: "Could not save the default pot.",
+    fr: "Impossible d’enregistrer l’enveloppe par défaut.",
+  },
   "plan.monthlyAmountFor": {
     en: "Monthly amount for {name}",
     fr: "Montant mensuel pour {name}",

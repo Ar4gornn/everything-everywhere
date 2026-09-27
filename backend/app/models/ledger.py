@@ -58,6 +58,19 @@ _kind = Enum(EntryKind, name="entry_kind", values_callable=lambda e: [m.value fo
 
 class Category(TimestampedMixin, Base):
     __tablename__ = "categories"
+    __table_args__ = (
+        # Epic 35.3 (AD-51): composite, so it cannot name another account's pot. The
+        # constraint itself (SET NULL on one column) is raw SQL in migration 0029.
+        ForeignKeyConstraint(
+            ["user_id", "default_savings_type_id"],
+            ["savings_types.user_id", "savings_types.id"],
+            name="categories_default_pot_fkey",
+        ),
+        CheckConstraint(
+            "default_savings_type_id IS NULL OR kind = 'expense'",
+            name="categories_default_pot_expense_only",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
@@ -67,6 +80,11 @@ class Category(TimestampedMixin, Base):
     )
     kind: Mapped[EntryKind] = mapped_column(_kind, nullable=False)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    # Epic 35.3: the pot an expense here is usually paid from. It pre-fills the entry form
+    # and nothing else: no entry is written from it, and changing it rewrites none.
+    default_savings_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True
+    )
 
 
 class Vendor(TimestampedMixin, Base):
