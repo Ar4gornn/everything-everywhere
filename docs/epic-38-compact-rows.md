@@ -110,3 +110,63 @@ Page height, measured in a same-origin iframe at the given width:
   `aria-expanded` removed, Entries never phone, the sign dropped from an amount.
 - Not addressed, noted in the audit: the floating buttons still cover the right edge of the
   last visible row (audit #5).
+
+---
+
+## 4. Story 38.2 — Phone rows for the remaining tables (scoped 2026-09-27, not built)
+
+### Scope (interview, 2026-09-27)
+
+| Question | Chosen | Rejected |
+|---|---|---|
+| Rows with inputs | **Mixed**: a frequent one-tap action stays on the row, rare edits move into the open row | edit on expand everywhere (restocking becomes two taps); inline compacted (does not fit 320 FR) |
+| Slice | **All except Stock item rows** (12 tables) | everything incl. Stock (conflicts with `feat/notification-control`, which adds a bell to that row); read-only lists only |
+| Grow year by year | **Row: year + balance, the rest on expand** | narrow two-column table; four small columns |
+| Gym session sets | **One line per set under an exercise heading** | edit on expand; leave Gym for later |
+
+Correction recorded: Gym's session sets are **not** input rows — sets are logged by the form
+above the list, and the list only displays them with Delete. "One line per set" therefore
+means grouping + a compact line, not inline inputs.
+
+**Stock item rows** (quantity steppers, remind-at, cost, History/Edit/Delete) are slice 3,
+built after Epic 36 merges, with the Mixed rule: −/+ on the row, the rest on expand.
+
+### `ListRow` change
+
+A `trailing` slot: one action button rendered **beside** the head button, never inside it
+(a button may not contain a button). The row still expands from its head.
+
+### Per table (phone only; desktop tables unchanged)
+
+| # | Table (file) | Collapsed row | On expand |
+|---|---|---|---|
+| 1 | Shopping list (`components/ShoppingList.tsx`) | name · space, meta "qty × cost", **Bought** as `trailing` | buy-quantity and cost inputs (same aria-labels) |
+| 2 | Plan budgets (`pages/PlanPage.tsx`, `AmountRow`) | category, spent, bar "of {budget}" / "No budget" | monthly amount input + Save, default pot select, Delete |
+| 3 | Recurring — to confirm (`components/RecurringCard.tsx`) | category · note, meta due date (`dates.day`), amount, **Add** as `trailing` | amount input, Skip |
+| 4 | Recurring — templates (same file) | category + Auto/Paused tags, meta "cadence · next {date}", amount; paused row muted | Pause/Resume, Delete |
+| 5 | Savings history (`components/SavingsCard.tsx`) | pot + withdrawal/paid-an-expense tag, meta date, signed amount (withdrawal in spend ink) | Delete, or the "change on the entry" link (AD-51) |
+| 6 | Category — by vendor (`pages/CategoryPage.tsx`) | vendor, meta "{rate} /{unit} · {n} entries", spent. Static. | — |
+| 7 | Category — entries (same file) | `dates.day(date)`, meta qty · rate · note, amount | note, Delete |
+| 8 | Gym — session sets (`pages/GymPage.tsx`) | heading per consecutive exercise; "Set N" + "reps × weight {unit}" or bodyweight | Delete |
+| 9 | Gym — routine exercises (same file) | exercise, target "3×8" | video link, Remove |
+| 10 | Gym — recent sessions (same file) | `dates.day(performed_on)` · routine name | Open, Delete |
+| 11 | Stock — restocks per space (`pages/InventoryPage.tsx`, bottom card only) | space, total, `CountBars` in the bar slot. Static. | — |
+| 12 | Grow — year by year (`pages/ProjectionsPage.tsx`) | "Year N", balance (difference when comparing) | paid in + interest (A and B balances when comparing) |
+
+### Acceptance criteria
+
+1. Each of the 12 renders `ListRow`s on a phone and its existing table on a desktop,
+   unchanged (existing tests green without edits).
+2. Every action keeps the accessible name it has on desktop.
+3. A `trailing` action works without opening the row, and is outside the head button.
+4. One row open per list; heads are `<button aria-expanded aria-controls>`; static rows are
+   not buttons.
+5. Any new visible string exists in English and French.
+6. Width sweep at 320 and 375, EN and FR, rows closed and one open per list: nothing past the
+   viewport or its card. Page heights before/after recorded below.
+7. New RTL phone tests per file; each new behaviour made to fail by a mutation first.
+8. Separate reviewer pass before the PR.
+
+### Results
+
+To be filled in after the build.
