@@ -79,6 +79,7 @@ export const entries = {
   "rows.nextOn": { en: "next {date}", fr: "prochaine le {date}" },
   "rows.year": { en: "Year {n}", fr: "Année {n}" },
   "rows.setN": { en: "Set {n}", fr: "Série {n}" },
+  "rows.unsaved": { en: "Not saved: {amount}", fr: "Non enregistré : {amount}" },
 
   "dash.savingsProgress": { en: "Savings progress", fr: "Avancement de l’épargne" },
   "dash.savingsCount_one": { en: "{count} type", fr: "{count} enveloppe" },

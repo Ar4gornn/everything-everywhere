@@ -201,6 +201,8 @@ session open (the sets list) and the routine open for editing (its exercises).
   later `trailing` action: **the closed row shows the value its action sends.** Also fixed:
   the shopping inputs' visible labels now match their accessible names (WCAG 2.5.3), and
   Grow's B series is computed once, not per row.
-- Not fixed, noted: a Plan budget typed and not saved gives no sign on the closed row (Save
-  stays enabled on reopening); floating buttons still cover the last row's right edge
-  (audit #5).
+- Follow-up, same day: a Plan budget typed and not saved now marks its closed row, "Not
+  saved: {amount}" / "Non enregistré : {amount}", in the meta line; typing the saved figure
+  back clears it. Two mutations red; 320/375 EN/FR measured with a long name and a
+  nine-digit amount, nothing past the card.
+- Not addressed: floating buttons still cover the last row's right edge (audit #5).

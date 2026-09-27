@@ -275,9 +275,23 @@ function AmountRow({
   );
 
   if (phone) {
+    // A typed amount lives on in this row after it closes; say so, or it is invisible
+    // until the row is reopened (the desktop always shows its input).
+    const draft = value.trim();
+    const unsaved =
+      dirty && value !== initial
+        ? t("rows.unsaved", {
+            amount: !draft
+              ? "—"
+              : isNonNegativeMoney(draft)
+                ? money.plain(normalizeMoney(draft))
+                : draft,
+          })
+        : undefined;
     return (
       <ListRow
         title={name}
+        meta={unsaved}
         amount={money.plain(spent)}
         amountTone={over ? "over" : undefined}
         bar={

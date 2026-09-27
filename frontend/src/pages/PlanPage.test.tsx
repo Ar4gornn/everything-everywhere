@@ -274,4 +274,31 @@ describe("PlanPage on a phone (Story 38.2)", () => {
     );
     expect(within(rows).getByRole("button", { name: "Delete Rent" })).toBeInTheDocument();
   });
+
+  it("marks the closed row when its typed amount is not saved", async () => {
+    const user = userEvent.setup();
+    mockApi({
+      budgets: [{ category_id: "c1", monthly_amount: "500.00", updated_at: "" }],
+      spent: [{ category_id: "c1", budget: "500.00", actual: "120.00" }],
+    });
+    render(<PlanPage />);
+
+    const rows = await screen.findByRole("list", { name: "Monthly budgets" });
+    const head = within(rows).getByRole("button", { name: /Rent/ });
+    expect(head).not.toHaveTextContent("Not saved");
+
+    await user.click(head);
+    const amount = screen.getByLabelText("Monthly amount for Rent");
+    await user.clear(amount);
+    await user.type(amount, "450,5");
+    await user.click(head);
+    expect(head).toHaveTextContent("Not saved: 450.50");
+
+    // Typed back to what is saved: nothing is pending.
+    await user.click(head);
+    await user.clear(screen.getByLabelText("Monthly amount for Rent"));
+    await user.type(screen.getByLabelText("Monthly amount for Rent"), "500.00");
+    await user.click(head);
+    expect(head).not.toHaveTextContent("Not saved");
+  });
 });
