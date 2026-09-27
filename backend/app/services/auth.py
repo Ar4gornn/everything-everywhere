@@ -50,6 +50,7 @@ class UserRow:
         preferences: object,
         timezone: str | None,
         digest_time: time,
+        is_admin: bool = False,
     ) -> None:
         self.id = id
         self.email = email
@@ -64,6 +65,7 @@ class UserRow:
         self.preferences = preferences_service.resolve(preferences)
         self.timezone = timezone
         self.digest_time = digest_time
+        self.is_admin = is_admin
 
 
 def _read_user(session: Session, user_id: uuid.UUID) -> UserRow | None:
@@ -81,6 +83,7 @@ def _read_user(session: Session, user_id: uuid.UUID) -> UserRow | None:
             User.preferences,
             User.timezone,
             User.digest_time,
+            User.is_admin,
         ).where(User.id == user_id)
     ).one_or_none()
     return None if row is None else UserRow(*row)
@@ -130,6 +133,13 @@ def register(
 
 def read_profile(session: Session, user_id: uuid.UUID) -> UserRow | None:
     return _read_user(session, user_id)
+
+
+def is_admin(session: Session, user_id: uuid.UUID) -> bool:
+    """AD-54. False for a user that does not exist, which is what the caller wants."""
+    return bool(
+        session.execute(select(User.is_admin).where(User.id == user_id)).scalar_one_or_none()
+    )
 
 
 def authenticate(session: Session, *, email: str, password: str) -> uuid.UUID | None:

@@ -130,6 +130,9 @@ class UserOut(BaseModel):
     # Epic 36 (AD-52). Null zone: the digest follows the host's clock, as it always did.
     timezone: str | None
     digest_time: time
+    # AD-54: whether this account may issue invites. Only decides what the client shows;
+    # every admin route checks again, and so does the database.
+    is_admin: bool = False
 
     @field_serializer("digest_time")
     def _hh_mm(self, value: time) -> str:

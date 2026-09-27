@@ -3510,3 +3510,34 @@ button.bell[aria-pressed="false"] {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* AD-54: the invite list. Scoped to its page; `.invite-row` is not reused elsewhere. */
+.invites-page ul.invite-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.invites-page li.invite-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.invites-page li.invite-row:first-child {
+  border-top: 0;
+}
+.invites-page .invite-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.invites-page li.invite-row:not(.open) .invite-text strong {
+  color: var(--muted);
+}
+.invites-page .invite-issued textarea {
+  width: 100%;
+  font: inherit;
+}

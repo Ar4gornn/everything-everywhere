@@ -51,3 +51,6 @@ class User(TimestampedMixin, Base):
     digest_time: Mapped[time] = mapped_column(
         Time, nullable=False, server_default=text("'19:00'::time")
     )
+    # AD-54: may issue invites from the web client. The runtime role can read it and never
+    # write it; only `backend/admin.py`, as the owner, sets it.
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

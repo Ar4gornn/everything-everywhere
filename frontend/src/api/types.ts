@@ -62,6 +62,29 @@ export interface User {
    */
   timezone?: string | null;
   digest_time?: string;
+  /**
+   * AD-54: may issue invites. Only decides whether the Invites page is offered; the server
+   * refuses a non-admin on every admin route regardless. Absent from an older server.
+   */
+  is_admin?: boolean;
+}
+
+/** AD-54: an invite as the admin list shows it. Never the code — that exists once. */
+export interface Invite {
+  id: string;
+  note: string | null;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  state: "open" | "used" | "expired";
+}
+
+/** The create's answer: the only time the plaintext code is ever sent. */
+export interface IssuedInvite {
+  id: string;
+  code: string;
+  note: string | null;
+  expires_at: string;
 }
 
 /** Epic 33 (AD-49): what can be switched off. Off hides the UI; the data stays. */

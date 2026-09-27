@@ -7,6 +7,7 @@ import type { Currency, Language } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { LANGUAGES, useLanguage } from "../i18n";
 import { errorMessage } from "../i18n/errors";
+import { InvitesCard } from "../components/InvitesCard";
 import { LayoutCard } from "../components/LayoutCard";
 import { NotificationsCard } from "../components/NotificationsCard";
 import { SecurityCard } from "../components/SecurityCard";
@@ -277,6 +278,9 @@ export function SettingsPage() {
       </Card>
 
       <NotificationsCard />
+
+      {/* AD-54: an admin only. Its own component, so a non-admin never mounts its hooks. */}
+      {user?.is_admin && <InvitesCard />}
 
       <Card title={t("settings.help")}>
         <p className="hint" style={{ margin: "0 0 10px" }}>

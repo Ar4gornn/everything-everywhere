@@ -35,6 +35,8 @@ import type {
   ScheduleKind,
   HabitProgress,
   Heatmap,
+  Invite,
+  IssuedInvite,
   Meal,
   Money,
   MoodDay,
@@ -1145,4 +1147,16 @@ export const api = {
     request<Note>(`/api/notes/${id}`, { method: "PUT", body: JSON.stringify(body) }),
 
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: "DELETE" }),
+
+  // --- AD-54: invites, for an admin
+  listInvites: () => items(request<Page<Invite>>("/api/admin/invites")),
+
+  createInvite: (note: string, days: number) =>
+    request<IssuedInvite>("/api/admin/invites", {
+      method: "POST",
+      body: JSON.stringify({ note: note.trim() || null, days }),
+    }),
+
+  revokeInvite: (id: string) =>
+    request<void>(`/api/admin/invites/${id}/revoke`, { method: "POST" }),
 };
