@@ -7,6 +7,7 @@ import type { Currency, Language } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { LANGUAGES, useLanguage } from "../i18n";
 import { errorMessage } from "../i18n/errors";
+import { CalendarFeedCard } from "../components/CalendarFeedCard";
 import { InvitesCard } from "../components/InvitesCard";
 import { LayoutCard } from "../components/LayoutCard";
 import { NotificationsCard } from "../components/NotificationsCard";
@@ -278,6 +279,8 @@ export function SettingsPage() {
       </Card>
 
       <NotificationsCard />
+
+      <CalendarFeedCard />
 
       {/* AD-54: an admin only. Its own component, so a non-admin never mounts its hooks. */}
       {user?.is_admin && <InvitesCard />}

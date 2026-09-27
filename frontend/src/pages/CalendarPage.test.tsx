@@ -337,7 +337,12 @@ describe("CalendarPage", () => {
     const forecast = within(forecastCard).getByText("Rent").closest("li") as HTMLElement;
     expect(within(forecast).getByText("expected")).toBeInTheDocument();
     expect(forecast.textContent).toContain("will be proposed");
-    expect(within(forecast).queryByRole("button")).toBeNull();
+    // Nothing to confirm or skip: the one button is Epic 39's "Add to calendar".
+    expect(
+      within(forecast)
+        .queryAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Add Rent to calendar"]);
   });
 
   it("says a withdrawal is money out, not money saved", async () => {

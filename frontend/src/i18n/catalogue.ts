@@ -36,6 +36,7 @@ import { notifications } from "./messages/notifications";
 import { layout } from "./messages/layout";
 import { tour } from "./messages/tour";
 import { invites } from "./messages/invites";
+import { calendarFeed } from "./messages/calendarFeed";
 
 export const LANGUAGES = ["en", "fr"] as const;
 export type Lang = (typeof LANGUAGES)[number];
@@ -60,6 +61,7 @@ export const messages = {
   ...layout,
   ...tour,
   ...invites,
+  ...calendarFeed,
   ...errors,
 };
 

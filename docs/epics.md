@@ -2609,3 +2609,30 @@ summary; email or SMS; badges or sound; the deploy itself.
 - Second-user proof (A's mutes and kinds never shape B's digest); a zone across the date
   line; a DST day; a module off; each new guard mutated red. Settings measured in both
   languages at 375 and 320.
+
+## Epic 39: Calendar apps — a subscribe link, and "Add to calendar"
+
+Scoped 2026-09-28. AD-55. Migration `0032`.
+
+### Story 39.1: The feed row and its URL
+
+- `calendar_feeds` (one per account, RLS), `calendar_feed_lookup(hash)`. `GET/POST/PATCH/
+  DELETE /api/calendar/feed`, `POST /api/calendar/feed/rotate`. The path is in the create and
+  rotate answers only.
+
+### Story 39.2: The feed
+
+- `GET /api/calendar/feed/<token>.ics`, no sign-in: nine layers (`due`, `money`, `savings`,
+  `stock`, `gym`, `habits`, `schedule`, `mood`, `meals`), a module's layer silent while it is
+  off, vague or detailed titles in the account's language, optional alarm. 404 for every
+  wrong URL, 429 past 30 fetches in 10 minutes, token masked in the access log.
+
+### Story 39.3: Settings — calendar apps
+
+- Create link (shown once, Copy, open as `webcal:`), New link and Turn off behind a confirm,
+  last-read time, layer switches, names and amounts, reminder.
+
+### Story 39.4: Add to calendar
+
+- A one-event .ics built in the browser, on bills due and forecast in the calendar's day view
+  and on each recurring rule's next date in Plan.
