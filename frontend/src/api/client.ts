@@ -314,6 +314,8 @@ export interface EntryInput {
   /** AD-29: both or neither. Sent as an explicit null pair to clear. */
   quantity?: Quantity | null;
   unit?: Unit | null;
+  /** AD-51: an expense paid from this pot. Explicit null on a PATCH stops it. */
+  savings_type_id?: string | null;
 }
 
 export interface TemplateInput {

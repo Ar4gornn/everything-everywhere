@@ -9,6 +9,10 @@ go below zero. A CHECK cannot see a sum over rows, so every write that could low
 balance locks the type rows it touches, writes, and then re-reads the sums; a negative one
 raises, and the request's transaction rolls back with it. The lock is what makes two
 concurrent withdrawals queue rather than both pass the same check.
+
+Epic 35 (AD-51): a withdrawal can pay for an expense. It belongs to the entry — written,
+moved and removed with it by ``set_entry_withdrawal`` — so the contribution endpoints refuse
+to edit or delete it on its own.
 """
 
 import datetime as dt
@@ -25,6 +29,7 @@ from app.core.months import DEFAULT_START_DAY, month_of, month_range, parse_mont
 from app.models.ledger import Budget, Category, EntryKind
 from app.models.savings import (
     DEPOSIT,
+    WITHDRAWAL,
     SavingsContribution,
     SavingsSkip,
     SavingsTarget,
@@ -228,6 +233,15 @@ def _get_contribution(
     return found
 
 
+def _refuse_entry_owned(contribution: SavingsContribution) -> None:
+    # AD-51: editing it here would leave the entry saying one thing and the pot another.
+    if contribution.entry_id is not None:
+        raise Conflict(
+            "That withdrawal paid for an entry; change the entry instead",
+            "savings_contribution_from_entry",
+        )
+
+
 def update_contribution(
     session: Session,
     user_id: uuid.UUID,
@@ -241,6 +255,7 @@ def update_contribution(
     kind: str | None = None,
 ) -> SavingsContribution:
     contribution = _get_contribution(session, user_id, contribution_id)
+    _refuse_entry_owned(contribution)
     touched = {contribution.savings_type_id}
     if savings_type_id is not None:
         require_type(session, user_id, savings_type_id)
@@ -267,7 +282,9 @@ def delete_contribution(
     session: Session, user_id: uuid.UUID, contribution_id: uuid.UUID
 ) -> None:
     # Deleting a deposit lowers the balance as surely as a withdrawal does.
-    type_id = _get_contribution(session, user_id, contribution_id).savings_type_id
+    contribution = _get_contribution(session, user_id, contribution_id)
+    _refuse_entry_owned(contribution)
+    type_id = contribution.savings_type_id
     _lock_types(session, user_id, {type_id})
     session.execute(
         delete(SavingsContribution).where(
@@ -275,6 +292,58 @@ def delete_contribution(
         )
     )
     _refuse_negative(session, user_id, {type_id})
+
+
+def set_entry_withdrawal(
+    session: Session,
+    user_id: uuid.UUID,
+    *,
+    entry_id: uuid.UUID,
+    savings_type_id: uuid.UUID | None,
+    amount: Decimal,
+    occurred_on: dt.date,
+) -> None:
+    """Make the entry's withdrawal match it: this pot, this amount, this date — or none.
+
+    AD-51: the one writer of an entry-owned withdrawal, called inside the entry's own write
+    so the two are one transaction. A pot that cannot cover it raises AD-50's
+    ``savings_balance_negative`` and the entry is rolled back with it.
+    """
+    existing = session.execute(
+        select(SavingsContribution).where(
+            SavingsContribution.user_id == user_id, SavingsContribution.entry_id == entry_id
+        )
+    ).scalar_one_or_none()
+
+    if savings_type_id is None:
+        if existing is not None:
+            # Removing a withdrawal only raises a balance: nothing to lock or check.
+            session.delete(existing)
+            session.flush()
+        return
+
+    require_type(session, user_id, savings_type_id)
+    touched = {savings_type_id}
+    if existing is not None:
+        touched.add(existing.savings_type_id)
+    _lock_types(session, user_id, touched)
+    if existing is None:
+        session.add(
+            SavingsContribution(
+                user_id=user_id,
+                savings_type_id=savings_type_id,
+                kind=WITHDRAWAL,
+                amount=amount,
+                occurred_on=occurred_on,
+                entry_id=entry_id,
+            )
+        )
+    else:
+        existing.savings_type_id = savings_type_id
+        existing.amount = amount
+        existing.occurred_on = occurred_on
+    session.flush()
+    _refuse_negative(session, user_id, touched)
 
 
 # --------------------------------------------------------- targets and budgets

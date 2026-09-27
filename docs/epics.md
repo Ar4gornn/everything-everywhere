@@ -2521,6 +2521,15 @@ automatically; re-linking past entries; income paid into a pot.
 
 - `savings_contributions.entry_id`, composite FK to `entries` with `ON DELETE CASCADE`,
   unique; only a withdrawal may carry it. The entry and its withdrawal are one write.
+- Migration `0027` (after `0025`). AD-51 holds the rules.
+- `POST /api/entries` takes an optional `savings_type_id` (expense only, else 422);
+  `PATCH` moves it, an explicit `null` removes it, absent leaves it. `EntryOut` carries it,
+  `ContributionOut` carries `entry_id`. An overdrawn pot refuses the whole write (409).
+- Editing or deleting such a withdrawal through the savings endpoints is `409
+  savings_contribution_from_entry`; deleting the entry removes it.
+- Entries: a "Paid from" choice beside the note, each pot with its balance, cleared after
+  each write; the row carries "From <pot>"; the inline editor can move or clear it.
+  Savings card: the row says "Paid an expense" and links to Entries instead of Delete.
 
 ### Story 35.3: A category's default pot
 

@@ -17,6 +17,7 @@ from app.core import search
 from app.core.errors import Conflict, Invalid, NotFound
 from app.core.months import DEFAULT_START_DAY, month_range
 from app.models.ledger import Category, Entry, EntryKind, Vendor
+from app.services import savings
 
 # ---------------------------------------------------------------- categories
 
@@ -244,7 +245,10 @@ def create_entry(
     unit: str | None = None,
     vendor_id: uuid.UUID | None = None,
     vendor_name: str | None = None,
+    savings_type_id: uuid.UUID | None = None,
 ) -> Entry:
+    if savings_type_id is not None and kind is not EntryKind.expense:
+        raise Invalid("only an expense can be paid from a pot", "savings_expense_only")
     if category_name is not None:
         category = get_or_create_category(session, user_id, kind=kind, name=category_name)
     else:
@@ -266,6 +270,16 @@ def create_entry(
     )
     session.add(entry)
     session.flush()
+    if savings_type_id is not None:
+        # AD-51: the expense and its withdrawal are one write; an overdrawn pot refuses both.
+        savings.set_entry_withdrawal(
+            session,
+            user_id,
+            entry_id=entry.id,
+            savings_type_id=savings_type_id,
+            amount=entry.amount,
+            occurred_on=entry.occurred_on,
+        )
     return entry
 
 
@@ -285,8 +299,14 @@ def update_entry(
     vendor_id: uuid.UUID | None = None,
     vendor_name: str | None = None,
     vendor_given: bool = False,
+    savings_type_id: uuid.UUID | None = None,
+    savings_type_given: bool = False,
 ) -> Entry:
     entry = get_entry(session, user_id, entry_id)
+    if savings_type_given and savings_type_id is not None and entry.kind is not EntryKind.expense:
+        raise Invalid("only an expense can be paid from a pot", "savings_expense_only")
+    # Read before anything is flushed: the property is loaded with the row.
+    paid_from = entry.savings_type_id
 
     if category_id is not None:
         # The new category has to be the caller's and of the entry's kind (AD-7, AD-18).
@@ -311,10 +331,24 @@ def update_entry(
         )
 
     session.flush()
+    # AD-51: the withdrawal follows the entry — its pot, its amount, its date — or goes.
+    target = savings_type_id if savings_type_given else paid_from
+    if target is not None or paid_from is not None:
+        savings.set_entry_withdrawal(
+            session,
+            user_id,
+            entry_id=entry.id,
+            savings_type_id=target,
+            amount=entry.amount,
+            occurred_on=entry.occurred_on,
+        )
+    session.refresh(entry)
     return entry
 
 
 def delete_entry(session: Session, user_id: uuid.UUID, entry_id: uuid.UUID) -> None:
+    # A withdrawal that paid for it goes with it (ON DELETE CASCADE, AD-51). That can only
+    # raise a pot's balance, so nothing is locked or checked.
     result = session.execute(delete(Entry).where(Entry.user_id == user_id, Entry.id == entry_id))
     if result.rowcount == 0:
         raise NotFound("No entry with that id")

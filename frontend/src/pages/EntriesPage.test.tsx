@@ -31,6 +31,30 @@ const entries = [
   },
 ];
 
+const holiday = {
+  savings_type_id: "p1",
+  name: "Holiday",
+  balance: "300.00",
+  saved: "0.00",
+  target: null,
+  due: null,
+  skipped: false,
+  goal_amount: null,
+  goal_date: null,
+  needed_per_month: null,
+};
+
+// AD-51: the page reads the pots for its "Paid from" choice.
+function overview(pots: (typeof holiday)[] = []) {
+  return {
+    month: "2026-09",
+    start: "2026-09-01",
+    end: "2026-10-01",
+    current_month: "2026-09",
+    pots,
+  };
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
@@ -38,9 +62,10 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function mockApi() {
+function mockApi(pots: (typeof holiday)[] = [], rows: unknown[] = entries) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("/api/categories")) return json({ items: categories });
+    if (url.includes("/api/savings/overview")) return json(overview(pots));
     if (url.includes("/api/entries") && init?.method === "POST") {
       return json({ ...entries[0], id: "e2" }, 201);
     }
@@ -48,7 +73,7 @@ function mockApi() {
     if (url.includes("/api/entries") && init?.method === "PATCH") {
       return json({ ...entries[0], ...JSON.parse(String(init.body)) });
     }
-    return json({ items: entries });
+    return json({ items: rows });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -126,6 +151,68 @@ describe("EntriesPage", () => {
     });
   });
 
+  it("pays an expense from the chosen pot, then forgets the choice", async () => {
+    const fetchMock = mockApi([holiday]);
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+    await screen.findByRole("table", { name: "Entries" });
+
+    const form = screen.getByRole("form", { name: "Record an entry" });
+    const paidFrom = within(form).getByLabelText("Paid from");
+    // The balance is beside the name: the choice is made knowing what the pot holds.
+    expect(within(paidFrom).getByRole("option", { name: "Holiday · 300.00" })).toBeInTheDocument();
+    await user.selectOptions(paidFrom, "p1");
+    await user.type(within(form).getByLabelText("Amount"), "45.50");
+    await user.type(within(form).getByLabelText("Category"), "Taxi");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(JSON.parse(String(posted?.[1]?.body)).savings_type_id).toBe("p1");
+    });
+    await waitFor(() => expect(within(form).getByLabelText("Paid from")).toHaveValue(""));
+  });
+
+  it("sends no pot when none is chosen, and offers none for income", async () => {
+    const fetchMock = mockApi([holiday]);
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+    await screen.findByRole("table", { name: "Entries" });
+
+    const form = screen.getByRole("form", { name: "Record an entry" });
+    await user.type(within(form).getByLabelText("Amount"), "45.50");
+    await user.type(within(form).getByLabelText("Category"), "Taxi");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(JSON.parse(String(posted?.[1]?.body))).not.toHaveProperty("savings_type_id");
+    });
+
+    await user.selectOptions(within(form).getByLabelText("Kind"), "income");
+    expect(within(form).queryByLabelText("Paid from")).not.toBeInTheDocument();
+  });
+
+  it("marks an expense paid from a pot, and can stop paying from it", async () => {
+    const fetchMock = mockApi([holiday], [{ ...entries[0], savings_type_id: "p1" }]);
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+
+    const table = await screen.findByRole("table", { name: "Entries" });
+    expect(within(table).getByText("From Holiday")).toBeInTheDocument();
+
+    await user.click(within(table).getByRole("button", { name: /^Edit/ }));
+    const choice = within(table).getByLabelText("Edit the pot it was paid from");
+    expect(choice).toHaveValue("p1");
+    await user.selectOptions(choice, "");
+    await user.click(within(table).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const patched = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+      // An explicit null, never an absent key: absent means "leave it where it is".
+      expect(JSON.parse(String(patched?.[1]?.body))).toEqual({ savings_type_id: null });
+    });
+  });
+
   it("refuses an amount with three decimal places before it reaches the server", async () => {
     const fetchMock = mockApi();
     const user = userEvent.setup();
@@ -146,6 +233,7 @@ describe("EntriesPage", () => {
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
         if (url.includes("/api/categories")) return json({ items: categories });
+        if (url.includes("/api/savings/overview")) return json(overview());
         if (init?.method === "DELETE") return json({ detail: "That category still has entries" }, 409);
         return json({ items: entries });
       }),
@@ -353,6 +441,7 @@ describe("quantity and unit price (AD-29)", () => {
       "fetch",
       vi.fn(async (url: string) => {
         if (url.includes("/api/categories")) return json({ items: categories });
+        if (url.includes("/api/savings/overview")) return json(overview());
         return json({
           items: [
             { ...entries[0], quantity: "40.000", unit: "l", unit_price: "20.0000" },

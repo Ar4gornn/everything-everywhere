@@ -164,6 +164,8 @@ export interface Entry {
   unit: Unit | null;
   /** Computed by the server from amount and quantity; null when there is no quantity. */
   unit_price: Rate | null;
+  /** AD-51: the pot this expense was paid from. Absent from servers older than Epic 35. */
+  savings_type_id?: string | null;
   created_at: string;
 }
 
@@ -186,6 +188,8 @@ export interface Contribution {
   amount: Money;
   occurred_on: string;
   note: string | null;
+  /** AD-51: the expense this withdrawal paid for; such a row is changed on the entry. */
+  entry_id?: string | null;
   created_at: string;
 }
 

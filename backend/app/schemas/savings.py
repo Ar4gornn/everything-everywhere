@@ -78,6 +78,8 @@ class ContributionOut(BaseModel):
     amount: Money
     occurred_on: dt.date
     note: str | None
+    #: AD-51: the expense this withdrawal paid for. Such a row is edited through the entry.
+    entry_id: uuid.UUID | None = None
     created_at: dt.datetime
 
 

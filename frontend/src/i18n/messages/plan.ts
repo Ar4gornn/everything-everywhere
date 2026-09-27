@@ -114,6 +114,8 @@ export const plan = {
   "pots.kind": { en: "Deposit or withdrawal", fr: "Versement ou retrait" },
   "pots.deposit": { en: "Deposit", fr: "Versement" },
   "pots.withdrawal": { en: "Withdrawal", fr: "Retrait" },
+  "pots.paidAnExpense": { en: "Paid an expense", fr: "A payé une dépense" },
+  "pots.changeOnEntry": { en: "Change on Entries", fr: "Modifier dans Opérations" },
   "pots.colMove": { en: "Move", fr: "Mouvement" },
   "pots.nothingMoved": {
     en: "Nothing moved in {month}.",

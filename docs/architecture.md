@@ -973,6 +973,38 @@ security-definer function
   savings fields became `SignedMoney` for it (they were non-negative, and a withdrawal month
   would have been a 500). The export gains a `kind` column before `amount`.
 
+### AD-51 — An expense paid from a pot is spending and a withdrawal, written as one, owned by the entry
+
+- **Binds:** entries, savings contributions, the Entries page, the Plan page's savings card.
+- **Extends:** AD-50 (the balance rule and its lock, unchanged), AD-18 (the new foreign key
+  is composite), AD-4 (one request, one transaction), AD-44 (refusals carry a code).
+- **Numbered 51:** Epic 35's. AD-52 is Epic 36's, on its own branch.
+- **Prevents:** three failures.
+
+  **Money counted once, or twice, depending on where you look.** A pot-funded expense is
+  both: it counts as spending (totals, the category's budget) *and* as a withdrawal from the
+  pot. Neither side is special-cased in any sum; the month's net savings go down by the same
+  amount its spending goes up, which is what Story 35.4's leftover will cancel out.
+
+  **An expense and a pot that disagree.** `savings_contributions.entry_id` points at the
+  entry — composite `(user_id, entry_id)` to `entries (user_id, id)`, `ON DELETE CASCADE`,
+  unique, and a CHECK that only a withdrawal carries it. `services/savings.set_entry_withdrawal`
+  is its one writer, called inside the entry's create or update: the withdrawal takes the
+  entry's pot, amount and date, or is removed. A pot that cannot cover it raises AD-50's
+  `409 savings_balance_negative` and the entry is rolled back with it. The contribution
+  endpoints refuse to edit or delete such a row (`409 savings_contribution_from_entry`), and
+  the Savings card shows it read-only with a link to Entries. Deleting the entry cascades,
+  which can only raise a balance, so the cascade needs no lock.
+
+  **A pot on income.** Only an expense can name a pot: `EntryCreate` refuses it (422), and
+  `PATCH` on an income answers `422 savings_expense_only` — an entry's kind cannot change, so
+  those two doors are all there are. The database does not hold this rule.
+
+  The entry reads its pot back through a `column_property` over the withdrawal, so the
+  answer is stored once. `PATCH /api/entries/{id}`: a pot moves the withdrawal, an explicit
+  `null` removes it, an absent key leaves it. The Entries form clears the choice after each
+  write, as a remembered pot would silently pay for the next entry too.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -1143,6 +1175,7 @@ Everything Everywhere/
 | Notes — text or a sketch, drafts on the device, shortcuts | `api/notes.py`, `services/notes.py`, migration 0024, `frontend/src/notes/`, `NotesPage.tsx`, `NotePage.tsx`, `public/manifest.webmanifest` | AD-48, AD-8, AD-30, AD-31, AD-24 |
 | Preferences — modules, tab order, dashboard cards, per layout | `services/preferences.py`, `api/auth.py`, migration 0025 | AD-49, AD-19, AD-24, AD-44 |
 | Savings pots — balances, withdrawals, goals, what is due | `api/savings.py`, `services/savings.py`, migration 0026, `frontend/src/components/SavingsCard.tsx` | AD-50, AD-10, AD-11, AD-18, AD-24 |
+| An expense paid from a pot | `services/ledger.py`, `services/savings.py` (`set_entry_withdrawal`), migration 0027, `frontend/src/pages/EntriesPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred

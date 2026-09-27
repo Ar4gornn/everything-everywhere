@@ -45,6 +45,18 @@ class SavingsContribution(TimestampedMixin, Base):
             name="savings_contributions_type_fkey",
             ondelete="RESTRICT",
         ),
+        # Epic 35 (AD-51): a withdrawal can pay for an expense. Composite, so it cannot
+        # point at another account's entry; CASCADE, because the withdrawal is the entry's.
+        ForeignKeyConstraint(
+            ["user_id", "entry_id"],
+            ["entries.user_id", "entries.id"],
+            name="savings_contributions_entry_fkey",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "entry_id IS NULL OR kind = 'withdrawal'",
+            name="savings_contributions_entry_is_withdrawal",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -59,6 +71,10 @@ class SavingsContribution(TimestampedMixin, Base):
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # AD-50: the amount is always positive; the direction lives here.
     kind: Mapped[str] = mapped_column(String(10), nullable=False, server_default="deposit")
+    # AD-51: the expense this withdrawal paid for. At most one per entry (unique).
+    entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True, unique=True
+    )
 
 
 class SavingsTarget(Base):

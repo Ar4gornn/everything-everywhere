@@ -15,12 +15,14 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.models.base import Base, TimestampedMixin
+from app.models.savings import SavingsContribution
 from app.schemas.common import quantise_rate
 
 
@@ -127,6 +129,14 @@ class Entry(TimestampedMixin, Base):
     quantity: Mapped[decimal.Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(8), nullable=True)
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    # AD-51: the pot this expense was paid from, read from its withdrawal — never stored
+    # twice. A column_property is stale after a flush, so the writers refresh the entry.
+    savings_type_id: Mapped[uuid.UUID | None] = column_property(
+        select(SavingsContribution.savings_type_id)
+        .where(SavingsContribution.entry_id == id)
+        .correlate_except(SavingsContribution)
+        .scalar_subquery()
+    )
 
     @property
     def unit_price(self) -> decimal.Decimal | None:
