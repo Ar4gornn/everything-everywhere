@@ -35,7 +35,8 @@ distinct from features, which can arrive whenever.
 
 ## Worth doing first, not blocking
 
-- [ ] CI running the test suite on push, so a break is caught before it reaches the instance.
+- [x] CI running the test suite on push, so a break is caught before it reaches the instance.
+      (`.github/workflows/ci.yml`, since 2026-09-21.)
 - [ ] Uptime check pointed at `/health` — which returns the API's real health, not the SPA shell.
 - [ ] Measure Argon2 hashing cost on the VPS once it is up. The defaults assume a server, and a
       4GB shared instance mostly is one, so this is a check rather than an expected problem.
