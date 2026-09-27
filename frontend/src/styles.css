@@ -1558,6 +1558,125 @@ tr.history td {
   }
 }
 
+/* --------------------------------------------------------------- list rows
+ * AD-53: on a phone a list is one line per thing, and the rest is a tap away.
+ * Only phone renderings use these, so there is no media query.
+ * ------------------------------------------------------------------------ */
+
+.list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+.list-row-head {
+  /* Reset the app's pill button: this is a row that happens to be pressable. */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+}
+
+button.list-row-head:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+
+.list-row-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.list-row-title,
+.list-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-row-meta {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.list-row-amount {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.list-row-amount.in {
+  color: var(--accent-ink);
+}
+
+.list-row-amount.over {
+  color: var(--spend-ink);
+}
+
+.list-row-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 10px;
+}
+
+.list-row-bar .bar-track {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.list-row-bar .hint {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* The bar sits under the button; with a chevron at the head's end, the "of …" note
+   lines up under the amount rather than under the chevron. */
+.list-row:has(> button.list-row-head) .list-row-bar {
+  padding-right: 22px;
+}
+
+.list-row-details {
+  padding: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.list-row-details .row {
+  justify-content: flex-end;
+}
+
+h3.list-day {
+  margin: 16px 0 2px;
+  color: var(--faint);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+section:first-child > h3.list-day {
+  margin-top: 0;
+}
+
 /* ------------------------------------------------------------------------ *
  * Bottom navigation and quick add
  * ------------------------------------------------------------------------ */
@@ -3259,4 +3378,18 @@ button.pin:not(.on) span {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--border);
+}
+
+/* Epic 38 (AD-53): after .chevron and .card-link, which they refine. */
+/* A way out of the row, not its headline: quieter than the row's own title. */
+.list-row-details .card-link {
+  font-weight: 400;
+  color: var(--link);
+}
+
+/* At the small size the rotated ▾ read as a dot. */
+.list-row-head .chevron {
+  flex: 0 0 12px;
+  font-size: var(--fs-body);
+  text-align: center;
 }

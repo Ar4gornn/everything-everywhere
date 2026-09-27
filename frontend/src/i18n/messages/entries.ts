@@ -66,6 +66,14 @@ export const entries = {
   "dash.notSet": { en: "not set", fr: "non défini" },
   "dash.budgetUsed": { en: "{name} budget used", fr: "budget {name} utilisé" },
 
+  // Epic 38: the phone rows (AD-53).
+  "rows.of": { en: "of {amount}", fr: "sur {amount}" },
+  "rows.noBudget": { en: "No budget", fr: "Pas de budget" },
+  "rows.noTarget": { en: "No target", fr: "Pas d’objectif" },
+  "rows.left": { en: "{amount} left this month", fr: "Reste {amount} ce mois-ci" },
+  "rows.over": { en: "{amount} over budget", fr: "Budget dépassé de {amount}" },
+  "rows.openCategory": { en: "Open category", fr: "Voir la catégorie" },
+
   "dash.savingsProgress": { en: "Savings progress", fr: "Avancement de l’épargne" },
   "dash.savingsCount_one": { en: "{count} type", fr: "{count} enveloppe" },
   "dash.savingsCount_other": { en: "{count} types", fr: "{count} enveloppes" },

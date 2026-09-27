@@ -1,7 +1,7 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { shiftMonth } from "../months";
 import { EntriesPage } from "./EntriesPage";
@@ -596,5 +596,76 @@ describe("quantity and unit price (AD-29)", () => {
         vendor_name: "Shell",
       });
     });
+  });
+});
+
+describe("on a phone (AD-53)", () => {
+  const rows = [
+    entries[0],
+    { ...entries[0], id: "e3", kind: "income" as const, category_id: "c2", amount: "3000.00", note: null },
+    { ...entries[0], id: "e4", occurred_on: "2026-07-31", amount: "12.50", note: null },
+  ];
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("groups entries under day headings, amounts signed", async () => {
+    mockApi([], rows);
+    render(<EntriesPage />);
+
+    const august = await screen.findByRole("region", { name: /1 August/ });
+    expect(screen.queryByRole("table", { name: "Entries" })).toBeNull();
+    expect(within(august).getByRole("button", { name: /Rent/ })).toHaveTextContent("−800.00");
+    expect(within(august).getByRole("button", { name: /Salary/ })).toHaveTextContent("+3,000.00");
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(headings).toHaveLength(2);
+    expect(headings[0]).toMatch(/1 August/);
+    expect(headings[1]).toMatch(/31 July/);
+  });
+
+  it("shows the note on the row and opens to the desktop's Edit and Delete", async () => {
+    const user = userEvent.setup();
+    mockApi([], rows);
+    render(<EntriesPage />);
+    const august = await screen.findByRole("region", { name: /1 August/ });
+
+    expect(within(august).getByRole("button", { name: /Rent/ })).toHaveTextContent("August rent");
+    expect(screen.queryByRole("button", { name: /Edit entry/ })).toBeNull();
+    await user.click(within(august).getByRole("button", { name: /Rent/ }));
+    expect(
+      screen.getByRole("button", { name: "Edit entry of 800.00 on 2026-08-01" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete entry of 800.00 on 2026-08-01" }),
+    ).toBeInTheDocument();
+  });
+
+  it("edits inside the row with the one edit form", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi([], rows);
+    render(<EntriesPage />);
+    const august = await screen.findByRole("region", { name: /1 August/ });
+
+    await user.click(within(august).getByRole("button", { name: /Rent/ }));
+    await user.click(screen.getByRole("button", { name: /Edit entry/ }));
+    const amount = screen.getByLabelText("Edit amount");
+    await user.clear(amount);
+    await user.type(amount, "925.00");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
+    );
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ amount: "925.00" });
   });
 });

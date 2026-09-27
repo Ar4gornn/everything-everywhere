@@ -1,7 +1,7 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DashboardPage } from "./DashboardPage";
 import type { Layout, Summary, Trends } from "../api/types";
@@ -758,5 +758,78 @@ describe("cards chosen by the account (Epic 33, story 33.5)", () => {
         expect(urls.some((url) => url.includes(path)), path).toBe(true);
       }
     });
+  });
+});
+
+describe("on a phone (AD-53)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    window.localStorage.clear();
+    // jsdom has no matchMedia, so without this the layout would be a desktop.
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("draws budgets as one row per category, not a table", async () => {
+    mockApi();
+    render(<DashboardPage />);
+
+    const list = await screen.findByRole("list", { name: "Budget vs actual" });
+    expect(screen.queryByRole("table", { name: "Budget vs actual" })).toBeNull();
+    expect(within(list).getByRole("button", { name: /Rent/ })).toHaveTextContent("800.00");
+    expect(within(list).getByText("of 900.00")).toBeInTheDocument();
+    // Spent and unbudgeted still has a row (AD-22), marked rather than given a bar.
+    const taxi = within(list).getByRole("button", { name: /Taxi/ }).closest("li") as HTMLElement;
+    expect(taxi).toHaveTextContent("No budget");
+    expect(within(taxi).queryByRole("meter")).toBeNull();
+  });
+
+  it("opens a category to what is left, its trend and its page", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<DashboardPage />);
+    const list = await screen.findByRole("list", { name: "Budget vs actual" });
+
+    await user.click(within(list).getByRole("button", { name: /Rent/ }));
+    expect(within(list).getByText("100.00 left this month")).toBeInTheDocument();
+    expect(within(list).getByRole("img", { name: "Rent spending per month" })).toBeInTheDocument();
+    expect(within(list).getByRole("link", { name: /Open category/ })).toHaveAttribute(
+      "href",
+      "/categories/r",
+    );
+  });
+
+  it("does not repeat the categories card while budgets carry the trends", async () => {
+    mockApi();
+    render(<DashboardPage />);
+    await screen.findByRole("list", { name: "Budget vs actual" });
+    // The trends arrive in the same response as the summary, so they are already here.
+    expect(screen.getByText(/Last 6 months/)).toBeInTheDocument();
+    expect(screen.queryByText("Expense by category")).toBeNull();
+  });
+
+  it("still draws categories, as rows, when the period is not a month", async () => {
+    window.localStorage.setItem("everything-everywhere.period", "year");
+    mockApi({ summary: { ...summary, period: "year", label: "2026" } });
+    render(<DashboardPage />);
+
+    const list = await screen.findByRole("list", { name: "Expense by category" });
+    expect(within(list).getByRole("button", { name: /Rent/ })).toHaveTextContent("800.00");
+  });
+
+  it("draws savings as rows with nothing to open", async () => {
+    mockApi();
+    render(<DashboardPage />);
+
+    const list = await screen.findByRole("list", { name: "Savings progress" });
+    expect(within(list).getByText("startup")).toBeInTheDocument();
+    expect(within(list).getByText("of 1,000.00")).toBeInTheDocument();
+    expect(within(list).queryByRole("button")).toBeNull();
   });
 });
