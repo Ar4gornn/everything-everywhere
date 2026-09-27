@@ -8,6 +8,7 @@ import { AuthProvider } from "../auth/AuthContext";
 import { todayIso } from "../months";
 import { confirmDate, SavingsCard } from "./SavingsCard";
 import { ToastProvider } from "./Toast";
+import { onAPhone } from "../test/phone";
 
 function render() {
   return rtlRender(
@@ -353,5 +354,40 @@ describe("confirmDate", () => {
   it("follows the budget month, not the calendar", () => {
     const past = overview([], { month: "2026-08", start: "2026-07-26", end: "2026-08-26" });
     expect(confirmDate(past, "2026-09-26")).toBe("2026-08-25");
+  });
+});
+
+describe("SavingsCard history on a phone (Story 38.2)", () => {
+  onAPhone();
+
+  it("signs each movement, and offers Delete or the entry on opening", async () => {
+    const user = userEvent.setup();
+    const paid = {
+      id: "w1",
+      savings_type_id: "p1",
+      kind: "withdrawal",
+      amount: "30.00",
+      occurred_on: "2026-09-10",
+      note: null,
+      entry_id: "e1",
+      created_at: "",
+    };
+    mockApi([pot()], {}, [paid, { ...paid, id: "d1", kind: "deposit", entry_id: null }]);
+    render();
+
+    const owned = (await screen.findByText("−30.00")).closest("button") as HTMLElement;
+    const own = screen.getByText("+30.00").closest("button") as HTMLElement;
+    expect(document.querySelector("table")).toBeNull();
+    expect(owned).toHaveTextContent("Holidays");
+    expect(owned).toHaveTextContent("Paid an expense");
+
+    await user.click(owned);
+    expect(screen.getByRole("link", { name: "Change on Entries" })).toHaveAttribute(
+      "href",
+      "/entries",
+    );
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    await user.click(own);
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 });

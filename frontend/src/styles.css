@@ -1664,6 +1664,38 @@ button.list-row-head:hover:not(:disabled) {
   justify-content: flex-end;
 }
 
+/* A row with one action of its own (Bought, Add): the action sits beside the head. */
+.list-row-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-row-line > .list-row-head {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.list-row-trailing {
+  flex: 0 0 auto;
+}
+
+.list-row.muted .list-row-head {
+  opacity: 0.55;
+}
+
+/* Inputs moved into an open row: side by side, each allowed to shrink. */
+.list-row-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.list-row-fields > label {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 h3.list-day {
   margin: 16px 0 2px;
   color: var(--faint);

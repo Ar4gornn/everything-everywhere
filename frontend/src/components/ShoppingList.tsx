@@ -1,13 +1,15 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import type { Category, ShoppingList as List, ShoppingRow } from "../api/types";
-import { isPositiveMoney, normalizeMoney } from "../money";
+import { useLayout } from "../layout/useLayout";
+import { isNonNegativeMoney, isPositiveMoney, normalizeMoney } from "../money";
 import { useMoney } from "../useMoney";
 import { todayIso } from "../months";
 import { useT } from "../i18n";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { ListRow, useOpenRow } from "./ListRow";
 import { Card, ErrorBanner, TableWrap } from "./ui";
 import { useToast } from "./Toast";
 
@@ -43,6 +45,9 @@ export function ShoppingList({ onChanged }: { onChanged?: () => void }) {
   const money = useMoney();
   const t = useT();
   const toast = useToast();
+  const phone = useLayout() === "phone";
+  const [openRow, toggleRow] = useOpenRow();
+  const fieldId = useId();
 
   // Failures of the list's own actions. The load's failure is `failure`, from the hook.
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +130,57 @@ export function ShoppingList({ onChanged }: { onChanged?: () => void }) {
     list !== null && Array.isArray(list.items) && typeof list.estimate === "string";
   if (!usable || list.items.length === 0) return null;
 
+  // One of each control, drawn in a table cell on a desktop and in the row on a phone.
+  const quantityInput = (
+    row: ShoppingRow,
+    draft: { quantity: string; amount: string },
+    id?: string,
+  ) => (
+    <input
+      id={id}
+      className="num"
+      inputMode="numeric"
+      aria-label={t("shopping.howMany", { name: row.name })}
+      value={draft.quantity}
+      onChange={(event) =>
+        setDrafts({
+          ...drafts,
+          [row.item_id]: { ...draft, quantity: event.target.value },
+        })
+      }
+    />
+  );
+  const costInput = (
+    row: ShoppingRow,
+    draft: { quantity: string; amount: string },
+    id?: string,
+  ) => (
+    <input
+      id={id}
+      className="num"
+      inputMode="decimal"
+      placeholder="—"
+      aria-label={t("shopping.whatCost", { name: row.name })}
+      value={draft.amount}
+      onChange={(event) =>
+        setDrafts({
+          ...drafts,
+          [row.item_id]: { ...draft, amount: event.target.value },
+        })
+      }
+    />
+  );
+  const boughtButton = (row: ShoppingRow) => (
+    <button
+      type="button"
+      disabled={busy === row.item_id}
+      onClick={() => void bought(row)}
+      aria-label={t("shopping.boughtAria", { name: row.name })}
+    >
+      {t("shopping.bought")}
+    </button>
+  );
+
   return (
     <Card
       title={t("shopping.title")}
@@ -151,70 +207,88 @@ export function ShoppingList({ onChanged }: { onChanged?: () => void }) {
         </datalist>
       </div>
 
-      <TableWrap>
-        <table className="stacked" aria-label={t("shopping.title")}>
-          <thead>
-            <tr>
-              <th>{t("stock.colItem")}</th>
-              <th className="num">{t("shopping.colBuy")}</th>
-              <th className="num">{t("stock.colCost", { symbol: money.symbol })}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {list.items.map((row) => {
-              const draft = draftFor(row);
-              return (
-                <tr key={row.item_id}>
-                  <td data-label={t("stock.colItem")}>
+      {phone ? (
+        <ul className="list-rows" aria-label={t("shopping.title")}>
+          {list.items.map((row) => {
+            const draft = draftFor(row);
+            return (
+              <ListRow
+                key={row.item_id}
+                title={
+                  <>
                     {row.name}
                     {row.space_name ? <span className="hint"> · {row.space_name}</span> : null}
-                  </td>
-                  <td className="num" data-label={t("shopping.colBuy")}>
-                    <input
-                      className="num"
-                      inputMode="numeric"
-                      aria-label={t("shopping.howMany", { name: row.name })}
-                      value={draft.quantity}
-                      onChange={(event) =>
-                        setDrafts({
-                          ...drafts,
-                          [row.item_id]: { ...draft, quantity: event.target.value },
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="num" data-label={t("stock.cost")}>
-                    <input
-                      className="num"
-                      inputMode="decimal"
-                      placeholder="—"
-                      aria-label={t("shopping.whatCost", { name: row.name })}
-                      value={draft.amount}
-                      onChange={(event) =>
-                        setDrafts({
-                          ...drafts,
-                          [row.item_id]: { ...draft, amount: event.target.value },
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      disabled={busy === row.item_id}
-                      onClick={() => void bought(row)}
-                      aria-label={t("shopping.boughtAria", { name: row.name })}
-                    >
-                      {t("shopping.bought")}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </TableWrap>
+                  </>
+                }
+                meta={
+                  draft.quantity.trim()
+                    ? row.unit_cost
+                      ? `${draft.quantity} × ${money.plain(row.unit_cost)}`
+                      : `× ${draft.quantity}`
+                    : undefined
+                }
+                // What Bought will record: the cost as it stands, estimate or typed.
+                amount={
+                  draft.amount.trim()
+                    ? isNonNegativeMoney(draft.amount)
+                      ? money.plain(normalizeMoney(draft.amount))
+                      : draft.amount
+                    : undefined
+                }
+                // Buying is the list's whole point: one tap, with the suggested amounts.
+                trailing={boughtButton(row)}
+                open={openRow === row.item_id}
+                onToggle={() => toggleRow(row.item_id)}
+                details={
+                  <div className="list-row-fields">
+                    <label htmlFor={`${fieldId}-${row.item_id}-qty`}>
+                      {t("shopping.howMany", { name: row.name })}
+                      {quantityInput(row, draft, `${fieldId}-${row.item_id}-qty`)}
+                    </label>
+                    <label htmlFor={`${fieldId}-${row.item_id}-cost`}>
+                      {t("shopping.whatCost", { name: row.name })}
+                      {costInput(row, draft, `${fieldId}-${row.item_id}-cost`)}
+                    </label>
+                  </div>
+                }
+              />
+            );
+          })}
+        </ul>
+      ) : (
+        <TableWrap>
+          <table className="stacked" aria-label={t("shopping.title")}>
+            <thead>
+              <tr>
+                <th>{t("stock.colItem")}</th>
+                <th className="num">{t("shopping.colBuy")}</th>
+                <th className="num">{t("stock.colCost", { symbol: money.symbol })}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {list.items.map((row) => {
+                const draft = draftFor(row);
+                return (
+                  <tr key={row.item_id}>
+                    <td data-label={t("stock.colItem")}>
+                      {row.name}
+                      {row.space_name ? <span className="hint"> · {row.space_name}</span> : null}
+                    </td>
+                    <td className="num" data-label={t("shopping.colBuy")}>
+                      {quantityInput(row, draft)}
+                    </td>
+                    <td className="num" data-label={t("stock.cost")}>
+                      {costInput(row, draft)}
+                    </td>
+                    <td>{boughtButton(row)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
 
       <p className="hint" style={{ marginTop: 8 }}>
         {t("shopping.estimated", { amount: money.amount(list.estimate) })}

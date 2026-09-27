@@ -73,6 +73,12 @@ export const entries = {
   "rows.left": { en: "{amount} left this month", fr: "Reste {amount} ce mois-ci" },
   "rows.over": { en: "{amount} over budget", fr: "Budget dépassé de {amount}" },
   "rows.openCategory": { en: "Open category", fr: "Voir la catégorie" },
+  // Story 38.2.
+  "rows.entries_one": { en: "{count} entry", fr: "{count} opération" },
+  "rows.entries_other": { en: "{count} entries", fr: "{count} opérations" },
+  "rows.nextOn": { en: "next {date}", fr: "prochaine le {date}" },
+  "rows.year": { en: "Year {n}", fr: "Année {n}" },
+  "rows.setN": { en: "Set {n}", fr: "Série {n}" },
 
   "dash.savingsProgress": { en: "Savings progress", fr: "Avancement de l’épargne" },
   "dash.savingsCount_one": { en: "{count} type", fr: "{count} enveloppe" },

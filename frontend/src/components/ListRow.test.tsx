@@ -73,3 +73,30 @@ describe("ListRow (AD-53)", () => {
     expect(screen.getByText("Details b")).toBeInTheDocument();
   });
 });
+
+describe("ListRow trailing action (Story 38.2)", () => {
+  it("sits beside the head, not inside it, and works without opening the row", async () => {
+    const user = userEvent.setup();
+    const bought: string[] = [];
+    render(
+      <ul>
+        <ListRow
+          title="Milk"
+          details={<p>Inputs</p>}
+          trailing={
+            <button type="button" onClick={() => bought.push("milk")}>
+              Bought
+            </button>
+          }
+        />
+      </ul>,
+    );
+
+    const head = screen.getByRole("button", { name: /Milk/ });
+    const action = screen.getByRole("button", { name: "Bought" });
+    expect(head.contains(action)).toBe(false);
+    await user.click(action);
+    expect(bought).toEqual(["milk"]);
+    expect(head).toHaveAttribute("aria-expanded", "false");
+  });
+});

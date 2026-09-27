@@ -8,6 +8,9 @@ import { useCallback, useId, useState, type ReactNode } from "react";
  * whether it is open. A row without them is not a button at all — a control that does
  * nothing is worse than no control. The bar sits outside the button because a button may
  * only hold phrasing content, and a meter is not that.
+ *
+ * `trailing` is one action that does not need the row open (Bought, Add): it sits beside
+ * the head, never inside it, since a button may not contain a button.
  */
 export function ListRow({
   title,
@@ -16,6 +19,8 @@ export function ListRow({
   amountTone,
   bar,
   details,
+  trailing,
+  muted = false,
   open = false,
   onToggle,
 }: {
@@ -26,6 +31,10 @@ export function ListRow({
   amountTone?: "in" | "over";
   bar?: ReactNode;
   details?: ReactNode;
+  /** One action on the row itself, outside the head button. */
+  trailing?: ReactNode;
+  /** Drawn quieter: a paused template, say. */
+  muted?: boolean;
   open?: boolean;
   onToggle?: () => void;
 }) {
@@ -51,20 +60,29 @@ export function ListRow({
     </>
   );
 
+  const head = expandable ? (
+    <button
+      type="button"
+      className="list-row-head"
+      aria-expanded={open}
+      aria-controls={detailsId}
+      onClick={onToggle}
+    >
+      {inner}
+    </button>
+  ) : (
+    <div className="list-row-head">{inner}</div>
+  );
+
   return (
-    <li className={`list-row${open ? " open" : ""}`}>
-      {expandable ? (
-        <button
-          type="button"
-          className="list-row-head"
-          aria-expanded={open}
-          aria-controls={detailsId}
-          onClick={onToggle}
-        >
-          {inner}
-        </button>
+    <li className={`list-row${open ? " open" : ""}${muted ? " muted" : ""}`}>
+      {trailing ? (
+        <div className="list-row-line">
+          {head}
+          <span className="list-row-trailing">{trailing}</span>
+        </div>
       ) : (
-        <div className="list-row-head">{inner}</div>
+        head
       )}
       {bar ? <div className="list-row-bar">{bar}</div> : null}
       {expandable && open && (

@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { AuthProvider } from "../auth/AuthContext";
 import { ToastProvider } from "../components/Toast";
+import { onAPhone } from "../test/phone";
 
 // PlanPage formats amounts in the account's currency, so it reads the auth context. Rendering
 // it inside a real provider rather than stubbing the hook keeps the test honest about that.
@@ -241,5 +242,36 @@ describe("PlanPage", () => {
     );
 
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+});
+
+describe("PlanPage on a phone (Story 38.2)", () => {
+  onAPhone();
+
+  it("draws a budget as a row with a bar, and the amount inside the open row", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi({
+      budgets: [{ category_id: "c1", monthly_amount: "500.00", updated_at: "" }],
+      spent: [{ category_id: "c1", budget: "500.00", actual: "120.00" }],
+    });
+    render(<PlanPage />);
+
+    const rows = await screen.findByRole("list", { name: "Monthly budgets" });
+    const head = within(rows).getByRole("button", { name: /Rent/ });
+    expect(head).toHaveTextContent("120.00");
+    expect(rows).toHaveTextContent("of 500.00");
+    expect(within(rows).getByRole("meter", { name: /Rent/ })).toHaveAttribute("aria-valuenow", "24");
+    expect(screen.queryByLabelText("Monthly amount for Rent")).toBeNull();
+
+    await user.click(head);
+    expect(rows).toHaveTextContent("380.00 left");
+    const amount = screen.getByLabelText("Monthly amount for Rent");
+    await user.clear(amount);
+    await user.type(amount, "450");
+    await user.click(within(rows).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
+    );
+    expect(within(rows).getByRole("button", { name: "Delete Rent" })).toBeInTheDocument();
   });
 });

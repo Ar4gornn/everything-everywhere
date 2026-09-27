@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import type { Budget, BudgetVsActual, Category, Pot } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { ProgressBar } from "../charts/ProgressBar";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { RecurringCard } from "../components/RecurringCard";
 import { SavingsCard } from "../components/SavingsCard";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
@@ -14,6 +15,7 @@ import { useT, type Translate } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { useLayout } from "../layout/useLayout";
 
 const NOTHING = {
   categories: [] as Category[],
@@ -34,6 +36,8 @@ export function PlanPage() {
   // they landed above the fold, and a refused amount looked like a dead button. The
   // savings card keeps its own (SavingsCard). The load's failure is `failure`.
   const [error, setError] = useState<string | null>(null);
+  const phone = useLayout() === "phone";
+  const [openRow, toggleRow] = useOpenRow();
 
   const {
     data: { categories, budgets, spent, pots },
@@ -91,6 +95,21 @@ export function PlanPage() {
 
   if (loading) return <p className="empty">{t("state.loading")}</p>;
 
+  /** What a category's row needs, the same on a phone and a desktop. */
+  const rowProps = (category: Category) => ({
+    name: category.name,
+    t,
+    initial: budgetFor(category.id),
+    spent: spentFor(category.id),
+    pots,
+    potId: category.default_savings_type_id ?? "",
+    onPot: (potId: string) =>
+      guard(() => api.setCategoryPot(category.id, potId || null), "plan.couldNotSavePot"),
+    onSave: (value: string) => saveBudget(category.id, value),
+    onDelete: () =>
+      guard(() => api.deleteCategory(category.id), "plan.couldNotDeleteCategory"),
+  });
+
   return (
     <>
       <ErrorBanner message={failure} />
@@ -112,6 +131,18 @@ export function PlanPage() {
         </p>
         {categories.length === 0 ? (
           <Empty>{t("plan.noCategories")}</Empty>
+        ) : phone ? (
+          <ul className="list-rows" aria-label={t("plan.budgets")}>
+            {categories.map((category) => (
+              <AmountRow
+                key={category.id}
+                phone
+                open={openRow === category.id}
+                onToggle={() => toggleRow(category.id)}
+                {...rowProps(category)}
+              />
+            ))}
+          </ul>
         ) : (
           <TableWrap>
             <table className="stacked">
@@ -127,28 +158,7 @@ export function PlanPage() {
               </thead>
               <tbody>
                 {categories.map((category) => (
-                  <AmountRow
-                    key={category.id}
-                    name={category.name}
-                    t={t}
-                    initial={budgetFor(category.id)}
-                    spent={spentFor(category.id)}
-                    pots={pots}
-                    potId={category.default_savings_type_id ?? ""}
-                    onPot={(potId) =>
-                      guard(
-                        () => api.setCategoryPot(category.id, potId || null),
-                        "plan.couldNotSavePot",
-                      )
-                    }
-                    onSave={(value) => saveBudget(category.id, value)}
-                    onDelete={() =>
-                      guard(
-                        () => api.deleteCategory(category.id),
-                        "plan.couldNotDeleteCategory",
-                      )
-                    }
-                  />
+                  <AmountRow key={category.id} {...rowProps(category)} />
                 ))}
               </tbody>
             </table>
@@ -169,6 +179,9 @@ function AmountRow({
   onPot,
   onSave,
   onDelete,
+  phone = false,
+  open = false,
+  onToggle,
 }: {
   name: string;
   // Passed in rather than looked up: this row is rendered once per category and per
@@ -183,6 +196,10 @@ function AmountRow({
   onPot: (potId: string) => Promise<void>;
   onSave: (value: string) => Promise<void>;
   onDelete: () => Promise<void>;
+  /** AD-53: a list row rather than a table row, with the inputs inside it. */
+  phone?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
 }) {
   const [value, setValue] = useState(initial);
   const [dirty, setDirty] = useState(false);
@@ -193,75 +210,130 @@ function AmountRow({
   }, [initial]);
 
   const money = useMoney();
+  const inputId = useId();
   // Measured against the saved budget, not the draft in the box: the bar moves on Save.
   const budget = initial === "" ? null : initial;
   const over = budget !== null && toCents(spent) > toCents(budget);
+
+  // One of each control, placed in table cells on a desktop and in the open row on a phone.
+  const potSelect = (pots.length > 0 || potId) && (
+    <select
+      aria-label={t("plan.defaultPotFor", { name })}
+      // A bare select in the name column shrank to "No…"; a floor keeps its words.
+      style={{ display: "block", marginTop: 6, minWidth: "7rem" }}
+      value={potId}
+      onChange={(event) => void onPot(event.target.value)}
+    >
+      <option value="">{t("plan.noDefaultPot")}</option>
+      {pots.map((pot) => (
+        <option key={pot.savings_type_id} value={pot.savings_type_id}>
+          {pot.name}
+        </option>
+      ))}
+    </select>
+  );
+  const amountInput = (
+    <input
+      id={phone ? inputId : undefined}
+      className="num"
+      inputMode="decimal"
+      placeholder={t("plan.notSetPlaceholder")}
+      aria-label={t("plan.monthlyAmountFor", { name })}
+      value={value}
+      onChange={(event) => {
+        setValue(event.target.value);
+        setDirty(true);
+      }}
+    />
+  );
+  const leftOrOver =
+    budget !== null &&
+    (over
+      ? t("plan.overBy", { amount: money.plain(subtractMoney(spent, budget)) })
+      : t("plan.leftOf", { amount: money.plain(subtractMoney(budget, spent)) }));
+  const bar = (
+    <ProgressBar
+      percent={progress(spent, budget)}
+      over={over}
+      label={t("dash.budgetUsed", { name })}
+    />
+  );
+  const saveButton = (
+    <button type="button" disabled={!dirty} onClick={() => void onSave(value)}>
+      {t("action.save")}
+    </button>
+  );
+  const deleteButton = (
+    <button
+      type="button"
+      className="quiet"
+      onClick={() => void onDelete()}
+      aria-label={t("plan.deleteNamed", { name })}
+    >
+      {t("action.delete")}
+    </button>
+  );
+
+  if (phone) {
+    return (
+      <ListRow
+        title={name}
+        amount={money.plain(spent)}
+        amountTone={over ? "over" : undefined}
+        bar={
+          budget === null ? (
+            <span className="hint">{t("rows.noBudget")}</span>
+          ) : (
+            <>
+              {bar}
+              <span className="hint">{t("rows.of", { amount: money.plain(budget) })}</span>
+            </>
+          )
+        }
+        open={open}
+        onToggle={onToggle}
+        details={
+          <>
+            {leftOrOver && (
+              <p className="hint" style={{ margin: 0 }}>
+                {leftOrOver}
+              </p>
+            )}
+            <div className="list-row-fields">
+              <label htmlFor={inputId}>
+                {t("plan.colMonthly")}
+                {amountInput}
+              </label>
+              {saveButton}
+            </div>
+            {potSelect}
+            <div className="row">{deleteButton}</div>
+          </>
+        }
+      />
+    );
+  }
 
   return (
     <tr>
       <td data-label={t("field.name")}>
         {name}
-        {(pots.length > 0 || potId) && (
-          <select
-            aria-label={t("plan.defaultPotFor", { name })}
-            // A bare select in the name column shrank to "No…"; a floor keeps its words.
-            style={{ display: "block", marginTop: 6, minWidth: "7rem" }}
-            value={potId}
-            onChange={(event) => void onPot(event.target.value)}
-          >
-            <option value="">{t("plan.noDefaultPot")}</option>
-            {pots.map((pot) => (
-              <option key={pot.savings_type_id} value={pot.savings_type_id}>
-                {pot.name}
-              </option>
-            ))}
-          </select>
-        )}
+        {potSelect}
       </td>
       <td className="num" data-label={t("plan.colMonthly")}>
-        <input
-          className="num"
-          inputMode="decimal"
-          placeholder={t("plan.notSetPlaceholder")}
-          aria-label={t("plan.monthlyAmountFor", { name })}
-          value={value}
-          onChange={(event) => {
-            setValue(event.target.value);
-            setDirty(true);
-          }}
-        />
+        {amountInput}
       </td>
       <td className="num" data-label={t("dash.colSpentShort")}>
         <span style={over ? { color: "var(--spend-ink)" } : undefined}>
           {money.plain(spent)}
         </span>
-        {budget !== null && (
-          <span className="hint">
-            {" "}
-            {over
-              ? t("plan.overBy", { amount: money.plain(subtractMoney(spent, budget)) })
-              : t("plan.leftOf", { amount: money.plain(subtractMoney(budget, spent)) })}
-          </span>
-        )}
-        <ProgressBar
-          percent={progress(spent, budget)}
-          over={over}
-          label={t("dash.budgetUsed", { name })}
-        />
+        {leftOrOver && <span className="hint"> {leftOrOver}</span>}
+        {bar}
       </td>
       <td>
         <div className="row" style={{ flexWrap: "nowrap" }}>
-          <button type="button" disabled={!dirty} onClick={() => void onSave(value)}>
-            {t("action.save")}
-          </button>
-          <button
-            type="button"
-            className="quiet"
-            onClick={() => void onDelete()}
-            aria-label={t("plan.deleteNamed", { name })}
-          >
-            {t("action.delete")}
-          </button>
+          {saveButton}
+          {deleteButton}
         </div>
       </td>
     </tr>

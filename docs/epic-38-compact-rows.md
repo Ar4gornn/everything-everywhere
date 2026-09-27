@@ -113,7 +113,7 @@ Page height, measured in a same-origin iframe at the given width:
 
 ---
 
-## 4. Story 38.2 — Phone rows for the remaining tables (scoped 2026-09-27, not built)
+## 4. Story 38.2 — Phone rows for the remaining tables (scoped and built 2026-09-27)
 
 ### Scope (interview, 2026-09-27)
 
@@ -167,6 +167,40 @@ A `trailing` slot: one action button rendered **beside** the head button, never 
 7. New RTL phone tests per file; each new behaviour made to fail by a mutation first.
 8. Separate reviewer pass before the PR.
 
-### Results
+### Results (2026-09-27, seeded demo account plus recurring, gym, vendor and purchase data)
 
-To be filled in after the build.
+Page height, measured in a same-origin iframe at the given width. Gym is measured with a
+session open (the sets list) and the routine open for editing (its exercises).
+
+| Page | 375 EN before | 375 EN after | 375 FR after | 320 FR after |
+|---|---|---|---|---|
+| Plan (recurring, savings history, budgets) | 5793px | 3128px (−46%) | 3146px | 3265px |
+| Stock (shopping list, restocks) | 4140px | 3645px (−12%) | 3781px | 4158px |
+| Category (Fuel: vendors, entries) | 2162px | 1284px (−41%) | 1302px | 1307px |
+| Gym | 3056px | 1863px (−39%) | 1863px | 1941px |
+| Grow | 2662px | 1583px (−41%) | 1601px | 1628px |
+
+- Stock gains least because its item rows, the bulk of the page, are slice 3.
+- Width sweep, the five pages, 320 and 375, EN and FR, rows closed and the first row of
+  every list open: nothing past the viewport or its card. Re-run on the final build after
+  the review fixes.
+- Desktop (1280): the same tables as before on all five pages (4 / 5 / 2 / 3 / 1), no list
+  rows.
+- `ListRow` gained `trailing` (Shopping's Bought, Recurring's Add) and `muted` (a paused
+  template). Labels in an open row name their input by `htmlFor`; the controls themselves
+  are shared with the desktop cells, so every accessible name is the desktop's.
+- Tests: a phone block per file (16 new, two new files: `CategoryPage.test.tsx`,
+  `ProjectionsPage.test.tsx`; `test/phone.ts` stubs the layout); vitest 530/530, exit 0,
+  0 unhandled. Twelve mutations each turned a new test red: trailing drawn inside the head,
+  Shopping never phone, Plan inputs shown closed, Recurring Add moved off the row, paused
+  not muted, deposit unsigned, vendor rows expandable, Gym sets never grouped, restocks
+  never phone, Grow details dropped, and the two review fixes below.
+- Review (separate agent): one major, fixed — a closed proposal row showed the original
+  amount while Add beside it confirmed the corrected one. The row now shows what Add will
+  send; the shopping row likewise shows the cost Bought will record. The rule, for any
+  later `trailing` action: **the closed row shows the value its action sends.** Also fixed:
+  the shopping inputs' visible labels now match their accessible names (WCAG 2.5.3), and
+  Grow's B series is computed once, not per row.
+- Not fixed, noted: a Plan budget typed and not saved gives no sign on the closed row (Save
+  stays enabled on reopening); floating buttons still cover the last row's right edge
+  (audit #5).

@@ -10,6 +10,7 @@ import type {
   WorkoutDetail,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { StrengthChart } from "../charts/StrengthChart";
@@ -18,6 +19,21 @@ import { useT } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { useDates } from "../useDates";
+import { useLayout } from "../layout/useLayout";
+
+type WorkoutSet = WorkoutDetail["sets"][number];
+
+/** A session's sets, one group per run of the same exercise, in the order they were done. */
+function byExercise(sets: WorkoutSet[]): { name: string; sets: WorkoutSet[] }[] {
+  const groups: { name: string; sets: WorkoutSet[] }[] = [];
+  for (const set of sets) {
+    const last = groups[groups.length - 1];
+    if (last && last.name === set.exercise_name) last.sets.push(set);
+    else groups.push({ name: set.exercise_name, sets: [set] });
+  }
+  return groups;
+}
 
 /**
  * Routines and the workout log (Epic 19).
@@ -33,6 +49,11 @@ export function GymPage() {
   const t = useT();
   const toast = useToast();
   const unit = user?.weight_unit ?? "kg";
+  const dates = useDates();
+  const phone = useLayout() === "phone";
+  const [openSet, toggleSet] = useOpenRow();
+  const [openLine, toggleLine] = useOpenRow();
+  const [openSession, toggleSession] = useOpenRow();
 
   // Failures of the page's own actions. The load's failure is `failure`, from the hook.
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +188,88 @@ export function GymPage() {
     }, "gym.couldNotLogSet");
   }
 
+  // One of each control, placed in table cells on a desktop and in the open row on a phone.
+  const deleteSetButton = (row: WorkoutSet) => (
+    <button
+      type="button"
+      className="quiet"
+      disabled={busy}
+      aria-label={t("gym.deleteSet", { name: row.exercise_name })}
+      onClick={() =>
+        void run(async () => {
+          await api.deleteSet(row.id);
+          if (current) setCurrent(await api.readWorkout(current.id));
+        }, "gym.couldNotDeleteSet")
+      }
+    >
+      {t("action.delete")}
+    </button>
+  );
+  const target = (line: RoutineDetail["lines"][number]) =>
+    line.target_sets && line.target_reps
+      ? `${line.target_sets}×${line.target_reps}`
+      : (line.target_sets ?? line.target_reps ?? "—");
+  const videoLink = (href: string) => (
+    <a
+      href={href}
+      target="_blank"
+      // noopener so the opened page cannot reach back through
+      // window.opener; noreferrer so it is not told where from.
+      rel="noopener noreferrer"
+    >
+      {t("gym.video")}
+    </a>
+  );
+  const removeLineButton = (line: RoutineDetail["lines"][number], from: RoutineDetail) => (
+    <button
+      type="button"
+      className="quiet"
+      disabled={busy}
+      aria-label={t("gym.removeFrom", {
+        exercise: line.exercise_name,
+        routine: from.name,
+      })}
+      onClick={() =>
+        void run(async () => {
+          await api.removeRoutineLine(line.id);
+          setRoutine(await api.readRoutine(from.id));
+        }, "gym.couldNotRemove")
+      }
+    >
+      {t("action.remove")}
+    </button>
+  );
+  const openSessionButton = (entry: Workout) => (
+    <button
+      type="button"
+      className="quiet"
+      aria-label={t("gym.openSession", { date: entry.performed_on })}
+      onClick={() =>
+        void run(async () => {
+          setCurrent(await api.readWorkout(entry.id));
+        }, "gym.couldNotOpenSession")
+      }
+    >
+      {t("gym.open")}
+    </button>
+  );
+  const deleteSessionButton = (entry: Workout) => (
+    <button
+      type="button"
+      className="quiet"
+      aria-label={t("gym.deleteSession", { date: entry.performed_on })}
+      onClick={() =>
+        void run(async () => {
+          await api.deleteWorkout(entry.id);
+          if (current?.id === entry.id) setCurrent(null);
+          await load();
+        }, "gym.couldNotDeleteSession")
+      }
+    >
+      {t("action.delete")}
+    </button>
+  );
+
   if (loading && routines.length === 0 && workouts.length === 0) {
     return <p className="empty">{t("state.loading")}</p>;
   }
@@ -243,6 +346,28 @@ export function GymPage() {
 
           {current.sets.length === 0 ? (
             <Empty>{t("gym.noSets")}</Empty>
+          ) : phone ? (
+            <div aria-label={t("gym.sets")} role="group">
+              {byExercise(current.sets).map((group) => (
+                <section key={group.sets[0]?.id} aria-label={group.name}>
+                  <h3 className="list-day">{group.name}</h3>
+                  <ul className="list-rows">
+                    {group.sets.map((row, index) => (
+                      <ListRow
+                        key={row.id}
+                        title={t("rows.setN", { n: index + 1 })}
+                        amount={`${row.reps} × ${
+                          row.weight === null ? t("gym.bodyweight") : `${row.weight} ${unit}`
+                        }`}
+                        open={openSet === row.id}
+                        onToggle={() => toggleSet(row.id)}
+                        details={<div className="row">{deleteSetButton(row)}</div>}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
           ) : (
             <TableWrap>
               <table className="stacked" aria-label={t("gym.sets")}>
@@ -264,22 +389,7 @@ export function GymPage() {
                       <td className="num" data-label={t("gym.weightShort")}>
                         {row.weight ?? <span className="hint">{t("gym.bodyweight")}</span>}
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="quiet"
-                          disabled={busy}
-                          aria-label={t("gym.deleteSet", { name: row.exercise_name })}
-                          onClick={() =>
-                            void run(async () => {
-                              await api.deleteSet(row.id);
-                              setCurrent(await api.readWorkout(current.id));
-                            }, "gym.couldNotDeleteSet")
-                          }
-                        >
-                          {t("action.delete")}
-                        </button>
-                      </td>
+                      <td>{deleteSetButton(row)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -407,6 +517,27 @@ export function GymPage() {
 
             {routine.lines.length === 0 ? (
               <Empty>{t("gym.emptyRoutine", { name: routine.name })}</Empty>
+            ) : phone ? (
+              <ul
+                className="list-rows"
+                aria-label={t("gym.routineExercises", { name: routine.name })}
+              >
+                {routine.lines.map((line) => (
+                  <ListRow
+                    key={line.id}
+                    title={line.exercise_name}
+                    amount={target(line)}
+                    open={openLine === line.id}
+                    onToggle={() => toggleLine(line.id)}
+                    details={
+                      <div className="row">
+                        {line.video_url && videoLink(line.video_url)}
+                        {removeLineButton(line, routine)}
+                      </div>
+                    }
+                  />
+                ))}
+              </ul>
             ) : (
               <TableWrap>
                 <table
@@ -425,45 +556,12 @@ export function GymPage() {
                       <tr key={line.id}>
                         <td data-label={t("gym.exercise")}>
                           {line.exercise_name}
-                          {line.video_url && (
-                            <>
-                              {" "}
-                              <a
-                                href={line.video_url}
-                                target="_blank"
-                                // noopener so the opened page cannot reach back through
-                                // window.opener; noreferrer so it is not told where from.
-                                rel="noopener noreferrer"
-                              >
-                                {t("gym.video")}
-                              </a>
-                            </>
-                          )}
+                          {line.video_url && <> {videoLink(line.video_url)}</>}
                         </td>
                         <td className="num" data-label={t("gym.colTarget")}>
-                          {line.target_sets && line.target_reps
-                            ? `${line.target_sets}×${line.target_reps}`
-                            : (line.target_sets ?? line.target_reps ?? "—")}
+                          {target(line)}
                         </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="quiet"
-                            disabled={busy}
-                            aria-label={t("gym.removeFrom", {
-                              exercise: line.exercise_name,
-                              routine: routine.name,
-                            })}
-                            onClick={() =>
-                              void run(async () => {
-                                await api.removeRoutineLine(line.id);
-                                setRoutine(await api.readRoutine(routine.id));
-                              }, "gym.couldNotRemove")
-                            }
-                          >
-                            {t("action.remove")}
-                          </button>
-                        </td>
+                        <td>{removeLineButton(line, routine)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -522,6 +620,24 @@ export function GymPage() {
       >
         {workouts.length === 0 ? (
           <Empty>{t("gym.nothingLogged")}</Empty>
+        ) : phone ? (
+          <ul className="list-rows" aria-label={t("gym.recent")}>
+            {workouts.map((entry) => (
+              <ListRow
+                key={entry.id}
+                title={dates.day(entry.performed_on)}
+                meta={entry.routine_id ? routineName_(entry.routine_id) : undefined}
+                open={openSession === entry.id}
+                onToggle={() => toggleSession(entry.id)}
+                details={
+                  <div className="row" style={{ gap: 6 }}>
+                    {openSessionButton(entry)}
+                    {deleteSessionButton(entry)}
+                  </div>
+                }
+              />
+            ))}
+          </ul>
         ) : (
           <TableWrap>
             <table className="stacked" aria-label={t("gym.recent")}>
@@ -541,32 +657,8 @@ export function GymPage() {
                     </td>
                     <td>
                       <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
-                        <button
-                          type="button"
-                          className="quiet"
-                          aria-label={t("gym.openSession", { date: entry.performed_on })}
-                          onClick={() =>
-                            void run(async () => {
-                              setCurrent(await api.readWorkout(entry.id));
-                            }, "gym.couldNotOpenSession")
-                          }
-                        >
-                          {t("gym.open")}
-                        </button>
-                        <button
-                          type="button"
-                          className="quiet"
-                          aria-label={t("gym.deleteSession", { date: entry.performed_on })}
-                          onClick={() =>
-                            void run(async () => {
-                              await api.deleteWorkout(entry.id);
-                              if (current?.id === entry.id) setCurrent(null);
-                              await load();
-                            }, "gym.couldNotDeleteSession")
-                          }
-                        >
-                          {t("action.delete")}
-                        </button>
+                        {openSessionButton(entry)}
+                        {deleteSessionButton(entry)}
                       </div>
                     </td>
                   </tr>
