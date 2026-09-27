@@ -17,7 +17,8 @@ import datetime as dt
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import text
+from sqlalchemy import exists, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.months import (
@@ -26,10 +27,12 @@ from app.core.months import (
     add_months,
     bucket_params,
     format_month,
+    month_of,
     month_range,
     parse_month,
     period_window,
 )
+from app.models.savings import LeftoverDismissal
 from app.schemas.common import quantise_rate
 
 _TOTALS = text(
@@ -326,6 +329,60 @@ def summary(
 
     return Summary(
         month, totals.income, totals.expense, saved, budgets, savings, period, label, start, end
+    )
+
+
+def leftover(
+    session: Session,
+    user_id: uuid.UUID,
+    start_day: int = DEFAULT_START_DAY,
+    today: dt.date | None = None,
+) -> dict:
+    """What the last closed budget month left over (Story 35.4, AD-51).
+
+    ``income − expenses − net savings``, over the same two aggregates the summary uses, so
+    the three figures cannot disagree with the dashboard's own for that month. A pot-funded
+    expense raises expenses and lowers net savings by the same amount: it cancels out, and
+    nothing here special-cases it.
+
+    Proposed, never recorded (AD-50's rule). Taking it is an ordinary deposit dated inside
+    the month, which lowers the figure it answers — so a taken leftover disappears by
+    arithmetic, and only "not this time" needs a row.
+    """
+    current = month_of(today or dt.date.today(), start_day)
+    label = format_month(add_months(parse_month(current), -1))
+    start, end = month_range(label, start_day)
+    window = {"uid": str(user_id), "start": start, "end": end}
+
+    totals = session.execute(_TOTALS, window).one()
+    saved = session.execute(_SAVED, window).scalar_one()
+    dismissed = session.execute(
+        select(
+            exists().where(
+                LeftoverDismissal.user_id == user_id, LeftoverDismissal.month == label
+            )
+        )
+    ).scalar_one()
+    return {
+        "month": label,
+        "start": start,
+        # Inclusive, as in the summary: it is also the date the deposit is recorded on.
+        "end": end - dt.timedelta(days=1),
+        "income": totals.income,
+        "expense": totals.expense,
+        "saved": saved,
+        "leftover": totals.income - totals.expense - saved,
+        "dismissed": dismissed,
+    }
+
+
+def dismiss_leftover(session: Session, user_id: uuid.UUID, month: str) -> None:
+    label = month.strip()
+    parse_month(label)
+    session.execute(
+        pg_insert(LeftoverDismissal)
+        .values(user_id=user_id, month=label)
+        .on_conflict_do_nothing(constraint="leftover_dismissals_pkey")
     )
 
 

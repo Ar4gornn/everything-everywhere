@@ -43,6 +43,18 @@ const trends: Trends = {
   expense_by_category: [{ category_id: "r", category_name: "Rent", values: ["790.00", "800.00"] }],
 };
 
+/** A closed month that left nothing: no card. */
+const nothingLeft = {
+  month: "2026-07",
+  start: "2026-07-01",
+  end: "2026-07-31",
+  income: "0.00",
+  expense: "0.00",
+  saved: "0.00",
+  leftover: "0.00",
+  dismissed: false,
+};
+
 function mockApi(
   overrides: {
     summary?: Summary;
@@ -51,10 +63,15 @@ function mockApi(
     pending?: unknown[];
     reading?: unknown[];
     quote?: unknown;
+    leftover?: unknown;
   } = {},
 ) {
   const fetchMock = vi.fn(async (url: string) => {
-      const body = url.includes("/api/recurring/pending")
+      const body = url.includes("/api/dashboard/leftover")
+        ? (overrides.leftover ?? { ...nothingLeft })
+        : url.includes("/api/savings/types")
+          ? { items: [{ id: "p1", name: "Holidays", created_at: "" }] }
+        : url.includes("/api/recurring/pending")
         ? { items: overrides.pending ?? [] }
         : url.includes("/api/books/quotes/draw")
           ? (overrides.quote ?? null)
@@ -375,6 +392,65 @@ describe("restock reminders on the dashboard (AD-30, AD-31)", () => {
     expect(screen.queryByText(/recurring/i)).toBeNull();
   });
 
+  it("proposes what last month left over (Story 35.4)", async () => {
+    mockApi({ leftover: { ...nothingLeft, income: "900.00", leftover: "250.00" } });
+    render(<DashboardPage />);
+
+    expect(
+      await screen.findByText("July 2026 left $250.00 after spending and savings."),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "Holidays" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["nothing was left", { leftover: "0.00" }],
+    ["the month overspent", { leftover: "-40.00" }],
+    ["it was dismissed", { leftover: "250.00", dismissed: true }],
+  ])("proposes no leftover when %s", async (_, change) => {
+    const fetchMock = mockApi({ leftover: { ...nothingLeft, ...change } });
+    render(<DashboardPage />);
+    await screen.findByText("Budget vs actual");
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([url]) => String(url).includes("/api/dashboard/leftover")),
+      ).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(screen.queryByText("Left over")).toBeNull();
+  });
+
+  it("reads the leftover again once it is acted on, and the card goes", async () => {
+    const user = userEvent.setup();
+    let dismissed = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/dashboard/leftover/") && init?.method === "PUT") dismissed = true;
+      const body = url.includes("/api/dashboard/leftover/")
+        ? null
+        : url.includes("/api/dashboard/leftover")
+          ? { ...nothingLeft, leftover: "250.00", dismissed }
+          : url.includes("/summary")
+            ? summary
+            : url.includes("/trends")
+              ? trends
+              : { items: [] };
+      return new Response(body === null ? null : JSON.stringify(body), {
+        status: body === null ? 204 : 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DashboardPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Not this time" }));
+
+    await waitFor(() => expect(screen.queryByText("Left over")).toBeNull());
+    const reads = fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes("/api/dashboard/leftover") && (init?.method ?? "GET") === "GET",
+    );
+    expect(reads).toHaveLength(2);
+  });
+
   it("switches the trend window to a year and remembers it", async () => {
     const fetchMock = mockApi();
     const user = userEvent.setup();
@@ -654,7 +730,8 @@ describe("cards chosen by the account (Epic 33, story 33.5)", () => {
     await screen.findByText("Budget vs actual");
     await new Promise((resolve) => setTimeout(resolve, 30));
     const urls = asked();
-    for (const path of ["/api/recurring/pending", "/api/books", "/api/inventory", "/api/dashboard/trends"]) {
+    for (const path of ["/api/recurring/pending", "/api/books", "/api/inventory",
+      "/api/dashboard/trends", "/api/dashboard/leftover"]) {
       expect(urls.some((url) => url.includes(path)), path).toBe(false);
     }
     expect(urls.some((url) => url.includes("/api/dashboard/summary"))).toBe(true);
@@ -677,7 +754,7 @@ describe("cards chosen by the account (Epic 33, story 33.5)", () => {
     await waitFor(() => {
       const urls = asked();
       for (const path of ["/api/recurring/pending", "/api/books", "/api/inventory",
-        "/api/dashboard/summary", "/api/dashboard/trends"]) {
+        "/api/dashboard/summary", "/api/dashboard/trends", "/api/dashboard/leftover"]) {
         expect(urls.some((url) => url.includes(path)), path).toBe(true);
       }
     });

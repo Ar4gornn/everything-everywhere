@@ -30,6 +30,7 @@ import type {
   InventoryItem,
   ItemChange,
   Language,
+  Leftover,
   Habit,
   ScheduleKind,
   HabitProgress,
@@ -754,6 +755,12 @@ export const api = {
 
   exportCsv: (kind: "entries" | "savings" | "inventory" | "books") =>
     download(`/api/export/${kind}.csv`, `everything-everywhere-${kind}.csv`),
+
+  /** Story 35.4: the last closed budget month's leftover. Reading it records nothing. */
+  leftover: () => request<Leftover>("/api/dashboard/leftover"),
+
+  dismissLeftover: (month: string) =>
+    request<void>(`/api/dashboard/leftover/${month}/dismissed`, { method: "PUT" }),
 
   summary: (month: string, period: Period = "month") =>
     request<Summary>(

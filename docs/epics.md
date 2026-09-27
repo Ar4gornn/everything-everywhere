@@ -2549,3 +2549,13 @@ automatically; re-linking past entries; income paid into a pot.
 
 - `income − expenses − net savings` of a closed budget month; pot-funded spending cancels
   out. A dashboard card proposes it as a deposit into a chosen pot, or is dismissed.
+- The closed month is the **previous budget month** (Epic 20), and only that one.
+  `GET /api/dashboard/leftover` answers its label, dates, the three figures, the leftover
+  (signed) and whether it was dismissed. The figures are the summary's own aggregates.
+- Taking it is an ordinary `POST /api/savings/contributions`, dated on the month's last day,
+  so it lowers the leftover it answers: all of it clears the card, part of it leaves the rest
+  proposed. No pot is pre-selected; "Put aside" waits for one.
+- "Not this time": `PUT /api/dashboard/leftover/{month}/dismissed` (idempotent), a row in
+  `leftover_dismissals` keyed by label, migration `0030` (after `0029`). No undo.
+- New dashboard card id `leftover`, after `pending` (AD-49 fills it into stored layouts).
+  Drawn only when the leftover is above zero and not dismissed; with no pot, it links to Plan.

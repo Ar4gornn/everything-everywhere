@@ -105,6 +105,21 @@ class SavingsTarget(Base):
     )
 
 
+class LeftoverDismissal(Base):
+    """Story 35.4: "not this time" for a closed month's leftover, by budget-month label."""
+
+    __tablename__ = "leftover_dismissals"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "month", name="leftover_dismissals_pkey"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    month: Mapped[str] = mapped_column(String(7), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class SavingsSkip(Base):
     """AD-50: "not this month" for a proposed contribution, by budget-month label."""
 

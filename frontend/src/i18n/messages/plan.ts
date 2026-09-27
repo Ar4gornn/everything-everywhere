@@ -109,6 +109,27 @@ export const plan = {
     fr: "Proposer à nouveau {name} ce mois-ci",
   },
   "pots.putAside": { en: "{amount} put aside", fr: "{amount} mis de côté" },
+  "leftover.title": { en: "Left over", fr: "Reste du mois" },
+  "leftover.lead": {
+    en: "{month} left {amount} after spending and savings.",
+    fr: "En {month}, il est resté {amount} après dépenses et épargne.",
+  },
+  "leftover.breakdown": {
+    en: "Income {income} · spent {expense} · saved {saved}",
+    fr: "Revenus {income} · dépensé {expense} · épargné {saved}",
+  },
+  "leftover.pot": { en: "Into which pot", fr: "Dans quelle enveloppe" },
+  "leftover.choosePot": { en: "Choose a pot", fr: "Choisir une enveloppe" },
+  "leftover.amount": { en: "Amount to put aside", fr: "Montant à mettre de côté" },
+  "leftover.dismiss": { en: "Not this time", fr: "Pas cette fois" },
+  "leftover.noPots": {
+    en: "Create a pot on the Plan page to put it aside.",
+    fr: "Créez une enveloppe sur la page Plan pour le mettre de côté.",
+  },
+  "leftover.couldNotDismiss": {
+    en: "Could not dismiss the leftover.",
+    fr: "Impossible d’ignorer le reste du mois.",
+  },
   "pots.edit": { en: "Edit", fr: "Modifier" },
   "pots.editFor": { en: "Edit {name}", fr: "Modifier {name}" },
   "pots.close": { en: "Close", fr: "Fermer" },

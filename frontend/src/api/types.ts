@@ -73,6 +73,7 @@ export type SectionId =
 export type CardId =
   | "stats"
   | "pending"
+  | "leftover"
   | "reading"
   | "quote"
   | "restock"
@@ -249,6 +250,20 @@ export interface TargetVsActual {
 
 /** How wide a window the headline figures cover. */
 export type Period = "month" | "year" | "all";
+
+/** Story 35.4: the last closed budget month, and what it left over. */
+export interface Leftover {
+  month: string;
+  /** Inclusive; `end` is the date a deposit of the leftover is recorded on. */
+  start: string;
+  end: string;
+  income: Money;
+  expense: Money;
+  saved: Money;
+  /** income − expenses − net savings. Negative when the month overspent. */
+  leftover: Money;
+  dismissed: boolean;
+}
 
 export interface Summary {
   /** The anchor that was asked for, echoed back. */

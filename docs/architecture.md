@@ -975,7 +975,8 @@ security-definer function
 
 ### AD-51 — An expense paid from a pot is spending and a withdrawal, written as one, owned by the entry
 
-- **Binds:** entries, savings contributions, the Entries page, the Plan page's savings card.
+- **Binds:** entries, savings contributions, the Entries page, the Plan page's savings card,
+  the dashboard's leftover card.
 - **Extends:** AD-50 (the balance rule and its lock, unchanged), AD-18 (the new foreign key
   is composite), AD-4 (one request, one transaction), AD-44 (refusals carry a code).
 - **Numbered 51:** Epic 35's. AD-52 is Epic 36's, on its own branch.
@@ -1013,6 +1014,16 @@ security-definer function
   rewrites no entry and writes no withdrawal. The Entries form fills "Paid from" from it and
   shows the choice, which is why re-offering it after a write does not break the rule above:
   what is remembered is visible and belongs to the category, not to the last entry.
+
+  **What a closed month left over (Story 35.4)** is `income − expenses − net savings` of the
+  previous budget month, over the dashboard summary's own two aggregates, so it cannot
+  disagree with that month's figures. A pot-funded expense adds to expenses and subtracts
+  from net savings by the same amount, so it cancels with no special case. It is proposed,
+  never recorded (AD-50): taking it is an ordinary deposit dated on the month's last day,
+  which lowers the figure it answers, so a taken leftover disappears by arithmetic and a
+  partial one leaves the rest proposed. Only "not this time" has no trace of its own, so it
+  is a row in `leftover_dismissals (user_id, month)`, keyed by label like `savings_skips`
+  (migration 0030). The client picks no pot for the person, as rejected at scoping.
 
 ## Consistency Conventions
 
@@ -1185,6 +1196,7 @@ Everything Everywhere/
 | Preferences — modules, tab order, dashboard cards, per layout | `services/preferences.py`, `api/auth.py`, migration 0025 | AD-49, AD-19, AD-24, AD-44 |
 | Savings pots — balances, withdrawals, goals, what is due | `api/savings.py`, `services/savings.py`, migration 0026, `frontend/src/components/SavingsCard.tsx` | AD-50, AD-10, AD-11, AD-18, AD-24 |
 | An expense paid from a pot, a category's default pot | `services/ledger.py` (`set_default_pot`), `services/savings.py` (`set_entry_withdrawal`), migrations 0027 and 0029, `frontend/src/pages/EntriesPage.tsx`, `PlanPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
+| What a closed month left over | `services/dashboard.py` (`leftover`, `dismiss_leftover`), migration 0030, `frontend/src/components/LeftoverCard.tsx`, `DashboardPage.tsx` | AD-51, AD-50, AD-49, AD-10 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred
