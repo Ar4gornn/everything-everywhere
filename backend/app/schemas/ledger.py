@@ -25,11 +25,22 @@ class CategoryOut(BaseModel):
     id: uuid.UUID
     kind: EntryKind
     name: str
+    #: Epic 35.3: pre-fills "Paid from" on the entry form. Expense categories only.
+    default_savings_type_id: uuid.UUID | None = None
     created_at: dt.datetime
+
+
+class CategoryUpdate(BaseModel):
+    """Epic 35.3: set the default pot, or clear it with ``null``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    default_savings_type_id: uuid.UUID | None
 
 
 _QUANTITY_TOGETHER = "quantity and unit go together: send both, or neither"
 _QUANTITY_EXPENSE_ONLY = "only an expense can carry a quantity"
+_POT_EXPENSE_ONLY = "only an expense can be paid from a pot"
 
 
 class VendorCreate(BaseModel):
@@ -66,6 +77,14 @@ class EntryCreate(BaseModel):
     # Optional, and at most one of the two: a name creates the vendor (AD-12).
     vendor_id: uuid.UUID | None = None
     vendor_name: str | None = Field(default=None, min_length=1, max_length=80)
+    # AD-51: optional. The pot this expense is paid from; a withdrawal is written with it.
+    savings_type_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _pot_expense_only(self) -> "EntryCreate":
+        if self.savings_type_id is not None and self.kind is not EntryKind.expense:
+            raise ValueError(_POT_EXPENSE_ONLY)
+        return self
 
     @model_validator(mode="after")
     def _at_most_one_vendor(self) -> "EntryCreate":
@@ -118,6 +137,8 @@ class EntryUpdate(BaseModel):
     # Sent as an explicit null to clear the vendor; absent means "leave it alone".
     vendor_id: uuid.UUID | None = None
     vendor_name: str | None = Field(default=None, min_length=1, max_length=80)
+    # AD-51: a pot moves the withdrawal there; an explicit null removes it; absent leaves it.
+    savings_type_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _at_most_one_vendor(self) -> "EntryUpdate":
@@ -152,6 +173,8 @@ class EntryOut(BaseModel):
     quantity: Quantity | None
     unit: Unit | None
     vendor_id: uuid.UUID | None
+    #: AD-51: the pot this expense was paid from; null for almost every entry.
+    savings_type_id: uuid.UUID | None = None
     # AD-29: read from the model's property — computed, four places, never stored.
     unit_price: Rate | None
     created_at: dt.datetime

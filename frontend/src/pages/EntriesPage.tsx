@@ -9,6 +9,7 @@ import {
   type Category,
   type Entry,
   type EntryKind,
+  type Pot,
   type Unit,
   type Vendor,
 } from "../api/types";
@@ -37,7 +38,12 @@ import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
 import { budgetMonth, shiftMonth, todayIso } from "../months";
 
-const NOTHING = { entries: [] as Entry[], categories: [] as Category[], vendors: [] as Vendor[] };
+const NOTHING = {
+  entries: [] as Entry[],
+  categories: [] as Category[],
+  vendors: [] as Vendor[],
+  pots: [] as Pot[],
+};
 
 export function EntriesPage() {
   const money = useMoney();
@@ -66,6 +72,12 @@ export function EntriesPage() {
   const [categoryName, setCategoryName] = useState("");
   const [note, setNote] = useState("");
   const [vendorName, setVendorName] = useState("");
+  // AD-51: the pot an expense is paid from. Cleared after every write, so one trip paid
+  // from the holiday pot does not quietly pay for the next week's groceries too.
+  const [potId, setPotId] = useState("");
+  // Epic 35.3: whether the pot was picked by hand. Until it is, the category's default
+  // pot follows the category box; once it is, the category no longer overrides it.
+  const [potChosen, setPotChosen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // AD-29: the optional "how much of what" section. Any two of amount, quantity and unit
@@ -90,10 +102,11 @@ export function EntriesPage() {
     note: string;
     quantity: string;
     unit: Unit | "";
+    savings_type_id: string;
   } | null>(null);
 
   const {
-    data: { entries, categories, vendors },
+    data: { entries, categories, vendors, pots },
     loading,
     failure,
     reload: load,
@@ -108,7 +121,9 @@ export function EntriesPage() {
         }),
         api.listCategories(),
         api.listVendors(),
-      ]).then(([entries, categories, vendors]) => ({ entries, categories, vendors })),
+        // For the "Paid from" choice and its balances, which every such write changes.
+        api.savingsOverview().then((overview) => overview.pots),
+      ]).then(([entries, categories, vendors, pots]) => ({ entries, categories, vendors, pots })),
     NOTHING,
     [kindFilter, monthFilter, categoryFilter, search],
     "entries.couldNotLoad",
@@ -130,6 +145,30 @@ export function EntriesPage() {
     const lookup = new Map(categories.map((category) => [category.id, category.name]));
     return (id: string) => lookup.get(id) ?? "—";
   }, [categories]);
+
+  const potName = useMemo(() => {
+    const lookup = new Map(pots.map((pot) => [pot.savings_type_id, pot.name]));
+    return (id: string) => lookup.get(id) ?? "—";
+  }, [pots]);
+
+  /** Epic 35.3: the default pot of the expense category this name resolves to, or "". */
+  function defaultPotFor(name: string) {
+    const wanted = name.trim().toLowerCase();
+    const category = categories.find(
+      (c) => c.kind === "expense" && c.name.trim().toLowerCase() === wanted,
+    );
+    const pot = category?.default_savings_type_id;
+    // A pot the overview does not list (deleted since) cannot be offered by the select.
+    return pot && pots.some((p) => p.savings_type_id === pot) ? pot : "";
+  }
+
+  function potOptions() {
+    return pots.map((pot) => (
+      <option key={pot.savings_type_id} value={pot.savings_type_id}>
+        {pot.name} · {money.plain(pot.balance)}
+      </option>
+    ));
+  }
 
   // --- the three-way solve -------------------------------------------------------
 
@@ -160,6 +199,7 @@ export function EntriesPage() {
 
   function onCategoryNameChange(value: string) {
     setCategoryName(value);
+    if (kind === "expense" && !potChosen) setPotId(defaultPotFor(value));
     // Pre-fill the unit this category was last quantified in. Only for an expense, only
     // when the section is untouched, and never after it was dismissed for this entry.
     if (kind === "expense" && !unitDismissed && !unit && !quantity) {
@@ -205,10 +245,15 @@ export function EntriesPage() {
         ...(vendorName.trim() ? { vendor_name: vendorName.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(quantified && unit ? { quantity: quantity.trim(), unit } : {}),
+        ...(kind === "expense" && potId ? { savings_type_id: potId } : {}),
       });
       if (quantified && unit) rememberUnit(categoryName, unit);
       setAmount("");
       setNote("");
+      // AD-51: a pot picked by hand is not remembered. The category's default is shown
+      // again, visibly, since the category box keeps its name for the next entry.
+      setPotId(kind === "expense" ? defaultPotFor(categoryName) : "");
+      setPotChosen(false);
       clearQuantity();
       setUnitDismissed(false);
       await load();
@@ -231,6 +276,7 @@ export function EntriesPage() {
       note: entry.note ?? "",
       quantity: entry.quantity ?? "",
       unit: entry.unit ?? "",
+      savings_type_id: entry.savings_type_id ?? "",
     });
   }
 
@@ -279,6 +325,11 @@ export function EntriesPage() {
       }
     }
 
+    // AD-51: a pot moves the withdrawal; an explicit null stops paying from savings.
+    if (draft.savings_type_id !== (entry.savings_type_id ?? "")) {
+      patch.savings_type_id = draft.savings_type_id || null;
+    }
+
     if (Object.keys(patch).length === 0) {
       setEditing(null);
       return;
@@ -314,6 +365,7 @@ export function EntriesPage() {
             ...(entry.quantity && entry.unit
               ? { quantity: entry.quantity, unit: entry.unit }
               : {}),
+            ...(entry.savings_type_id ? { savings_type_id: entry.savings_type_id } : {}),
           });
           await load();
         },
@@ -341,9 +393,13 @@ export function EntriesPage() {
                 setKind(next);
                 // Only an expense buys something. Drop the section rather than send a
                 // payload the API would refuse.
+                setPotChosen(false);
                 if (next === "income") {
                   clearQuantity();
                   setShowQuantity(false);
+                  setPotId("");
+                } else {
+                  setPotId(defaultPotFor(categoryName));
                 }
               }}
             >
@@ -420,6 +476,23 @@ export function EntriesPage() {
               onChange={(event) => setNote(event.target.value)}
             />
           </label>
+
+          {kind === "expense" && pots.length > 0 && (
+            <label style={{ flex: "1 1 160px" }}>
+              {t("entries.paidFrom")}
+              <select
+                aria-label={t("entries.paidFrom")}
+                value={potId}
+                onChange={(event) => {
+                  setPotId(event.target.value);
+                  setPotChosen(true);
+                }}
+              >
+                <option value="">{t("entries.paidFromNone")}</option>
+                {potOptions()}
+              </select>
+            </label>
+          )}
 
           {kind === "expense" && !quantitySectionOpen && (
             <button
@@ -689,6 +762,19 @@ export function EntriesPage() {
                             </select>
                           </div>
                         )}
+                        {entry.kind === "expense" && (pots.length > 0 || draft.savings_type_id) && (
+                          <select
+                            aria-label={t("entries.editPaidFrom")}
+                            style={{ marginTop: 6 }}
+                            value={draft.savings_type_id}
+                            onChange={(event) =>
+                              setDraft({ ...draft, savings_type_id: event.target.value })
+                            }
+                          >
+                            <option value="">{t("entries.paidFromNone")}</option>
+                            {potOptions()}
+                          </select>
+                        )}
                       </td>
                       <td className="wrap" data-label={t("field.note")}>
                         <input
@@ -727,6 +813,11 @@ export function EntriesPage() {
                         <Link to={`/categories/${entry.category_id}`}>
                           {nameOf(entry.category_id)}
                         </Link>
+                        {entry.savings_type_id && (
+                          <span className="tag">
+                            {t("entries.fromPot", { pot: potName(entry.savings_type_id) })}
+                          </span>
+                        )}
                       </td>
                       <td className="num" data-label={t("entries.colAmountShort")}>
                         {money.plain(entry.amount)}

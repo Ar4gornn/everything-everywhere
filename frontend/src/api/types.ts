@@ -73,6 +73,7 @@ export type SectionId =
 export type CardId =
   | "stats"
   | "pending"
+  | "leftover"
   | "reading"
   | "quote"
   | "restock"
@@ -114,6 +115,8 @@ export interface Category {
   id: string;
   kind: EntryKind;
   name: string;
+  /** Epic 35.3: pre-fills "Paid from". Absent from servers older than Epic 35. */
+  default_savings_type_id?: string | null;
   created_at: string;
 }
 
@@ -164,6 +167,8 @@ export interface Entry {
   unit: Unit | null;
   /** Computed by the server from amount and quantity; null when there is no quantity. */
   unit_price: Rate | null;
+  /** AD-51: the pot this expense was paid from. Absent from servers older than Epic 35. */
+  savings_type_id?: string | null;
   created_at: string;
 }
 
@@ -186,6 +191,8 @@ export interface Contribution {
   amount: Money;
   occurred_on: string;
   note: string | null;
+  /** AD-51: the expense this withdrawal paid for; such a row is changed on the entry. */
+  entry_id?: string | null;
   created_at: string;
 }
 
@@ -243,6 +250,20 @@ export interface TargetVsActual {
 
 /** How wide a window the headline figures cover. */
 export type Period = "month" | "year" | "all";
+
+/** Story 35.4: the last closed budget month, and what it left over. */
+export interface Leftover {
+  month: string;
+  /** Inclusive; `end` is the date a deposit of the leftover is recorded on. */
+  start: string;
+  end: string;
+  income: Money;
+  expense: Money;
+  saved: Money;
+  /** income − expenses − net savings. Negative when the month overspent. */
+  leftover: Money;
+  dismissed: boolean;
+}
 
 export interface Summary {
   /** The anchor that was asked for, echoed back. */

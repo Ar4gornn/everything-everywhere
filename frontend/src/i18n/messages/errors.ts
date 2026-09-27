@@ -102,6 +102,14 @@ export const errors = {
     en: "That savings pot still has contributions.",
     fr: "Cette enveloppe d’épargne contient encore des versements.",
   },
+  "error.savings_contribution_from_entry": {
+    en: "That withdrawal paid for an expense. Change the expense instead.",
+    fr: "Ce retrait a payé une dépense. Modifiez plutôt la dépense.",
+  },
+  "error.savings_expense_only": {
+    en: "Only an expense can be paid from savings.",
+    fr: "Seule une dépense peut être payée depuis l’épargne.",
+  },
   "error.savings_balance_negative": {
     en: "That would take more out of the pot than there is in it.",
     fr: "Cela retirerait de l’enveloppe plus qu’elle ne contient.",

@@ -50,6 +50,7 @@ export const SECTION_LABEL: Record<SectionId, MessageKey> = {
 export const CARD_LABEL: Record<CardId, MessageKey> = {
   stats: "card.stats",
   pending: "dash.toConfirm",
+  leftover: "leftover.title",
   reading: "dash.readingNow",
   quote: "quotes.cardTitle",
   restock: "dash.restock",

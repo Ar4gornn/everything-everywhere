@@ -31,6 +31,7 @@ export const MODULES: ModuleId[] = ["habits", "books", "mood", "stock", "gym", "
 export const CARDS: CardId[] = [
   "stats",
   "pending",
+  "leftover",
   "reading",
   "quote",
   "restock",

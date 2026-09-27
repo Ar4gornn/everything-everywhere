@@ -25,7 +25,23 @@ export const plan = {
     en: "Monthly budget ({symbol})",
     fr: "Budget mensuel ({symbol})",
   },
+  "plan.spentThisMonth": {
+    en: "Spent is what {range} has cost so far.",
+    fr: "Dépensé : ce que {range} a coûté jusqu’ici.",
+  },
+  "plan.leftOf": { en: "· {amount} left", fr: "· reste {amount}" },
+  "plan.overBy": { en: "· {amount} over", fr: "· {amount} de dépassement" },
   "plan.colMonthly": { en: "Monthly", fr: "Mensuel" },
+  "plan.defaultPotHint": {
+    en: "A category’s pot fills in “Paid from” on its next expenses. Past entries stay as they are.",
+    fr: "L’enveloppe d’une catégorie remplit « Payé depuis » pour ses prochaines dépenses. Les entrées passées ne changent pas.",
+  },
+  "plan.defaultPotFor": { en: "Default pot for {name}", fr: "Enveloppe par défaut pour {name}" },
+  "plan.noDefaultPot": { en: "No pot", fr: "Sans enveloppe" },
+  "plan.couldNotSavePot": {
+    en: "Could not save the default pot.",
+    fr: "Impossible d’enregistrer l’enveloppe par défaut.",
+  },
   "plan.monthlyAmountFor": {
     en: "Monthly amount for {name}",
     fr: "Montant mensuel pour {name}",
@@ -93,6 +109,27 @@ export const plan = {
     fr: "Proposer à nouveau {name} ce mois-ci",
   },
   "pots.putAside": { en: "{amount} put aside", fr: "{amount} mis de côté" },
+  "leftover.title": { en: "Left over", fr: "Reste du mois" },
+  "leftover.lead": {
+    en: "{month} left {amount} after spending and savings.",
+    fr: "En {month}, il est resté {amount} après dépenses et épargne.",
+  },
+  "leftover.breakdown": {
+    en: "Income {income} · spent {expense} · saved {saved}",
+    fr: "Revenus {income} · dépensé {expense} · épargné {saved}",
+  },
+  "leftover.pot": { en: "Into which pot", fr: "Dans quelle enveloppe" },
+  "leftover.choosePot": { en: "Choose a pot", fr: "Choisir une enveloppe" },
+  "leftover.amount": { en: "Amount to put aside", fr: "Montant à mettre de côté" },
+  "leftover.dismiss": { en: "Not this time", fr: "Pas cette fois" },
+  "leftover.noPots": {
+    en: "Create a pot on the Plan page to put it aside.",
+    fr: "Créez une enveloppe sur la page Plan pour le mettre de côté.",
+  },
+  "leftover.couldNotDismiss": {
+    en: "Could not dismiss the leftover.",
+    fr: "Impossible d’ignorer le reste du mois.",
+  },
   "pots.edit": { en: "Edit", fr: "Modifier" },
   "pots.editFor": { en: "Edit {name}", fr: "Modifier {name}" },
   "pots.close": { en: "Close", fr: "Fermer" },
@@ -108,6 +145,8 @@ export const plan = {
   "pots.kind": { en: "Deposit or withdrawal", fr: "Versement ou retrait" },
   "pots.deposit": { en: "Deposit", fr: "Versement" },
   "pots.withdrawal": { en: "Withdrawal", fr: "Retrait" },
+  "pots.paidAnExpense": { en: "Paid an expense", fr: "A payé une dépense" },
+  "pots.changeOnEntry": { en: "Change on Entries", fr: "Modifier dans Opérations" },
   "pots.colMove": { en: "Move", fr: "Mouvement" },
   "pots.nothingMoved": {
     en: "Nothing moved in {month}.",

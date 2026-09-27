@@ -1,11 +1,17 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response, status
 
 from app.core.deps import CurrentUserId, DbSession, StartDay
 from app.core.months import Period
-from app.schemas.dashboard import SummaryOut, TrendsOut, UnitPricesOut, VendorPricesOut
+from app.schemas.dashboard import (
+    LeftoverOut,
+    SummaryOut,
+    TrendsOut,
+    UnitPricesOut,
+    VendorPricesOut,
+)
 from app.services import dashboard
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -28,6 +34,19 @@ def summary(
         dashboard.summary(session, user_id, month, start_day, period)
     )
 
+
+
+@router.get("/leftover", response_model=LeftoverOut)
+def leftover(user_id: CurrentUserId, session: DbSession, start_day: StartDay = 1) -> LeftoverOut:
+    """Story 35.4: what the last closed budget month left over, proposed as a deposit."""
+    return LeftoverOut.model_validate(dashboard.leftover(session, user_id, start_day))
+
+
+@router.put("/leftover/{month}/dismissed", status_code=status.HTTP_204_NO_CONTENT)
+def dismiss_leftover(month: str, user_id: CurrentUserId, session: DbSession) -> Response:
+    # PUT: dismissing a month twice is the same dismissal.
+    dashboard.dismiss_leftover(session, user_id, month)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.get("/trends", response_model=TrendsOut)
 def trends(

@@ -8,6 +8,7 @@
  */
 
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { MovementKind, Pot, SavingsOverview } from "../api/types";
@@ -276,7 +277,11 @@ export function SavingsCard() {
                       <td data-label={t("field.date")}>{contribution.occurred_on}</td>
                       <td data-label={t("dash.colType")}>
                         {typeName(contribution.savings_type_id)}
-                        {out && <span className="tag">{t("pots.withdrawal")}</span>}
+                        {out && (
+                          <span className="tag">
+                            {t(contribution.entry_id ? "pots.paidAnExpense" : "pots.withdrawal")}
+                          </span>
+                        )}
                       </td>
                       <td
                         className="num"
@@ -287,37 +292,42 @@ export function SavingsCard() {
                         {money.plain(contribution.amount)}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="quiet"
-                          onClick={() =>
-                            void guard(
-                              "record",
-                              async () => {
-                                await api.deleteContribution(contribution.id);
-                                toast.show(
-                                  t("entries.deleted", {
-                                    amount: money.amount(contribution.amount),
-                                  }),
-                                  {
-                                    onUndo: async () => {
-                                      await api.createContribution({
-                                        savings_type_id: contribution.savings_type_id,
-                                        kind: contribution.kind ?? "deposit",
-                                        amount: contribution.amount,
-                                        occurred_on: contribution.occurred_on,
-                                      });
-                                      await reload();
+                        {/* AD-51: it belongs to the entry, and the API refuses it here. */}
+                        {contribution.entry_id ? (
+                          <Link to="/entries">{t("pots.changeOnEntry")}</Link>
+                        ) : (
+                          <button
+                            type="button"
+                            className="quiet"
+                            onClick={() =>
+                              void guard(
+                                "record",
+                                async () => {
+                                  await api.deleteContribution(contribution.id);
+                                  toast.show(
+                                    t("entries.deleted", {
+                                      amount: money.amount(contribution.amount),
+                                    }),
+                                    {
+                                      onUndo: async () => {
+                                        await api.createContribution({
+                                          savings_type_id: contribution.savings_type_id,
+                                          kind: contribution.kind ?? "deposit",
+                                          amount: contribution.amount,
+                                          occurred_on: contribution.occurred_on,
+                                        });
+                                        await reload();
+                                      },
                                     },
-                                  },
-                                );
-                              },
-                              "plan.couldNotDeleteContribution",
-                            )
-                          }
-                        >
-                          {t("action.delete")}
-                        </button>
+                                  );
+                                },
+                                "plan.couldNotDeleteContribution",
+                              )
+                            }
+                          >
+                            {t("action.delete")}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

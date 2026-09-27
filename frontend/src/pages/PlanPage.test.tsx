@@ -29,8 +29,44 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+function summary(budgets: { category_id: string; budget: string | null; actual: string }[]) {
+  return {
+    month: "2026-09",
+    period: "month",
+    label: "2026-09",
+    start: "2026-09-01",
+    end: "2026-09-30",
+    income: "0.00",
+    expense: "0.00",
+    net: "0.00",
+    saved: "0.00",
+    budgets: budgets.map((row) => ({ ...row, category_name: "Rent" })),
+    savings: [],
+  };
+}
+
 /** No budget set yet, and no savings pots — the savings card has its own tests. */
-function mockApi() {
+const holiday = {
+  savings_type_id: "p1",
+  name: "Holiday",
+  balance: "300.00",
+  saved: "0.00",
+  target: null,
+  due: null,
+  skipped: false,
+  goal_amount: null,
+  goal_date: null,
+  needed_per_month: null,
+};
+
+function mockApi(
+  opts: {
+    budgets?: unknown[];
+    spent?: Parameters<typeof summary>[0];
+    pots?: (typeof holiday)[];
+    categories?: unknown[];
+  } = {},
+) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     if (url.includes("/api/savings/overview")) {
@@ -39,12 +75,14 @@ function mockApi() {
         start: "2026-09-01",
         end: "2026-10-01",
         current_month: "2026-09",
-        pots: [],
+        pots: opts.pots ?? [],
       });
     }
-    if (url.includes("/api/categories")) return json({ items: categories });
+    if (url.includes("/api/categories") && method === "PATCH") return json({});
+    if (url.includes("/api/categories")) return json({ items: opts.categories ?? categories });
     if (url.includes("/api/budgets") && method === "PUT") return json({}, 200);
-    if (url.includes("/api/budgets")) return json({ items: [] });
+    if (url.includes("/api/budgets")) return json({ items: opts.budgets ?? [] });
+    if (url.includes("/api/dashboard/summary")) return json(summary(opts.spent ?? []));
     return json({ items: [] });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -54,6 +92,91 @@ function mockApi() {
 describe("PlanPage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("asks for the current budget month's summary, the dashboard's own figures", async () => {
+    const fetchMock = mockApi();
+    render(<PlanPage />);
+    await screen.findByLabelText("Monthly amount for Rent");
+    expect(
+      fetchMock.mock.calls.some(([url]) => /^\/api\/dashboard\/summary\?month=\d{4}-\d{2}$/.test(String(url))),
+    ).toBe(true);
+  });
+
+  it("shows what a category has spent this month, and what is left of its budget", async () => {
+    mockApi({
+      budgets: [{ category_id: "c1", monthly_amount: "500.00", updated_at: "" }],
+      spent: [{ category_id: "c1", budget: "500.00", actual: "120.00" }],
+    });
+    render(<PlanPage />);
+
+    const row = (await screen.findByLabelText("Monthly amount for Rent")).closest("tr") as HTMLElement;
+    expect(row).toHaveTextContent("120.00");
+    expect(row).toHaveTextContent("380.00 left");
+    expect(within(row).getByRole("meter", { name: /Rent/ })).toHaveAttribute("aria-valuenow", "24");
+  });
+
+  it("says by how much a category is over its budget", async () => {
+    mockApi({
+      budgets: [{ category_id: "c1", monthly_amount: "100.00", updated_at: "" }],
+      spent: [{ category_id: "c1", budget: "100.00", actual: "130.00" }],
+    });
+    render(<PlanPage />);
+
+    const row = (await screen.findByLabelText("Monthly amount for Rent")).closest("tr") as HTMLElement;
+    expect(row).toHaveTextContent("30.00 over");
+    expect(row).not.toHaveTextContent("left");
+  });
+
+  it("shows zero spent and no bar for a category with neither budget nor spending", async () => {
+    mockApi();
+    render(<PlanPage />);
+
+    const row = (await screen.findByLabelText("Monthly amount for Rent")).closest("tr") as HTMLElement;
+    expect(row).toHaveTextContent("0.00");
+    expect(within(row).queryByRole("meter")).toBeNull();
+  });
+
+  it("offers no default pot when there are no pots", async () => {
+    mockApi();
+    render(<PlanPage />);
+    await screen.findByLabelText("Monthly amount for Rent");
+    expect(screen.queryByLabelText("Default pot for Rent")).toBeNull();
+  });
+
+  it("shows a category's default pot and saves a new one at once", async () => {
+    const fetchMock = mockApi({ pots: [holiday] });
+    const user = userEvent.setup();
+    render(<PlanPage />);
+
+    const choice = await screen.findByLabelText("Default pot for Rent");
+    expect(choice).toHaveValue("");
+    await user.selectOptions(choice, "p1");
+
+    await waitFor(() => {
+      const patch = fetchMock.mock.calls.find(
+        ([url, init]) => String(url) === "/api/categories/c1" && init?.method === "PATCH",
+      );
+      expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ default_savings_type_id: "p1" });
+    });
+  });
+
+  it("clears a default pot with an explicit null", async () => {
+    const fetchMock = mockApi({
+      pots: [holiday],
+      categories: [{ ...categories[0], default_savings_type_id: "p1" }],
+    });
+    const user = userEvent.setup();
+    render(<PlanPage />);
+
+    const choice = await screen.findByLabelText("Default pot for Rent");
+    expect(choice).toHaveValue("p1");
+    await user.selectOptions(choice, "");
+
+    await waitFor(() => {
+      const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+      expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ default_savings_type_id: null });
+    });
   });
 
   it("saves a budget amount with a PUT carrying a two-place decimal string, never a POST", async () => {

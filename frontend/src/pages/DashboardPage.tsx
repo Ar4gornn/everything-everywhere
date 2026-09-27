@@ -7,6 +7,7 @@ import type {
   Book,
   CardId,
   InventoryItem,
+  Leftover,
   PendingEntry,
   Period,
   Space,
@@ -17,6 +18,7 @@ import { Sparkline } from "../charts/Sparkline";
 import { ProgressBar } from "../charts/ProgressBar";
 import { TrendChart } from "../charts/TrendChart";
 import { MoodCheckin } from "../components/MoodCheckin";
+import { LeftoverCard } from "../components/LeftoverCard";
 import { QuoteCard } from "../components/QuoteCard";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
@@ -106,6 +108,7 @@ export function DashboardPage() {
   const needSummary = shown("stats") || shown("budgets") || shown("savings");
   const needTrends = shown("trends") || shown("categories");
   const pendingOn = shown("pending");
+  const leftoverOn = shown("leftover");
   const restockOn = shown("restock");
   const readingOn = shown("reading");
   const [month, setMonth] = useState(() => budgetMonth(startDay));
@@ -125,6 +128,9 @@ export function DashboardPage() {
   // blank the ledger.
   const [lowItems, setLowItems] = useState<InventoryItem[] | null>(null);
   const [pending, setPending] = useState<PendingEntry[] | null>(null);
+  // Story 35.4: the last closed month's leftover. Read again after the card acts on it.
+  const [leftover, setLeftover] = useState<Leftover | null>(null);
+  const [leftoverReads, setLeftoverReads] = useState(0);
   const [spaces, setSpaces] = useState<Space[]>([]);
   // What is open on the shelf (Epic 28). Read from the books module and composed here, the
   // same way the restock list is (AD-37); null while unknown, so a failed read hides the
@@ -166,6 +172,29 @@ export function DashboardPage() {
       cancelled = true;
     };
   }, [pendingOn]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!leftoverOn) {
+      setLeftover(null);
+      return;
+    }
+    // A reread is asked for by bumping the counter; the value itself is not read.
+    void leftoverReads;
+    void api.leftover().then(
+      (value) => {
+        // An answer without the figure proposes nothing, rather than taking the page down:
+        // this card is a suggestion, and the ledger around it matters more.
+        if (!cancelled) setLeftover(typeof value?.leftover === "string" ? value : null);
+      },
+      () => {
+        if (!cancelled) setLeftover(null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [leftoverOn, leftoverReads]);
 
   useEffect(() => {
     let cancelled = false;
@@ -287,6 +316,15 @@ export function DashboardPage() {
             {pending.length > 3 ? t("dash.andMore") : ""}
           </p>
         </Card>
+      ),
+    leftover: () =>
+      leftover &&
+      !leftover.dismissed &&
+      toCents(leftover.leftover) > 0 && (
+        <LeftoverCard
+          leftover={leftover}
+          onChange={() => setLeftoverReads((count) => count + 1)}
+        />
       ),
     reading: () =>
       reading &&
