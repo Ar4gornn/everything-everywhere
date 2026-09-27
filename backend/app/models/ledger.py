@@ -15,12 +15,14 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from app.models.base import Base, TimestampedMixin
+from app.models.savings import SavingsContribution
 from app.schemas.common import quantise_rate
 
 
@@ -56,6 +58,19 @@ _kind = Enum(EntryKind, name="entry_kind", values_callable=lambda e: [m.value fo
 
 class Category(TimestampedMixin, Base):
     __tablename__ = "categories"
+    __table_args__ = (
+        # Epic 35.3 (AD-51): composite, so it cannot name another account's pot. The
+        # constraint itself (SET NULL on one column) is raw SQL in migration 0029.
+        ForeignKeyConstraint(
+            ["user_id", "default_savings_type_id"],
+            ["savings_types.user_id", "savings_types.id"],
+            name="categories_default_pot_fkey",
+        ),
+        CheckConstraint(
+            "default_savings_type_id IS NULL OR kind = 'expense'",
+            name="categories_default_pot_expense_only",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
@@ -65,6 +80,11 @@ class Category(TimestampedMixin, Base):
     )
     kind: Mapped[EntryKind] = mapped_column(_kind, nullable=False)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    # Epic 35.3: the pot an expense here is usually paid from. It pre-fills the entry form
+    # and nothing else: no entry is written from it, and changing it rewrites none.
+    default_savings_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True
+    )
 
 
 class Vendor(TimestampedMixin, Base):
@@ -127,6 +147,14 @@ class Entry(TimestampedMixin, Base):
     quantity: Mapped[decimal.Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(8), nullable=True)
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    # AD-51: the pot this expense was paid from, read from its withdrawal — never stored
+    # twice. A column_property is stale after a flush, so the writers refresh the entry.
+    savings_type_id: Mapped[uuid.UUID | None] = column_property(
+        select(SavingsContribution.savings_type_id)
+        .where(SavingsContribution.entry_id == id)
+        .correlate_except(SavingsContribution)
+        .scalar_subquery()
+    )
 
     @property
     def unit_price(self) -> decimal.Decimal | None:

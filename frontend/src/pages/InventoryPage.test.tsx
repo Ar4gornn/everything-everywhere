@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InventoryPage } from "./InventoryPage";
 import type { InventoryItem, Space } from "../api/types";
+import { onAPhone } from "../test/phone";
 
 function render(ui: React.ReactElement, path = "/inventory") {
   return rtlRender(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
@@ -223,5 +224,20 @@ describe("InventoryPage", () => {
     );
     render(<InventoryPage />);
     expect(await screen.findByText(/A space is anywhere you keep things/)).toBeInTheDocument();
+  });
+});
+
+describe("InventoryPage restocks on a phone (Story 38.2)", () => {
+  onAPhone();
+
+  it("draws a static row per space: its bars and its total", async () => {
+    mockApi();
+    render(<InventoryPage />);
+
+    const rows = await screen.findByRole("list", { name: "Restocks per space" });
+    expect(screen.queryByRole("table", { name: "Restocks per space" })).toBeNull();
+    expect(within(rows).getByRole("img", { name: "Fridge restocks per month" })).toBeInTheDocument();
+    expect(within(rows).getByText("Fridge").closest("li")).toHaveTextContent("3");
+    expect(within(rows).queryByRole("button")).toBeNull();
   });
 });

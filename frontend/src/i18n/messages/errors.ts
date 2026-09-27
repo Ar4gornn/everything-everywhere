@@ -102,6 +102,14 @@ export const errors = {
     en: "That savings pot still has contributions.",
     fr: "Cette enveloppe d’épargne contient encore des versements.",
   },
+  "error.savings_contribution_from_entry": {
+    en: "That withdrawal paid for an expense. Change the expense instead.",
+    fr: "Ce retrait a payé une dépense. Modifiez plutôt la dépense.",
+  },
+  "error.savings_expense_only": {
+    en: "Only an expense can be paid from savings.",
+    fr: "Seule une dépense peut être payée depuis l’épargne.",
+  },
   "error.push_test_too_soon": {
     en: "A test went to this device less than a minute ago. Try again in a moment.",
     fr: "Un test a été envoyé à cet appareil il y a moins d’une minute. Réessayez dans un instant.",

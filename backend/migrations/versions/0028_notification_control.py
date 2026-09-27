@@ -17,10 +17,11 @@ The kinds of notification (stock, recurring, …) are not here: they are a key o
 account's ``preferences`` (AD-49), sparse, so no data is written for them.
 
 Revision ID: 0028
-Revises: 0025
+Revises: 0030
 
-0027 is Epic 35's (plan ↔ entries), on its own branch. Whichever lands on ``main`` second
-re-points its ``down_revision`` at the other.
+Written after 0025 while Epic 35 (0027, 0029, 0030) was on its own branch; Epic 35 landed
+first, so this one was re-pointed at its head when ``main`` was merged in. The number is
+out of order, as 0025 already is after 0026.
 """
 
 from collections.abc import Sequence
@@ -31,7 +32,7 @@ from alembic import op
 from migrations.rls import APP_ROLE
 
 revision: str = "0028"
-down_revision: str | None = "0025"
+down_revision: str | None = "0030"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

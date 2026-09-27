@@ -32,7 +32,13 @@ from app.models.recipes import (
     RecipeUnit,
 )
 from app.models.recurring import Cadence, OccurrenceStatus, RecurringOccurrence, RecurringTemplate
-from app.models.savings import SavingsContribution, SavingsSkip, SavingsTarget, SavingsType
+from app.models.savings import (
+    LeftoverDismissal,
+    SavingsContribution,
+    SavingsSkip,
+    SavingsTarget,
+    SavingsType,
+)
 from app.models.user import User
 
 __all__ = [
@@ -61,6 +67,7 @@ __all__ = [
     "Workout",
     "WorkoutSet",
     "InventoryItemChange",
+    "LeftoverDismissal",
     "MoodDay",
     "Note",
     "SavingsContribution",

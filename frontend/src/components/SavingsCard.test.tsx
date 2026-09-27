@@ -1,5 +1,6 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Pot, SavingsOverview } from "../api/types";
@@ -7,14 +8,17 @@ import { AuthProvider } from "../auth/AuthContext";
 import { todayIso } from "../months";
 import { confirmDate, SavingsCard } from "./SavingsCard";
 import { ToastProvider } from "./Toast";
+import { onAPhone } from "../test/phone";
 
 function render() {
   return rtlRender(
-    <AuthProvider>
-      <ToastProvider>
-        <SavingsCard />
-      </ToastProvider>
-    </AuthProvider>,
+    <MemoryRouter>
+      <AuthProvider>
+        <ToastProvider>
+          <SavingsCard />
+        </ToastProvider>
+      </AuthProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -57,6 +61,7 @@ type Answer = { status: number; body?: unknown };
 function mockApi(
   pots: Pot[],
   answers: { deleteType?: Answer; createContribution?: Answer; patchType?: Answer } = {},
+  contributions: unknown[] = [],
 ) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
@@ -70,7 +75,7 @@ function mockApi(
     if (url.startsWith("/api/savings/contributions") && method === "POST") {
       return answer(answers.createContribution, { id: "new" });
     }
-    if (url.startsWith("/api/savings/contributions")) return json({ items: [] });
+    if (url.startsWith("/api/savings/contributions")) return json({ items: contributions });
     if (url.startsWith("/api/savings/skips")) return json(null, 204);
     if (url.startsWith("/api/savings/types") && method === "PATCH") {
       return answer(answers.patchType, {});
@@ -96,6 +101,32 @@ const bodyOf = (call: unknown[] | undefined) =>
 describe("SavingsCard", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("shows a withdrawal that paid for an expense as the entry's, not its own", async () => {
+    const paid = {
+      id: "w1",
+      savings_type_id: "p1",
+      kind: "withdrawal",
+      amount: "30.00",
+      occurred_on: "2026-09-10",
+      note: null,
+      entry_id: "e1",
+      created_at: "",
+    };
+    mockApi([pot()], {}, [paid, { ...paid, id: "w2", entry_id: null }]);
+    render();
+
+    const [owned, own] = (await screen.findAllByText("−30.00")).map((cell) => cell.closest("tr"));
+    // AD-51: the API refuses to delete it here, so the card offers the entry instead.
+    expect(within(owned as HTMLElement).getByText("Paid an expense")).toBeInTheDocument();
+    expect(within(owned as HTMLElement).queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(within(owned as HTMLElement).getByRole("link", { name: "Change on Entries" })).toHaveAttribute(
+      "href",
+      "/entries",
+    );
+    expect(within(own as HTMLElement).getByText("Withdrawal")).toBeInTheDocument();
+    expect(within(own as HTMLElement).getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("shows each pot's balance, the month against its target, and what is due", async () => {
@@ -323,5 +354,40 @@ describe("confirmDate", () => {
   it("follows the budget month, not the calendar", () => {
     const past = overview([], { month: "2026-08", start: "2026-07-26", end: "2026-08-26" });
     expect(confirmDate(past, "2026-09-26")).toBe("2026-08-25");
+  });
+});
+
+describe("SavingsCard history on a phone (Story 38.2)", () => {
+  onAPhone();
+
+  it("signs each movement, and offers Delete or the entry on opening", async () => {
+    const user = userEvent.setup();
+    const paid = {
+      id: "w1",
+      savings_type_id: "p1",
+      kind: "withdrawal",
+      amount: "30.00",
+      occurred_on: "2026-09-10",
+      note: null,
+      entry_id: "e1",
+      created_at: "",
+    };
+    mockApi([pot()], {}, [paid, { ...paid, id: "d1", kind: "deposit", entry_id: null }]);
+    render();
+
+    const owned = (await screen.findByText("−30.00")).closest("button") as HTMLElement;
+    const own = screen.getByText("+30.00").closest("button") as HTMLElement;
+    expect(document.querySelector("table")).toBeNull();
+    expect(owned).toHaveTextContent("Holidays");
+    expect(owned).toHaveTextContent("Paid an expense");
+
+    await user.click(owned);
+    expect(screen.getByRole("link", { name: "Change on Entries" })).toHaveAttribute(
+      "href",
+      "/entries",
+    );
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    await user.click(own);
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 });

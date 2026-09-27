@@ -6,6 +6,7 @@ import type { ItemInput } from "../api/client";
 import type { InventoryItem, ItemChange, Restocks, Space } from "../api/types";
 import { CountBars } from "../charts/CountBars";
 import { StepChart } from "../charts/StepChart";
+import { ListRow } from "../components/ListRow";
 import { ShoppingList } from "../components/ShoppingList";
 import { NotifyBell, usePushEnabled } from "../components/NotifyBell";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
@@ -17,6 +18,7 @@ import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
+import { useLayout } from "../layout/useLayout";
 
 const RESTOCK_MONTHS = 6;
 const NOTHING = { spaces: [] as Space[], items: [] as InventoryItem[], restocks: null as Restocks | null };
@@ -35,6 +37,7 @@ export function InventoryPage() {
   const pushOn = usePushEnabled();
   const t = useT();
   const dates = useDates();
+  const phone = useLayout() === "phone";
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -476,8 +479,10 @@ export function InventoryPage() {
               title={space.name}
               actions={
                 renaming === space.id ? (
-                  <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                  <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                     <input
+                      // Without a basis the buttons squeezed this to 25px on a phone.
+                      style={{ flex: "1 1 8rem", minWidth: 0 }}
                       aria-label={t("stock.renameSpaceAria")}
                       value={renameDraft}
                       onChange={(event) => setRenameDraft(event.target.value)}
@@ -760,35 +765,55 @@ export function InventoryPage() {
 
       {restocks && anyRestocks && (
         <Card title={t("stock.restocksTitle", { months: RESTOCK_MONTHS })}>
-          <TableWrap>
-            <table className="stacked" aria-label={t("stock.restocksAria")}>
-              <thead>
-                <tr>
-                  <th>{t("stock.space")}</th>
-                  <th>{t("stock.colPerMonth")}</th>
-                  <th className="num">{t("stock.colTotal")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {restocks.series.map((series) => (
-                  <tr key={series.space_id}>
-                    <td data-label={t("stock.space")}>{series.space_name}</td>
-                    <td data-label={t("stock.colPerMonth")}>
-                      <CountBars
-                        values={series.values}
-                        months={restocks.months}
-                        label={series.space_name}
-                        peak={restockPeak}
-                      />
-                    </td>
-                    <td className="num" data-label={t("stock.colTotal")}>
-                      {series.values.reduce((sum, v) => sum + v, 0)}
-                    </td>
+          {phone ? (
+            <ul className="list-rows" aria-label={t("stock.restocksAria")}>
+              {restocks.series.map((series) => (
+                <ListRow
+                  key={series.space_id}
+                  title={series.space_name}
+                  amount={series.values.reduce((sum, v) => sum + v, 0)}
+                  bar={
+                    <CountBars
+                      values={series.values}
+                      months={restocks.months}
+                      label={series.space_name}
+                      peak={restockPeak}
+                    />
+                  }
+                />
+              ))}
+            </ul>
+          ) : (
+            <TableWrap>
+              <table className="stacked" aria-label={t("stock.restocksAria")}>
+                <thead>
+                  <tr>
+                    <th>{t("stock.space")}</th>
+                    <th>{t("stock.colPerMonth")}</th>
+                    <th className="num">{t("stock.colTotal")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
+                </thead>
+                <tbody>
+                  {restocks.series.map((series) => (
+                    <tr key={series.space_id}>
+                      <td data-label={t("stock.space")}>{series.space_name}</td>
+                      <td data-label={t("stock.colPerMonth")}>
+                        <CountBars
+                          values={series.values}
+                          months={restocks.months}
+                          label={series.space_name}
+                          peak={restockPeak}
+                        />
+                      </td>
+                      <td className="num" data-label={t("stock.colTotal")}>
+                        {series.values.reduce((sum, v) => sum + v, 0)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
           <div className="legend">
             {restocks.months.map((m) => (
               <span key={m}>{dates.monthTick(m)}</span>

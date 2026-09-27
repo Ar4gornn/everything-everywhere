@@ -973,6 +973,58 @@ security-definer function
   savings fields became `SignedMoney` for it (they were non-negative, and a withdrawal month
   would have been a 500). The export gains a `kind` column before `amount`.
 
+### AD-51 — An expense paid from a pot is spending and a withdrawal, written as one, owned by the entry
+
+- **Binds:** entries, savings contributions, the Entries page, the Plan page's savings card,
+  the dashboard's leftover card.
+- **Extends:** AD-50 (the balance rule and its lock, unchanged), AD-18 (the new foreign key
+  is composite), AD-4 (one request, one transaction), AD-44 (refusals carry a code).
+- **Numbered 51:** Epic 35's. AD-52 is Epic 36's, on its own branch.
+- **Prevents:** three failures.
+
+  **Money counted once, or twice, depending on where you look.** A pot-funded expense is
+  both: it counts as spending (totals, the category's budget) *and* as a withdrawal from the
+  pot. Neither side is special-cased in any sum; the month's net savings go down by the same
+  amount its spending goes up, which is what Story 35.4's leftover will cancel out.
+
+  **An expense and a pot that disagree.** `savings_contributions.entry_id` points at the
+  entry — composite `(user_id, entry_id)` to `entries (user_id, id)`, `ON DELETE CASCADE`,
+  unique, and a CHECK that only a withdrawal carries it. `services/savings.set_entry_withdrawal`
+  is its one writer, called inside the entry's create or update: the withdrawal takes the
+  entry's pot, amount and date, or is removed. A pot that cannot cover it raises AD-50's
+  `409 savings_balance_negative` and the entry is rolled back with it. The contribution
+  endpoints refuse to edit or delete such a row (`409 savings_contribution_from_entry`), and
+  the Savings card shows it read-only with a link to Entries. Deleting the entry cascades,
+  which can only raise a balance, so the cascade needs no lock.
+
+  **A pot on income.** Only an expense can name a pot: `EntryCreate` refuses it (422), and
+  `PATCH` on an income answers `422 savings_expense_only` — an entry's kind cannot change, so
+  those two doors are all there are. The database does not hold this rule.
+
+  The entry reads its pot back through a `column_property` over the withdrawal, so the
+  answer is stored once. `PATCH /api/entries/{id}`: a pot moves the withdrawal, an explicit
+  `null` removes it, an absent key leaves it. The Entries form clears the choice after each
+  write, as a remembered pot would silently pay for the next entry too.
+
+  **A category's default pot (Story 35.3)** is a form default and nothing more.
+  `categories.default_savings_type_id` is composite to `savings_types (user_id, id)`,
+  `ON DELETE SET NULL (default_savings_type_id)`, with a CHECK that only an expense category
+  carries it (migration 0029). The entry endpoints never read it: an entry sent without a
+  pot is paid from nothing, whatever its category says, so setting or clearing a default
+  rewrites no entry and writes no withdrawal. The Entries form fills "Paid from" from it and
+  shows the choice, which is why re-offering it after a write does not break the rule above:
+  what is remembered is visible and belongs to the category, not to the last entry.
+
+  **What a closed month left over (Story 35.4)** is `income − expenses − net savings` of the
+  previous budget month, over the dashboard summary's own two aggregates, so it cannot
+  disagree with that month's figures. A pot-funded expense adds to expenses and subtracts
+  from net savings by the same amount, so it cancels with no special case. It is proposed,
+  never recorded (AD-50): taking it is an ordinary deposit dated on the month's last day,
+  which lowers the figure it answers, so a taken leftover disappears by arithmetic and a
+  partial one leaves the rest proposed. Only "not this time" has no trace of its own, so it
+  is a row in `leftover_dismissals (user_id, month)`, keyed by label like `savings_skips`
+  (migration 0030). The client picks no pot for the person, as rejected at scoping.
+
 ### AD-52 — The person chooses what the digest says and when; it is still one push a day
 
 - **Binds:** `services/push.py` (the digest), `notify.py`, the preferences' `notifications`
@@ -980,7 +1032,7 @@ security-definer function
   `users.timezone` / `users.digest_time`, the Settings notifications section.
 - **Extends:** AD-34 (cron, runtime role, read-only), AD-30 (one predicate per question),
   AD-49 (sparse preferences resolved on read), AD-19 (named-column grants on `users`).
-- **Numbered 52:** AD-51 is left to Epic 35 (plan ↔ entries), on its own branch.
+- **Numbered 52:** AD-51 is Epic 35's (plan ↔ entries), which landed first.
 - **Prevents:** three failures.
 
   **The all-or-nothing switch.** Before this, a person who did not want to hear about one
@@ -1194,7 +1246,9 @@ Everything Everywhere/
 | Notes — text or a sketch, drafts on the device, shortcuts | `api/notes.py`, `services/notes.py`, migration 0024, `frontend/src/notes/`, `NotesPage.tsx`, `NotePage.tsx`, `public/manifest.webmanifest` | AD-48, AD-8, AD-30, AD-31, AD-24 |
 | Preferences — modules, tab order, dashboard cards, per layout | `services/preferences.py`, `api/auth.py`, migration 0025 | AD-49, AD-19, AD-24, AD-44 |
 | Savings pots — balances, withdrawals, goals, what is due | `api/savings.py`, `services/savings.py`, migration 0026, `frontend/src/components/SavingsCard.tsx` | AD-50, AD-10, AD-11, AD-18, AD-24 |
-| Notification control — kinds, muted items, local send time, preview, test | `services/push.py`, `api/push.py`, `notify.py`, migration 0028 | AD-52, AD-34, AD-30, AD-49, AD-19 |
+| An expense paid from a pot, a category's default pot | `services/ledger.py` (`set_default_pot`), `services/savings.py` (`set_entry_withdrawal`), migrations 0027 and 0029, `frontend/src/pages/EntriesPage.tsx`, `PlanPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
+| What a closed month left over | `services/dashboard.py` (`leftover`, `dismiss_leftover`), migration 0030, `frontend/src/components/LeftoverCard.tsx`, `DashboardPage.tsx` | AD-51, AD-50, AD-49, AD-10 |
+| Notification control — kinds, muted items, local send time, preview, test | `services/push.py`, `api/push.py`, `notify.py`, migration 0028 (after 0030) | AD-52, AD-34, AD-30, AD-49, AD-19 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred

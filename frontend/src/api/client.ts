@@ -30,6 +30,7 @@ import type {
   InventoryItem,
   ItemChange,
   Language,
+  Leftover,
   Habit,
   ScheduleKind,
   HabitProgress,
@@ -316,6 +317,8 @@ export interface EntryInput {
   /** AD-29: both or neither. Sent as an explicit null pair to clear. */
   quantity?: Quantity | null;
   unit?: Unit | null;
+  /** AD-51: an expense paid from this pot. Explicit null on a PATCH stops it. */
+  savings_type_id?: string | null;
 }
 
 export interface TemplateInput {
@@ -477,6 +480,13 @@ export const api = {
     request<Category>("/api/categories", {
       method: "POST",
       body: JSON.stringify({ name, kind }),
+    }),
+
+  /** Epic 35.3: the pot an expense category pre-fills; null clears it. */
+  setCategoryPot: (id: string, savingsTypeId: string | null) =>
+    request<Category>(`/api/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ default_savings_type_id: savingsTypeId }),
     }),
 
   deleteCategory: (id: string) =>
@@ -771,6 +781,12 @@ export const api = {
 
   exportCsv: (kind: "entries" | "savings" | "inventory" | "books") =>
     download(`/api/export/${kind}.csv`, `everything-everywhere-${kind}.csv`),
+
+  /** Story 35.4: the last closed budget month's leftover. Reading it records nothing. */
+  leftover: () => request<Leftover>("/api/dashboard/leftover"),
+
+  dismissLeftover: (month: string) =>
+    request<void>(`/api/dashboard/leftover/${month}/dismissed`, { method: "PUT" }),
 
   summary: (month: string, period: Period = "month") =>
     request<Summary>(
