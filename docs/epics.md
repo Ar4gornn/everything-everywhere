@@ -2559,3 +2559,53 @@ automatically; re-linking past entries; income paid into a pot.
   `leftover_dismissals` keyed by label, migration `0030` (after `0029`). No undo.
 - New dashboard card id `leftover`, after `pending` (AD-49 fills it into stored layouts).
   Drawn only when the leftover is above zero and not dismissed; with no pot, it links to Plan.
+
+## Epic 36: Notification control — what reaches me, and when
+
+Scoped 2026-09-27, options and rejections in `LOG.md`. Epic 18's digest is one push a day
+with one switch per device; this gives the person control down to a single item, at an hour
+they pick in their own timezone, and still one push a day. AD-52 holds the rules. Numbered
+36: Epic 35 (plan ↔ entries) is on its own branch; deploying (VPS, cron, VAPID) is Epic 37.
+
+**Explicitly out:** preferences per device; a timed push per habit; a mood nudge; a weekly
+summary; email or SMS; badges or sound; the deploy itself.
+
+### Story 36.1: Kinds
+
+- `preferences.notifications` — `stock`, `recurring`, `habits` on, `due_tomorrow`,
+  `savings` off by default, resolved on read (AD-49). `StrictBool`; an unknown kind is
+  `pref_unknown_id`. A module off silences its kind.
+
+### Story 36.2: Items
+
+- Migration `0028` (after `0030`): `notify boolean NOT NULL DEFAULT true` on `savings_types`,
+  `recurring_templates`, `inventory_items`. Each one's PATCH takes it; the digest skips
+  muted rows. `GET /api/push/muted` lists them, named, for Settings.
+
+### Story 36.3: Timezone and send time
+
+- Same migration: `users.timezone text NULL`, `users.digest_time time NOT NULL DEFAULT
+  '19:00'`, granted by column. `PATCH /me/notification-schedule`; an unknown zone is
+  `422 invalid_timezone`. The client fills the zone from `Intl` when it is null.
+- `notify.py` runs every 15 minutes and sends when the local time has reached `digest_time`
+  and the device was not told on the local today.
+
+### Story 36.4: Due tomorrow and savings behind
+
+- Two clauses, English and French, defined once in `services/push.py` (AD-52).
+
+### Story 36.5: The push opens the page it is about
+
+- The payload's `url` is the first clause's page.
+
+### Story 36.6: Settings — notifications
+
+- Switches per kind, the time and zone, the muted list with Unmute, tonight's preview,
+  "Send test" (own device, not counted as the day's digest, one a minute: `429
+  push_test_too_soon`). A bell on each pot, recurring rule and stock item.
+
+### Story 36.7: QA
+
+- Second-user proof (A's mutes and kinds never shape B's digest); a zone across the date
+  line; a DST day; a module off; each new guard mutated red. Settings measured in both
+  languages at 375 and 320.

@@ -15,8 +15,13 @@ dependencies = [
     "argon2-cffi==25.1.0",
     "pyjwt==2.13.0",
     # Web Push, from web-push-libs — the same org as the reference JS implementation.
-    # MPL-2.0. Only ops/notify.py imports it; the API never sends a push itself.
+    # MPL-2.0. `notify.py` sends the digest with it; the API sends only the one push a
+    # person asks for from Settings ("Send test", Epic 36, AD-52).
     "pywebpush==2.5.0",
+    # The IANA zone database, from the PSF. `zoneinfo` reads the OS copy when there is one;
+    # Windows has none and python:3.13-slim is not guaranteed one, so it is pinned here
+    # rather than left to arrive as someone else's transitive dependency (Epic 36).
+    "tzdata==2026.3",
 ]
 
 [project.optional-dependencies]

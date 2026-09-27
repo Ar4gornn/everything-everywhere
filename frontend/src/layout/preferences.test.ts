@@ -64,6 +64,7 @@ describe("the defaults", () => {
     ].map((id) => ({ id, on: true }));
     expect(DEFAULT_PREFERENCES).toEqual({
       modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true },
+      notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false },
       phone: { tabs, cards },
       desktop: { tabs, cards },
     });
@@ -73,6 +74,14 @@ describe("the defaults", () => {
     expect(preferencesOf(null)).toBe(DEFAULT_PREFERENCES);
     expect(preferencesOf({ id: "u", email: "", currency: "USD", weight_unit: "kg",
       budget_start_day: 1, language: "en", created_at: "" })).toBe(DEFAULT_PREFERENCES);
+  });
+
+  it("fill in the notification kinds for a server between 0025 and 0028", () => {
+    const { notifications: _dropped, ...older } = DEFAULT_PREFERENCES;
+    const prefs = preferencesOf({ id: "u", email: "", currency: "USD", weight_unit: "kg",
+      budget_start_day: 1, language: "en", created_at: "",
+      preferences: older as typeof DEFAULT_PREFERENCES });
+    expect(prefs.notifications).toEqual(DEFAULT_PREFERENCES.notifications);
   });
 
   it("a patch replaces whole subtrees, like the server", () => {

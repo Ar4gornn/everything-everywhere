@@ -1,11 +1,18 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RecurringCard } from "./RecurringCard";
 import { ToastProvider } from "./Toast";
 import type { PendingEntry, RecurringTemplate } from "../api/types";
 import { onAPhone } from "../test/phone";
+
+// Whether the instance sends pushes; jsdom has no PushManager, so the real hook says no.
+const push = vi.hoisted(() => ({ on: false }));
+vi.mock("./NotifyBell", async (original) => ({
+  ...(await original<typeof import("./NotifyBell")>()),
+  usePushEnabled: () => push.on,
+}));
 
 function render(ui: React.ReactElement) {
   return rtlRender(<ToastProvider>{ui}</ToastProvider>);
@@ -68,7 +75,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function mockApi(overrides: { pending?: PendingEntry[] } = {}) {
+function mockApi(overrides: { pending?: PendingEntry[]; templates?: RecurringTemplate[] } = {}) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     if (url.includes("/api/recurring/pending")) {
@@ -81,7 +88,9 @@ function mockApi(overrides: { pending?: PendingEntry[] } = {}) {
     }
     if (url.includes("/api/recurring/templates") && method === "PATCH") return json(templates[1]);
     if (url.includes("/api/recurring/templates") && method === "DELETE") return json(null, 204);
-    if (url.includes("/api/recurring/templates")) return json({ items: templates });
+    if (url.includes("/api/recurring/templates")) {
+      return json({ items: overrides.templates ?? templates });
+    }
     if (url.includes("/api/categories")) return json({ items: categories });
     return json({ items: [] });
   });
@@ -266,5 +275,38 @@ describe("RecurringCard on a phone (Story 38.2)", () => {
     await user.click(paused);
     expect(screen.getByRole("button", { name: "Resume Electricity" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete recurring Electricity" })).toBeInTheDocument();
+  });
+});
+
+describe("RecurringCard bell on a phone (Epic 36 x 38.2)", () => {
+  onAPhone();
+  beforeEach(() => {
+    push.on = true;
+  });
+  afterEach(() => {
+    push.on = false;
+  });
+
+  it("puts a template's bell inside its open row, beside Pause and Delete", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi({ templates: templates.map((t) => ({ ...t, notify: true })) });
+    render(<RecurringCard />);
+
+    const rows = await screen.findByRole("list", { name: "Recurring templates" });
+    const bellName = "Stop mentioning Rent in notifications";
+    expect(screen.queryByRole("button", { name: bellName })).toBeNull();
+
+    await user.click(within(rows).getByRole("button", { name: /^Rent/ }));
+    await user.click(within(rows).getByRole("button", { name: bellName }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            String(url).includes("/api/recurring/templates/t1") &&
+            init?.method === "PATCH" &&
+            JSON.parse(String(init.body)).notify === false,
+        ),
+      ).toBe(true),
+    );
   });
 });

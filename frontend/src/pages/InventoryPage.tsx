@@ -8,6 +8,7 @@ import { CountBars } from "../charts/CountBars";
 import { StepChart } from "../charts/StepChart";
 import { ListRow } from "../components/ListRow";
 import { ShoppingList } from "../components/ShoppingList";
+import { NotifyBell, usePushEnabled } from "../components/NotifyBell";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { isNonNegativeMoney, normalizeMoney } from "../money";
@@ -33,6 +34,7 @@ type Filter = "all" | "restock" | string; // a space id is also a filter
  */
 export function InventoryPage() {
   const money = useMoney();
+  const pushOn = usePushEnabled();
   const t = useT();
   const dates = useDates();
   const phone = useLayout() === "phone";
@@ -201,6 +203,14 @@ export function InventoryPage() {
       await api.updateItem(item.id, { restock_below: item.quantity });
       await load();
     }, "stock.couldNotMark");
+  }
+
+  async function toggleNotify(item: InventoryItem, next: boolean) {
+    // Epic 36: out of the push only; the item stays on this page and in the restock card.
+    await run(async () => {
+      await api.updateItem(item.id, { notify: next });
+      await load();
+    }, "notify.couldNotSave");
   }
 
   function beginEdit(item: InventoryItem) {
@@ -660,7 +670,14 @@ export function InventoryPage() {
                               )}
                             </td>
                             <td>
-                              <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                              <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+                                {pushOn && item.notify !== undefined && (
+                                  <NotifyBell
+                                    on={item.notify}
+                                    name={item.name}
+                                    onToggle={(next) => void toggleNotify(item, next)}
+                                  />
+                                )}
                                 {!item.needs_restock && (
                                   <button
                                     type="button"

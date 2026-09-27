@@ -55,6 +55,18 @@ CARDS: tuple[str, ...] = (
 
 LAYOUTS: tuple[str, ...] = ("phone", "desktop")
 
+#: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
+#: three that existed before stay on; the two new ones are opt-in, so the digest keeps
+#: meaning "something is exceptional" for everyone who never opens Settings.
+NOTIFICATIONS: tuple[tuple[str, bool], ...] = (
+    ("stock", True),
+    ("recurring", True),
+    ("habits", True),
+    ("due_tomorrow", False),
+    ("savings", False),
+)
+_NOTIFICATION_DEFAULT = dict(NOTIFICATIONS)
+
 #: The phone top bar's content box is 335px at a 375px viewport, and French is the wide
 #: language (Epic 27). Five tabs and three top links are what was measured to fit.
 PHONE_CAPS = {"bar": 5, "top": 3}
@@ -122,10 +134,15 @@ def resolve(stored: object) -> dict:
     value from an older catalogue is read, not refused."""
     prefs = stored if isinstance(stored, dict) else {}
     modules = prefs.get("modules") if isinstance(prefs.get("modules"), dict) else {}
+    kinds = prefs.get("notifications") if isinstance(prefs.get("notifications"), dict) else {}
     return {
         "modules": {
             module: modules[module] if isinstance(modules.get(module), bool) else True
             for module in MODULES
+        },
+        "notifications": {
+            kind: kinds[kind] if isinstance(kinds.get(kind), bool) else default
+            for kind, default in NOTIFICATIONS
         },
         **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
     }
@@ -146,6 +163,12 @@ def _check_modules(modules: dict[str, bool]) -> None:
                           "pref_core_module")
         if module not in MODULES:
             raise Invalid(f"no module called {module!r}", "pref_unknown_id")
+
+
+def _check_notifications(kinds: dict[str, bool]) -> None:
+    for kind in kinds:
+        if kind not in _NOTIFICATION_DEFAULT:
+            raise Invalid(f"no notification called {kind!r}", "pref_unknown_id")
 
 
 def _check_layout(name: str, layout: dict) -> None:
@@ -179,6 +202,8 @@ def validate(patch: dict) -> None:
     the top-level keys the request sent, already shape-checked by the schema."""
     if "modules" in patch:
         _check_modules(patch["modules"])
+    if "notifications" in patch:
+        _check_notifications(patch["notifications"])
     for layout in LAYOUTS:
         if layout in patch:
             _check_layout(layout, patch[layout])

@@ -111,8 +111,8 @@ export const account = {
   "settings.exportPreparing": { en: "Preparing…", fr: "Préparation…" },
   "settings.notifications": { en: "Notifications", fr: "Notifications" },
   "settings.notificationsHint": {
-    en: "A single daily reminder on this device when something needs restocking or a recurring entry is waiting. At most one a day, and nothing at all on a day with nothing to say.",
-    fr: "Un seul rappel par jour sur cet appareil quand un article est à racheter ou qu’une opération récurrente attend. Au plus une fois par jour, et rien du tout un jour sans rien à signaler.",
+    en: "A single daily reminder on each device you turn on, at the time you choose. You decide what it mentions. At most one a day, and nothing at all on a day with nothing to say.",
+    fr: "Un seul rappel par jour sur chaque appareil activé, à l’heure choisie. Vous décidez de ce qu’il signale. Au plus une fois par jour, et rien du tout un jour sans rien à signaler.",
   },
   "settings.notificationsOn": {
     en: "Turn on for this device",

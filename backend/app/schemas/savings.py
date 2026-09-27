@@ -2,7 +2,7 @@ import datetime as dt
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from app.schemas.common import Money, NonNegativeMoney, SignedMoney
 
@@ -29,6 +29,16 @@ class SavingsTypeUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     goal_amount: Money | None = None
     goal_date: dt.date | None = None
+    # Epic 36 (AD-52): false keeps this row out of the daily digest. Strict, and never null:
+    # "off" or null would otherwise be read as a choice nobody made.
+    notify: StrictBool | None = None
+
+    @field_validator("notify")
+    @classmethod
+    def _notify_not_null(cls, value: bool | None) -> bool:
+        if value is None:
+            raise ValueError("notify is true or false, never null")
+        return value
 
     @model_validator(mode="after")
     def _trim(self) -> "SavingsTypeUpdate":
@@ -48,6 +58,7 @@ class SavingsTypeOut(BaseModel):
     name: str
     goal_amount: Money | None = None
     goal_date: dt.date | None = None
+    notify: bool
     created_at: dt.datetime
 
 
@@ -124,6 +135,8 @@ class PotOut(BaseModel):
     #: Per budget month, from the current one through the goal date's, to reach the goal.
     #: Null without a goal date, or once the goal is reached.
     needed_per_month: Money | None
+    #: Epic 36 (AD-52): false keeps this pot out of the daily digest.
+    notify: bool
 
 
 class OverviewOut(BaseModel):

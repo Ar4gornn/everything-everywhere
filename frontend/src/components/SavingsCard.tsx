@@ -29,6 +29,7 @@ import { useDates } from "../useDates";
 import { useLoad } from "../useLoad";
 import { useMoney } from "../useMoney";
 import { ListRow, useOpenRow } from "./ListRow";
+import { NotifyBell, usePushEnabled } from "./NotifyBell";
 import { useToast } from "./Toast";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
 
@@ -389,6 +390,7 @@ function PotRow({
   const dates = useDates();
   const [dueDraft, setDueDraft] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const pushOn = usePushEnabled();
 
   const name = pot.name;
   const monthPercent = pot.target === null ? null : progress(pot.saved, pot.target);
@@ -422,6 +424,19 @@ function PotRow({
       <div className="pot-head">
         <strong>{name}</strong>
         <span className="num">{t("pots.balance", { amount: money.amount(pot.balance) })}</span>
+        {pushOn && pot.notify !== undefined && (
+          <NotifyBell
+            on={pot.notify}
+            name={name}
+            onToggle={(next) =>
+              void guard(
+                "pots",
+                () => api.updateSavingsType(pot.savings_type_id, { notify: next }),
+                "notify.couldNotSave",
+              )
+            }
+          />
+        )}
         <button
           type="button"
           className="quiet"

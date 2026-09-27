@@ -32,6 +32,14 @@ DEFAULT = {
         module: True
         for module in ("habits", "books", "mood", "stock", "gym", "recipes", "notes")
     },
+    # Epic 36 (AD-52): what existed before stays on, the two new kinds are opt-in.
+    "notifications": {
+        "stock": True,
+        "recurring": True,
+        "habits": True,
+        "due_tomorrow": False,
+        "savings": False,
+    },
     "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
     "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
 }

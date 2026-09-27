@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { MAX_START_DAY, budgetMonth } from "../months";
 import { useDates } from "../useDates";
-import { disablePush, enablePush, pushSupported } from "../push";
 import type { Currency, Language } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { LANGUAGES, useLanguage } from "../i18n";
 import { errorMessage } from "../i18n/errors";
 import { LayoutCard } from "../components/LayoutCard";
+import { NotificationsCard } from "../components/NotificationsCard";
 import { SecurityCard } from "../components/SecurityCard";
 import { useTutorial } from "../components/Tutorial/useTutorial";
 import { Card, ErrorBanner } from "../components/ui";
@@ -64,45 +64,6 @@ export function SettingsPage() {
   const [exporting, setExporting] = useState<string | null>(null);
   const startDay = user?.budget_start_day ?? 1;
   const thisMonth = budgetMonth(startDay);
-  const [push, setPush] = useState<{ enabled: boolean; devices: number } | null>(null);
-  const [pushBusy, setPushBusy] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api.pushStatus().then(
-      (status) => {
-        if (!cancelled) setPush(status);
-      },
-      () => {
-        // An older server with no push endpoints: hide the card rather than show an error.
-        if (!cancelled) setPush(null);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function togglePush(on: boolean) {
-    setError(null);
-    setPushBusy(true);
-    try {
-      if (!on) {
-        await disablePush();
-      } else {
-        const outcome = await enablePush();
-        if (outcome === "denied") setError(t("settings.pushBlocked"));
-        else if (outcome === "unsupported") setError(t("settings.pushUnsupported"));
-        else if (outcome === "unavailable") setError(t("settings.pushUnavailable"));
-      }
-      setPush(await api.pushStatus());
-    } catch (caught) {
-      setError(errorMessage(t, caught, "settings.couldNotChange"));
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
   async function changeStartDay(day: number) {
     setError(null);
     setChanging(true);
@@ -315,31 +276,7 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {push?.enabled && pushSupported() && (
-        <Card title={t("settings.notifications")}>
-          <p className="hint" style={{ margin: "0 0 10px" }}>
-            {t("settings.notificationsHint")}
-          </p>
-          <div className="row">
-            <button type="button" disabled={pushBusy} onClick={() => void togglePush(true)}>
-              {pushBusy ? t("state.working") : t("settings.notificationsOn")}
-            </button>
-            <button
-              type="button"
-              className="quiet"
-              disabled={pushBusy || push.devices === 0}
-              onClick={() => void togglePush(false)}
-            >
-              {t("settings.notificationsOff")}
-            </button>
-          </div>
-          <p className="hint" style={{ marginTop: 8 }}>
-            {push.devices === 0
-              ? t("settings.noDevices")
-              : t.n("settings.devices", push.devices)}
-          </p>
-        </Card>
-      )}
+      <NotificationsCard />
 
       <Card title={t("settings.help")}>
         <p className="hint" style={{ margin: "0 0 10px" }}>

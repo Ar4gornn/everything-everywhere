@@ -32,6 +32,7 @@ import { plan } from "./messages/plan";
 import { recipes } from "./messages/recipes";
 import { books } from "./messages/books";
 import { notes } from "./messages/notes";
+import { notifications } from "./messages/notifications";
 import { layout } from "./messages/layout";
 import { tour } from "./messages/tour";
 
@@ -54,6 +55,7 @@ export const messages = {
   ...recipes,
   ...books,
   ...notes,
+  ...notifications,
   ...layout,
   ...tour,
   ...errors,

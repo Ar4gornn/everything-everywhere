@@ -20,6 +20,7 @@ import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
 import { ListRow, useOpenRow } from "./ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
+import { NotifyBell, usePushEnabled } from "./NotifyBell";
 import { useToast } from "./Toast";
 
 /**
@@ -38,6 +39,7 @@ const NOTHING = {
 
 export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
   const money = useMoney();
+  const pushOn = usePushEnabled();
   const t = useT();
   const toast = useToast();
   const dates = useDates();
@@ -248,6 +250,23 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
       {t("action.delete")}
     </button>
   );
+  // Epic 36 (AD-52): whether the digest may mention this rule. Absent from older servers.
+  const bellButton = (template: RecurringTemplate) =>
+    pushOn &&
+    template.notify !== undefined && (
+      <NotifyBell
+        on={template.notify}
+        name={template.note || nameOf(template.category_id)}
+        disabled={busy === template.id}
+        onToggle={(next) =>
+          void run(
+            template.id,
+            () => api.updateTemplate(template.id, { notify: next }),
+            "notify.couldNotSave",
+          )
+        }
+      />
+    );
   const tags = (template: RecurringTemplate) => (
     <>
       {template.auto ? <span className="tag">{t("recurring.tagAuto")}</span> : null}
@@ -454,6 +473,7 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                 onToggle={() => toggleTemplate(template.id)}
                 details={
                   <div className="row" style={{ gap: 6 }}>
+                    {bellButton(template)}
                     {pauseButton(template)}
                     {deleteButton(template)}
                   </div>
@@ -493,7 +513,8 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                     {template.paused ? "—" : template.next_due}
                   </td>
                   <td>
-                    <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+                      {bellButton(template)}
                       {pauseButton(template)}
                       {deleteButton(template)}
                     </div>

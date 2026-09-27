@@ -433,6 +433,7 @@ _OVERVIEW = text(
            s.name            AS name,
            s.goal_amount     AS goal_amount,
            s.goal_date       AS goal_date,
+           s.notify          AS notify,
            t.monthly_amount  AS target,
            COALESCE(SUM(CASE WHEN c.kind = 'withdrawal' THEN -c.amount ELSE c.amount END), 0)
                AS balance,
@@ -449,7 +450,7 @@ _OVERVIEW = text(
     LEFT JOIN savings_contributions c
            ON c.user_id = s.user_id AND c.savings_type_id = s.id
     WHERE s.user_id = :uid
-    GROUP BY s.id, s.name, s.goal_amount, s.goal_date, t.monthly_amount
+    GROUP BY s.id, s.name, s.goal_amount, s.goal_date, s.notify, t.monthly_amount
     ORDER BY lower(s.name), s.id
     """
 )
@@ -492,6 +493,63 @@ def needed_per_month(
         return None
     months = max(1, _months_between(current_month, month_of(goal_date, start_day)))
     return ((goal_amount - balance) / months).quantize(_CENT, rounding=ROUND_UP)
+
+
+#: How far ahead a goal date may be for the digest to say the pot is behind (AD-52). Further
+#: out, the Plan page's "needed per month" is the right place to read it, not a push.
+BEHIND_WINDOW = dt.timedelta(days=30)
+
+
+def is_behind(
+    goal_amount: Decimal | None,
+    goal_date: dt.date | None,
+    started_on: dt.date,
+    balance: Decimal,
+    today: dt.date,
+) -> bool:
+    """Is this pot below the straight line to its goal, with the goal less than a month off?
+
+    The line runs from nothing on the day the pot was created to the goal on its date, so
+    ``expected = goal × elapsed / total``. A goal already reached, already past, or more
+    than :data:`BEHIND_WINDOW` away is never behind — a past goal nagged about every
+    evening is the notification people switch off. Epic 36, AD-52.
+    """
+    if goal_amount is None or goal_date is None or balance >= goal_amount:
+        return False
+    if not today <= goal_date <= today + BEHIND_WINDOW:
+        return False
+    total = (goal_date - started_on).days
+    if total <= 0:
+        return True
+    elapsed = min(max((today - started_on).days, 0), total)
+    return balance < goal_amount * elapsed / total
+
+
+_GOALS = text(
+    """
+    SELECT s.id, s.name, s.notify, s.goal_amount, s.goal_date, s.created_at,
+           COALESCE(SUM(CASE WHEN c.kind = 'withdrawal' THEN -c.amount ELSE c.amount END), 0)
+               AS balance
+    FROM savings_types s
+    LEFT JOIN savings_contributions c
+           ON c.user_id = s.user_id AND c.savings_type_id = s.id
+    WHERE s.user_id = :uid AND s.goal_amount IS NOT NULL AND s.goal_date IS NOT NULL
+    GROUP BY s.id, s.name, s.notify, s.goal_amount, s.goal_date, s.created_at
+    ORDER BY lower(s.name), s.id
+    """
+)
+
+
+def behind_pots(session: Session, user_id: uuid.UUID, *, today: dt.date) -> list:
+    """The pots :func:`is_behind` says are behind, with the same signed balance as the
+    overview (AD-50). Muted pots are included; ``notify`` is the caller's to read."""
+    return [
+        row
+        for row in session.execute(_GOALS, {"uid": user_id}).all()
+        if is_behind(
+            row.goal_amount, row.goal_date, row.created_at.date(), row.balance, today
+        )
+    ]
 
 
 def overview(

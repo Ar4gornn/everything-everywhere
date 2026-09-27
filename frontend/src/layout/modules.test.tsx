@@ -254,6 +254,9 @@ describe("the module table is complete", () => {
     ],
     mood: ["components/MoodCheckin.tsx", "pages/CalendarPage.tsx", "pages/HabitsPage.tsx"],
     stock: [
+      // Settings' muted list unmutes a stock item even with Stock off (Epic 36): a mute
+      // that could not be undone while the module is off would be a notification lost.
+      "components/NotificationsCard.tsx",
       "components/ShoppingList.tsx",
       "pages/CalendarPage.tsx",
       "pages/DashboardPage.tsx",

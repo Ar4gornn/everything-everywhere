@@ -3425,3 +3425,55 @@ button.pin:not(.on) span {
   font-size: var(--fs-body);
   text-align: center;
 }
+
+/* ------------------------------------------------------------ notifications (Epic 36) */
+
+/* The bell on a pot, a recurring rule or a stock item: a toggle, icon-only, 36px square so
+   a thumb can hit it without widening the row it sits in. */
+button.bell {
+  min-width: 36px;
+  padding-inline: 6px;
+  line-height: 1;
+}
+
+button.bell[aria-pressed="false"] {
+  border-style: dashed;
+}
+
+.stack-checks {
+  display: grid;
+  gap: 8px;
+}
+
+/* `label` is a grid app-wide (field over input), so `.check`'s row direction has nothing to
+   act on; here the box sits beside its words, which is what a list of switches reads as. */
+.stack-checks .check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.digest-preview {
+  border-left: 3px solid var(--border-strong);
+  padding: 4px 0 4px 10px;
+}
+
+.muted-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.muted-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.muted-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

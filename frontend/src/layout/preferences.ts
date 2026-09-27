@@ -3,6 +3,7 @@ import type {
   Layout,
   LayoutName,
   ModuleId,
+  NotificationKind,
   Preferences,
   PreferencesPatch,
   SectionId,
@@ -42,6 +43,16 @@ export const CARDS: CardId[] = [
 ];
 export const LAYOUTS: LayoutName[] = ["phone", "desktop"];
 
+/** Epic 36 (AD-52): what the digest may mention, in Settings order, and each default —
+ *  what existed before stays on, the two new kinds are opt-in. Pinned against the server. */
+export const NOTIFICATIONS: [NotificationKind, boolean][] = [
+  ["stock", true],
+  ["recurring", true],
+  ["habits", true],
+  ["due_tomorrow", false],
+  ["savings", false],
+];
+
 function defaultLayout() {
   return {
     tabs: SECTIONS.map(([id, slot]) => ({ id, slot })),
@@ -51,13 +62,18 @@ function defaultLayout() {
 
 export const DEFAULT_PREFERENCES: Preferences = {
   modules: Object.fromEntries(MODULES.map((id) => [id, true])) as Record<ModuleId, boolean>,
+  notifications: Object.fromEntries(NOTIFICATIONS) as Record<NotificationKind, boolean>,
   phone: defaultLayout(),
   desktop: defaultLayout(),
 };
 
 /** The account's preferences, or the app as it was when the server predates them. */
 export function preferencesOf(user: User | null | undefined): Preferences {
-  return user?.preferences ?? DEFAULT_PREFERENCES;
+  if (!user?.preferences) return DEFAULT_PREFERENCES;
+  // A server between 0025 and 0028 resolves everything but the notification kinds.
+  return user.preferences.notifications
+    ? user.preferences
+    : { ...user.preferences, notifications: DEFAULT_PREFERENCES.notifications };
 }
 
 /** What the server does with a patch: each top-level key present replaces that subtree. */

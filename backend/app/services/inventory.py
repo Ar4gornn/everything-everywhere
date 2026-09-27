@@ -204,6 +204,8 @@ def update_item(
         item.cost = fields["cost"]
     if "note" in fields:
         item.note = fields["note"]
+    if "notify" in fields:
+        item.notify = fields["notify"]
     if "quantity" in fields and fields["quantity"] is not None:
         before, after = item.quantity, fields["quantity"]
         if after != before:

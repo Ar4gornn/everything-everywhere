@@ -1,8 +1,16 @@
-from datetime import datetime
+from datetime import datetime, time
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StrictBool,
+    field_serializer,
+    field_validator,
+)
 
 from app.core.months import MAX_START_DAY
 
@@ -81,6 +89,9 @@ class PreferencesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     modules: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 36 (AD-52): which kinds the daily digest may mention. Strict for the same reason
+    # as `Card.on`.
+    notifications: dict[str, StrictBool] | None = Field(default=None, max_length=32)
     phone: LayoutIn | None = None
     desktop: LayoutIn | None = None
 
@@ -94,6 +105,7 @@ class PreferencesOut(BaseModel):
     """Always resolved: every module, section and card, defaults filled in."""
 
     modules: dict[str, bool]
+    notifications: dict[str, bool]
     phone: LayoutOut
     desktop: LayoutOut
 
@@ -115,6 +127,14 @@ class UserOut(BaseModel):
     tutorial_completed: bool
     tutorial_skipped_at: datetime | None
     preferences: PreferencesOut
+    # Epic 36 (AD-52). Null zone: the digest follows the host's clock, as it always did.
+    timezone: str | None
+    digest_time: time
+
+    @field_serializer("digest_time")
+    def _hh_mm(self, value: time) -> str:
+        """"19:00", the shape an `<input type="time">` gives and takes."""
+        return value.strftime("%H:%M")
 
 
 class TokenOut(BaseModel):
@@ -144,6 +164,24 @@ class LanguageUpdate(BaseModel):
 
 class BudgetStartDayUpdate(BaseModel):
     budget_start_day: int = Field(ge=1, le=MAX_START_DAY)
+
+
+class NotificationScheduleUpdate(BaseModel):
+    """Epic 36. Both fields always sent: the pair is one setting, "19:00 in Paris"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Whether it names a real zone is the service's check (`invalid_timezone`); here, only
+    # its shape. Null hands the account back to the host's clock.
+    timezone: str | None = Field(min_length=1, max_length=64)
+    digest_time: time
+
+    @field_validator("digest_time")
+    @classmethod
+    def _whole_minutes(cls, value: time) -> time:
+        if value.second or value.microsecond or value.tzinfo is not None:
+            raise ValueError("digest_time is a local hour and minute, HH:MM")
+        return value
 
 
 class TutorialUpdate(BaseModel):
