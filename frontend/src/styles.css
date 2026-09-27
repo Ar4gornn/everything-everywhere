@@ -1356,6 +1356,34 @@ tr.history td {
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
 
+  /* And room for the floating buttons, or the end of the page can never be scrolled out
+     from under them: the dashboard's last card stopped at 736px with the buttons over its
+     right edge from 628px down. Their top, plus a 16px gap. */
+  .shell:has(> .fab) {
+    padding-bottom: calc(72px + 52px + 16px + env(safe-area-inset-bottom));
+  }
+
+  .shell:has(> .fab-note) {
+    padding-bottom: calc(72px + 52px + 12px + 48px + 16px + env(safe-area-inset-bottom));
+  }
+
+  /* The top bar's links and buttons are 27-31px tall, drawn that way so the bar stays one
+     slim row. A transparent overhang gives each a 43-47px target without moving anything. */
+  .nav-extra a,
+  .identity a,
+  .theme-toggle {
+    position: relative;
+  }
+
+  /* ::before, because ::after on the last two is their `data-tip` tooltip. */
+  .nav-extra a::before,
+  .identity a::before,
+  .theme-toggle::before {
+    content: "";
+    position: absolute;
+    inset: -8px 0;
+  }
+
   .topbar {
     align-items: center;
     gap: 8px;
@@ -1993,8 +2021,11 @@ section:first-child > h3.list-day {
   min-width: 0;
   background: none;
   border: none;
-  padding: 0;
-  margin: 0 0 12px;
+  /* The heading is 14px of text, and that was the whole target a thumb had to find. The
+     padding makes the button 44px tall and the negative margins take the same space back,
+     so the card looks exactly as it did. 15px fits inside the card's 16px padding. */
+  padding: 15px 0;
+  margin: -15px 0 -3px;
   cursor: pointer;
   text-align: left;
   color: inherit;
@@ -3197,7 +3228,9 @@ button.pin.on {
   align-items: center;
 }
 
-.swatch {
+/* `button.swatch`, not `.swatch`: the chart legends draw their keys as `<i class="swatch">`,
+   and a bare class selector here turned every 9px legend key into a 32px circle. */
+button.swatch {
   width: 32px;
   height: 32px;
   padding: 0;
@@ -3209,7 +3242,7 @@ button.pin.on {
   min-height: 0;
 }
 
-.swatch.on {
+button.swatch.on {
   border: 2px solid var(--primary);
 }
 
