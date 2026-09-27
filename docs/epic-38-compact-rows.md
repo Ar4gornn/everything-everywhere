@@ -206,3 +206,37 @@ session open (the sets list) and the routine open for editing (its exercises).
   back clears it. Two mutations red; 320/375 EN/FR measured with a long name and a
   nine-digit amount, nothing past the card.
 - Not addressed: floating buttons still cover the last row's right edge (audit #5).
+
+---
+
+## 5. Story 38.3 — Stock item rows on phones (built 2026-09-27, after Epic 36 merged)
+
+The Mixed rule from §4: the frequent act stays on the row, the rest moves into it.
+
+- **Collapsed row:** the item's name (with the restock badge), its note as the quiet line,
+  and the −/+ stepper as the row's `trailing` action, beside the head, never inside it.
+- **Open row:** "Remind at N · Cost {amount}" (the amount with its currency, since no
+  column head carries the symbol on a phone), then the desktop's own actions — Epic 36's
+  bell, Running low, History, Edit, Delete — and the history chart when asked for.
+- **Edit** reuses the desktop edit row inside the open row, as Entries does: one form.
+- One row open across the page's spaces; closing a row, or opening another, folds its
+  history chart.
+- Desktop unchanged: its edit row, stepper, actions and history moved into shared helpers
+  verbatim, so both renderings draw one control.
+
+### Results (2026-09-27, seeded demo account plus a long French item name and note)
+
+| Page | 375 EN before | 375 EN after | 375 FR after | 320 FR after |
+|---|---|---|---|---|
+| Stock | 3665px | 2087px (−43%) | 2113px | 2236px |
+
+- Width sweep 320 and 375, EN and FR: rows closed, the long row open, its history open, its
+  edit form open — nothing past the viewport or its card. At 320 the title keeps 104–123px
+  beside an 85–104px stepper.
+- Desktop (1280): the same four tables, a stepper and History in every item row, no list
+  rows.
+- Tests: 4 new phone tests; vitest 554/554, exit 0, 0 unhandled. Six mutations each turned
+  one red: the stepper moved into the open row, the actions left off it, edit drawn without
+  the form, Stock never phone, the cost without its currency, the history kept on close.
+- Review (separate agent): ship; two minors fixed (the cost's currency, the history folding
+  with its row). Left: the in-row edit table is named "Edit", as on Entries.
