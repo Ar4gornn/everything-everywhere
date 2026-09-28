@@ -2288,6 +2288,87 @@ a.chip {
   color: var(--faint);
 }
 
+/* Epic 40.1: today, ringed. The number sits in a filled disc so it reads at a glance on a
+   48px phone cell, where a border alone was one more line among the cell's own. */
+.cal-day.today .cal-num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+.cal-day:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* The day beside the month. Below 1000px the grid needs the width, so the panel follows
+   it in the flow as it always did; above, it is pinned beside the grid and a day is read
+   without scrolling away from the month. */
+.cal-side {
+  margin-top: var(--gap);
+}
+
+@media (min-width: 1000px) {
+  .cal-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--gap);
+    align-items: start;
+  }
+
+  .cal-side {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    margin-top: 0;
+  }
+}
+
+/* On a phone the same panel sits over the lower part of the screen, above the tabs and
+   the quick-add button. Not a modal: no backdrop, nothing inert, the grid above it still
+   answers a tap (see MoodCheckin on why there is no modal in this app). */
+@media (max-width: 720px) {
+  .cal-side {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    z-index: 22;
+    max-height: 45vh;
+    overflow-y: auto;
+    border-radius: var(--radius);
+    box-shadow: 0 -4px 24px rgb(0 0 0 / 0.18);
+    margin-top: 0;
+  }
+
+  .cal-side[hidden] {
+    display: none;
+  }
+
+  /* Room to scroll the last week out from under the panel, and "nearest" measured to
+     the panel's top edge rather than the screen's bottom. */
+  .shell:has(.cal-sheet-open) {
+    padding-bottom: calc(64px + 45vh + 16px + env(safe-area-inset-bottom));
+  }
+
+  .cal-sheet-open .cal-day {
+    scroll-margin-bottom: calc(64px + 45vh + 8px + env(safe-area-inset-bottom));
+  }
+}
+
+.cal-close {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 20px;
+  line-height: 1;
+}
+
 .day-list {
   list-style: none;
   margin: 0;

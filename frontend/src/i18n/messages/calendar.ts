@@ -33,6 +33,14 @@ export const calendar = {
     fr: "Les totaux du jour sont arrondis ; touchez un jour pour les montants exacts. Le stock est placé selon son jour UTC, un changement de quantité étant un instant et non une date choisie.",
   },
   "cal.addOnThisDay": { en: "Add on this day", fr: "Ajouter ce jour-là" },
+  // Epic 40.1: the day panel, beside the grid or over it.
+  "cal.today": { en: "Today", fr: "Aujourd'hui" },
+  "cal.closeDay": { en: "Close the day", fr: "Fermer le jour" },
+  "cal.dayPanel": { en: "Day details", fr: "Détails du jour" },
+  "cal.pickADay": {
+    en: "Pick a day to see what happened on it. Arrow keys move between days.",
+    fr: "Choisissez un jour pour voir ce qui s'y est passé. Les flèches passent d'un jour à l'autre.",
+  },
   "cal.couldNotLoad": {
     en: "Could not load the calendar.",
     fr: "Impossible de charger le calendrier.",

@@ -1137,6 +1137,22 @@ security-definer function
   again (it would have to be stored reversibly); timed events (VTIMEZONE, for little gain);
   a server endpoint for single events (a round trip to build a file the browser can build).
 
+### AD-56 — The calendar's day sits beside the grid on a wide screen and over it on a phone; never a modal
+
+- **Binds:** `pages/CalendarPage.tsx` (`.cal-layout`, `.cal-side`, `onCellKey`), the Epic 40
+  block in `styles.css`.
+- **Extends:** Epic 24's `MoodCheckin` note (no modal in this app), AD-49 (`useLayout()` is
+  the one phone/desktop switch).
+- **Decision:** one panel element, placed by CSS: pinned beside the grid at ≥1000px, in the
+  flow below it from 721px, fixed above the tabs on a phone. On a phone it is a disclosure:
+  no backdrop, nothing inert, no focus trap; Escape, Close and a tap outside close it and
+  focus returns to the day. The grid is one tab stop (roving tabindex); arrows move focus
+  and cross into the neighbouring period, Enter chooses.
+- **Rejected:** a modal bottom sheet (focus trap, scroll lock, inert background — new
+  machinery for a read-only panel); two components, one per layout (two sets of behaviour
+  to keep in step); selection following focus (every arrow press would re-render the panel
+  and move a screen reader's context).
+
 ## Consistency Conventions
 
 | Concern | Convention |

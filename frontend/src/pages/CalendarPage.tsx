@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError, api } from "../api/client";
@@ -31,7 +31,8 @@ import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
 import { dueEvent } from "../ics";
 import { AddToCalendar } from "../components/AddToCalendar";
-import { budgetMonth, monthBounds, monthOf, shiftMonth } from "../months";
+import { useLayout } from "../layout/useLayout";
+import { budgetMonth, monthBounds, monthOf, shiftMonth, todayIso } from "../months";
 
 /**
  * One view of what happened, and what is due, day by day (Epic 22).
@@ -216,7 +217,18 @@ export function CalendarPage() {
   };
   const available = LAYERS.filter((layer) => layerOn(layer.key));
   const shownActive = active.filter(layerOn);
-  const [selected, setSelected] = useState<string | null>(null);
+  // Epic 40: the day's detail sits beside the grid on a wide screen and over its lower half
+  // on a phone, so the two differ in what "nothing selected" means. Beside the grid there
+  // is room to show today straight away; over it, an open panel on arrival would hide the
+  // month the person came to see.
+  const phone = useLayout() === "phone";
+  const today = todayIso();
+  const [selected, setSelected] = useState<string | null>(() => (phone ? null : today));
+  // The one cell in the tab order (roving tabindex): arrows move it, Enter opens it.
+  const [focusIso, setFocusIso] = useState<string | null>(null);
+  const pendingFocus = useRef<string | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const sideRef = useRef<HTMLDivElement>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [savingsTypes, setSavingsTypes] = useState<SavingsType[]>([]);
 
@@ -348,6 +360,93 @@ export function CalendarPage() {
 
   const on = (key: LayerKey) => shownActive.includes(key);
 
+  const inPeriodIso = (iso: string | null): iso is string =>
+    iso !== null && iso >= isoOf(periodStart) && iso <= isoOf(periodEnd);
+  const onGrid = (iso: string | null): iso is string =>
+    iso !== null &&
+    iso >= isoOf(weeks[0]?.[0] as Date) &&
+    iso <= isoOf(weeks[weeks.length - 1]?.[6] as Date);
+  const tabbable = onGrid(focusIso)
+    ? focusIso
+    : inPeriodIso(selected)
+      ? selected
+      : inPeriodIso(today)
+        ? today
+        : isoOf(periodStart);
+
+  const cellOf = (iso: string) =>
+    gridRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${iso}"]`) ?? null;
+
+  // Focus follows the arrows after the render that drew the target — which, past the edge
+  // of the grid, is the render of the neighbouring period.
+  useEffect(() => {
+    const iso = pendingFocus.current;
+    if (!iso) return;
+    const cell = cellOf(iso);
+    if (cell) {
+      pendingFocus.current = null;
+      cell.focus();
+    }
+  });
+
+  function goToMonth(next: string) {
+    setSelected(null);
+    setFocusIso(null);
+    setMonth(next);
+  }
+
+  function closeDay(refocus: boolean) {
+    const was = selected;
+    setSelected(null);
+    if (refocus && was) cellOf(was)?.focus();
+  }
+
+  // The phone panel is a disclosure, not a modal (see MoodCheckin for why the app has
+  // none): nothing is trapped and the page stays live. Escape and a tap outside both put
+  // it away, which is what a panel covering half the screen has to offer.
+  useEffect(() => {
+    if (!phone || !selected) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") closeDay(true);
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (sideRef.current?.contains(target) || gridRef.current?.contains(target)) return;
+      closeDay(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  });
+
+  // A day low in the month would open under the panel; bring it up above it. The margin
+  // that makes "nearest" mean "above the panel" is in styles.css.
+  useEffect(() => {
+    if (!phone || !selected) return;
+    gridRef.current
+      ?.querySelector(`[data-iso="${selected}"]`)
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [phone, selected]);
+
+  /** Arrows by day and week, Home and End to the week's ends — the grid pattern's keys. */
+  function onCellKey(event: KeyboardEvent<HTMLButtonElement>, day: Date) {
+    const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+    let target: Date | null = null;
+    if (event.key in step) target = addDays(day, step[event.key] as number);
+    else if (event.key === "Home") target = addDays(day, -weekIndex(day));
+    else if (event.key === "End") target = addDays(day, 6 - weekIndex(day));
+    if (!target) return;
+    event.preventDefault();
+    const iso = isoOf(target);
+    // Off the drawn grid is the neighbouring period, exactly as tapping a muted day is.
+    if (!onGrid(iso)) goToMonth(monthOf(target, startDay));
+    setFocusIso(iso);
+    pendingFocus.current = iso;
+  }
+
   function toggle(key: LayerKey) {
     setActive((was) => {
       const next = was.includes(key) ? was.filter((k) => k !== key) : [...was, key];
@@ -420,10 +519,7 @@ export function CalendarPage() {
               type="button"
               className="quiet"
               aria-label={t("month.previous")}
-              onClick={() => {
-                setSelected(null);
-                setMonth(shiftMonth(month, -1));
-              }}
+              onClick={() => goToMonth(shiftMonth(month, -1))}
             >
               ←
             </button>
@@ -432,22 +528,28 @@ export function CalendarPage() {
                 type="month"
                 aria-label={t("dash.month")}
                 value={month}
-                onChange={(event) => {
-                  setSelected(null);
-                  setMonth(event.target.value || budgetMonth(startDay));
-                }}
+                onChange={(event) => goToMonth(event.target.value || budgetMonth(startDay))}
               />
             </label>
             <button
               type="button"
               className="quiet"
               aria-label={t("month.next")}
-              onClick={() => {
-                setSelected(null);
-                setMonth(shiftMonth(month, 1));
-              }}
+              onClick={() => goToMonth(shiftMonth(month, 1))}
             >
               →
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              disabled={month === budgetMonth(startDay) && (phone || selected === today)}
+              onClick={() => {
+                goToMonth(budgetMonth(startDay));
+                if (!phone) setSelected(today);
+                setFocusIso(today);
+              }}
+            >
+              {t("cal.today")}
             </button>
           </div>
         </div>
@@ -482,8 +584,10 @@ export function CalendarPage() {
         ))}
       </div>
 
+      <div className={`cal-layout${phone && selected ? " cal-sheet-open" : ""}`}>
       <Card>
         <div
+          ref={gridRef}
           className="cal-grid"
           role="grid"
           aria-label={t("cal.gridAria", { month: dates.month(month) })}
@@ -553,18 +657,26 @@ export function CalendarPage() {
                       "cal-day",
                       inPeriod ? "" : "outside",
                       selected === iso ? "on" : "",
+                      iso === today ? "today" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    data-iso={iso}
+                    tabIndex={iso === tabbable ? 0 : -1}
                     aria-label={label}
                     aria-selected={selected === iso}
+                    aria-current={iso === today ? "date" : undefined}
+                    onKeyDown={(event) => onCellKey(event, day)}
+                    onFocus={() => setFocusIso(iso)}
                     onClick={() => {
                       if (!inPeriod) {
-                        setSelected(null);
-                        setMonth(monthOf(day, startDay));
+                        goToMonth(monthOf(day, startDay));
+                        setFocusIso(iso);
                         return;
                       }
-                      setSelected(selected === iso ? null : iso);
+                      // On a phone a second tap puts the panel away; beside the grid the
+                      // panel is always there, so a tap only ever chooses.
+                      setSelected(phone && selected === iso ? null : iso);
                     }}
                   >
                     <span className="cal-num">{day.getDate()}</span>
@@ -613,28 +725,56 @@ export function CalendarPage() {
         </p>
       </Card>
 
-      {selected && selectedBucket && (
-        <Card
-          title={dates.day(selected)}
-          actions={
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => navigate(`/entries?add=1&date=${selected}`)}
-            >
-              {t("cal.addOnThisDay")}
-            </button>
-          }
-        >
-          <DayDetail
-            bucket={selectedBucket}
-            active={shownActive}
-            categoryName={categoryName}
-            savingsName={savingsName}
-            t={t}
-          />
-        </Card>
-      )}
+
+      <div
+        ref={sideRef}
+        className="cal-side"
+        role="region"
+        aria-label={selected ? dates.day(selected) : t("cal.dayPanel")}
+        hidden={phone && !selected}
+      >
+        {selected && selectedBucket ? (
+          <Card
+            title={dates.day(selected)}
+            actions={
+              <>
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => navigate(`/entries?add=1&date=${selected}`)}
+                >
+                  {t("cal.addOnThisDay")}
+                </button>
+                {phone && (
+                  <button
+                    type="button"
+                    className="quiet cal-close"
+                    aria-label={t("cal.closeDay")}
+                    onClick={() => closeDay(true)}
+                  >
+                    ×
+                  </button>
+                )}
+              </>
+            }
+          >
+            <DayDetail
+              bucket={selectedBucket}
+              active={shownActive}
+              categoryName={categoryName}
+              savingsName={savingsName}
+              t={t}
+            />
+          </Card>
+        ) : (
+          <Card>
+            <p className="hint" style={{ margin: 0 }}>
+              {t("cal.pickADay")}
+            </p>
+          </Card>
+        )}
+      </div>
+      </div>
 
       {/* A line from a book, when one is kept (Epic 31). Absent otherwise. */}
       {modules.books && <QuoteCard collapseKey="calendar.quote" />}

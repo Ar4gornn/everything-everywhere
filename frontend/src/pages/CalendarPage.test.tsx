@@ -408,4 +408,142 @@ describe("CalendarPage", () => {
       expect(screen.getByLabelText("Month")).toHaveValue("2026-08");
     });
   });
+
+  // --------------------------------------------------------------- Epic 40.1
+
+  it("rings today and opens on it beside the grid", async () => {
+    mockApi({ startDay: 1 });
+    render(<CalendarPage />);
+
+    // "Now" is 10 August 2026 (see beforeEach). A desktop has room, so today's day is
+    // already open; nobody has to click to learn what happened today.
+    const today = await screen.findByRole("gridcell", { name: /^2026-08-10/ });
+    expect(today).toHaveAttribute("aria-current", "date");
+    expect(screen.getAllByRole("gridcell").filter((c) => c.hasAttribute("aria-current")))
+      .toHaveLength(1);
+    expect(await screen.findByRole("region", { name: "Mon 10 August" })).toBeInTheDocument();
+  });
+
+  it("keeps one day in the tab order and moves it with the arrows", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const start = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+    start.focus();
+    const focused = () => (document.activeElement as HTMLElement).dataset.iso;
+
+    await userEvent.keyboard("{ArrowRight}");
+    expect(focused()).toBe("2026-09-03");
+    await userEvent.keyboard("{ArrowDown}");
+    expect(focused()).toBe("2026-09-10");
+    await userEvent.keyboard("{End}");
+    expect(focused()).toBe("2026-09-13");
+    await userEvent.keyboard("{Home}");
+    expect(focused()).toBe("2026-09-07");
+    await userEvent.keyboard("{ArrowUp}");
+    expect(focused()).toBe("2026-08-31");
+
+    expect(screen.getAllByRole("gridcell").filter((c) => c.tabIndex === 0)).toHaveLength(1);
+
+    // Moving only moves; Enter chooses.
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("region", { name: "Mon 31 August" })).toBeInTheDocument();
+  });
+
+  it("an arrow past the drawn grid turns to the next period", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    // The September period ends on the 25th; its grid runs to Sunday 27 September.
+    (await screen.findByRole("gridcell", { name: /^2026-09-27/ })).focus();
+    await userEvent.keyboard("{ArrowDown}");
+
+    await waitFor(() => expect(screen.getByLabelText("Month")).toHaveValue("2026-10"));
+    await waitFor(() => {
+      expect((document.activeElement as HTMLElement).dataset.iso).toBe("2026-10-04");
+    });
+  });
+
+  it("Today goes back to this period and opens today", async () => {
+    mockApi({ startDay: 1 });
+    render(<CalendarPage />);
+    await setMonth("2026-11");
+    const button = screen.getByRole("button", { name: "Today" });
+    expect(button).toBeEnabled();
+
+    await userEvent.click(button);
+
+    await waitFor(() => expect(screen.getByLabelText("Month")).toHaveValue("2026-08"));
+    expect(await screen.findByRole("region", { name: "Mon 10 August" })).toBeInTheDocument();
+    expect(button).toBeDisabled();
+  });
+
+  describe("on a phone", () => {
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: query.includes("max-width: 720px"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("opens a day over the grid and Escape puts it away, back on the day", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+
+      // Nothing covers the month on arrival.
+      expect(screen.queryByRole("region")).toBeNull();
+
+      const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+      await userEvent.click(day);
+      const panel = await screen.findByRole("region", { name: "Wed 2 September" });
+      expect(within(panel).getByText("Fuel")).toBeInTheDocument();
+
+      // From inside the panel: focus must land back on the day, not be lost with it.
+      within(panel).getByRole("button", { name: "Close the day" }).focus();
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+      expect(document.activeElement).toBe(day);
+    });
+
+    it("closes from its button, from a tap outside, and from a second tap", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+
+      await userEvent.click(day);
+      await userEvent.click(await screen.findByRole("button", { name: "Close the day" }));
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+
+      await userEvent.click(day);
+      await screen.findByRole("region", { name: "Wed 2 September" });
+      await userEvent.click(screen.getByText("26 Aug – 25 Sep"));
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+
+      await userEvent.click(day);
+      await screen.findByRole("region", { name: "Wed 2 September" });
+      await userEvent.click(day);
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+    });
+
+    it("a tap on another day swaps the panel rather than closing it", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+
+      await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
+      await screen.findByRole("region", { name: "Wed 2 September" });
+      await userEvent.click(screen.getByRole("gridcell", { name: /^2026-09-03/ }));
+      expect(await screen.findByRole("region", { name: "Thu 3 September" })).toBeInTheDocument();
+    });
+  });
 });
