@@ -556,6 +556,59 @@ describe("CalendarPage", () => {
     expect(button).toBeDisabled();
   });
 
+  /** The figure under a label in the period's summary, or null when the label is absent. */
+  function figure(group: HTMLElement, label: string): string | null {
+    const term = within(group).queryByText(label, { selector: "dt" });
+    return term ? (term.nextElementSibling?.textContent ?? "") : null;
+  }
+
+  it("sums the period above the grid and counts each layer that is on", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const group = await screen.findByRole("group", { name: /in figures$/ });
+    // 26 August is inside this account's September, so its salary counts; the net is
+    // worked in cents, never as a float.
+    await waitFor(() => expect(figure(group, "In")).toBe("$1,200.00"));
+    expect(figure(group, "Out")).toBe("$40.00");
+    expect(figure(group, "Net")).toBe("$1,160.00");
+    expect(figure(group, "Stock")).toBe("1");
+    expect(figure(group, "Habits")).toBe("1");
+    expect(figure(group, "Meals")).toBe("2");
+    expect(figure(group, "Due")).toBe("1");
+    // A layer with nothing in the period takes no room, and money is the figures above.
+    expect(figure(group, "Gym")).toBeNull();
+    expect(figure(group, "Money")).toBeNull();
+  });
+
+  it("the summary follows the layers menu", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+    const group = await screen.findByRole("group", { name: /in figures$/ });
+    await waitFor(() => expect(figure(group, "Meals")).toBe("2"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Layers (8/8)" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Money" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Meals" }));
+    expect(figure(group, "In")).toBeNull();
+    expect(figure(group, "Net")).toBeNull();
+    expect(figure(group, "Meals")).toBeNull();
+    expect(figure(group, "Stock")).toBe("1");
+  });
+
+  it("counts only the period's own days, not the ragged edges", async () => {
+    mockApi({ startDay: 1 });
+    render(<CalendarPage />);
+    // For a plain calendar month, the salary on 26 August belongs to August.
+    await setMonth("2026-09");
+    const group = await screen.findByRole("group", { name: /in figures$/ });
+    await waitFor(() => expect(figure(group, "Out")).toBe("$40.00"));
+    expect(figure(group, "In")).toBe("$0.00");
+    expect(figure(group, "Net")).toBe("-$40.00");
+  });
+
   describe("on a phone", () => {
     beforeEach(() => {
       vi.stubGlobal("matchMedia", (query: string) => ({
@@ -631,6 +684,43 @@ describe("CalendarPage", () => {
       await screen.findByRole("region", { name: "Wed 2 September" });
       await userEvent.click(screen.getByRole("gridcell", { name: /^2026-09-03/ }));
       expect(await screen.findByRole("region", { name: "Thu 3 September" })).toBeInTheDocument();
+    });
+
+    /** One finger, from one point to another, over the grid. */
+    function swipe(from: [number, number], to: [number, number]) {
+      const grid = screen.getByRole("grid");
+      fireEvent.touchStart(grid, { touches: [{ clientX: from[0], clientY: from[1] }] });
+      fireEvent.touchEnd(grid, { touches: [], changedTouches: [{ clientX: to[0], clientY: to[1] }] });
+    }
+
+    it("a sideways swipe turns the month; a drifting scroll does not", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const input = screen.getByLabelText("Month") as HTMLInputElement;
+      await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+
+      swipe([250, 300], [100, 310]);
+      await waitFor(() => expect(input.value).toBe("2026-10"));
+
+      swipe([100, 300], [250, 290]);
+      await waitFor(() => expect(input.value).toBe("2026-09"));
+
+      // Mostly down: a scroll that drifted sideways, not a swipe.
+      swipe([250, 100], [180, 300]);
+      // Too short to be meant.
+      swipe([250, 300], [220, 300]);
+      // Two fingers is a pinch.
+      const grid = screen.getByRole("grid");
+      fireEvent.touchStart(grid, {
+        touches: [
+          { clientX: 250, clientY: 300 },
+          { clientX: 200, clientY: 300 },
+        ],
+      });
+      fireEvent.touchEnd(grid, { touches: [], changedTouches: [{ clientX: 50, clientY: 300 }] });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(input.value).toBe("2026-09");
     });
   });
 });

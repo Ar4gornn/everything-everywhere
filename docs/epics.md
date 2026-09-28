@@ -2651,4 +2651,7 @@ Scoped 2026-09-28. AD-56. No migration. Brief and as-built notes: `docs/epic-40-
 
 ### Story 40.3: Month summary and swipe
 
+- In / out / net and a count per layer that is on, for the period's own days, above the
+  grid; a sideways swipe over the grid turns the period (week view: 40.4).
+
 ### Story 40.4: Week view

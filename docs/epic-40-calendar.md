@@ -82,3 +82,32 @@ a day view, any change to the Epic 39 feed.
 - `cal-verify` :8019: desktop 1280 lines tinted, busy day 3 + "+2 more", bars hidden;
   320/375 EN+FR: 0 overflow (viewport and card edges, both sides) closed, with the menu
   open and with the panel open; menu panel x 20→280.
+
+## 4. Story 40.3 — as built
+
+- **The period in figures.** A `<dl class="cal-summary">` between the layers menu and the
+  grid, named as a group ("September 2026 in figures") rather than a region, so the day panel
+  stays the page's one landmark. In / Out / Net when the money layer is on, then one count
+  per other layer that is on and has something in the period, each with its key swatch.
+  Money is the three figures, never a count.
+- **Only the period's own days.** Summed from the same `byDay` map the cells read, filtered
+  to `periodStart..periodEnd`: the ragged edge days belong to the neighbouring periods, and
+  the due list is not month-shaped at all. Money in cents (AD-5).
+- **Swipe.** Touch events on the grid, decided on release: one finger, at least 50px
+  sideways, and sideways by more than twice the vertical travel, so a drifting scroll stays
+  a scroll. Left is the next period, right the previous. Touch only; a mouse has the arrows.
+  A phone's grid hint says the grid can be swiped. The week half of the story waits for
+  40.4, which brings the week view.
+- Rejected: the dashboard's four `Stat` cards (four rows of a phone screen above the month);
+  counts with zeros (seven labels at 320 for mostly nothing); pointer events with
+  `touch-action: pan-y` (a pointer swipe would also catch mouse drags).
+
+### Verified
+
+- 4 new tests (figures and counts, following the layers menu, ragged edges excluded, swipe
+  incl. drift / short / pinch). 11 mutants, all killed. Full suite 589/589, exit 0, 0
+  unhandled. tsc clean, lint = the 2 old warnings.
+- `cal-verify` :8019, bundle `index-B18BD-20.js`: desktop 1280 one line above the grid;
+  320 EN summary 90px, 0 overflow; synthetic `TouchEvent`s in Chromium turned 2026-09 →
+  2026-10 → 2026-09 and a drifting stroke did nothing. French not measured in the pane
+  (fixture account is EN); the row wraps by construction.

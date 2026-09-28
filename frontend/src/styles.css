@@ -2344,6 +2344,42 @@ a.chip {
   height: 4px;
 }
 
+/* The period in figures (Epic 40.3). Pairs of a small uppercase label over a figure, in one
+   wrapping row, so it costs one line on a wide screen and two on a phone rather than the
+   dashboard's four cards. Qualified by the list, since .in / .out also colour other things. */
+.cal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0 0 var(--gap);
+  padding: 0;
+}
+
+.cal-summary dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cal-summary dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.cal-summary dd.in {
+  color: var(--accent-ink);
+}
+
+.cal-summary dd.out {
+  color: var(--spend-ink);
+}
+
 /* The layers menu. Anchored at the start of its row, so the panel opens rightwards into
    the page and never past its edge. */
 .cal-layers {

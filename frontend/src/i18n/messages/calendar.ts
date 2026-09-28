@@ -31,6 +31,14 @@ export const calendar = {
     fr: "{date}, hors de cette période — ouvrir {month}",
   },
   "cal.more": { en: "+{count} more", fr: "+{count} de plus" },
+  // Epic 40.3: the period in figures above the grid, and the swipe that turns it.
+  "cal.summary": { en: "{month} in figures", fr: "{month} en chiffres" },
+  "cal.in": { en: "In", fr: "Entrées" },
+  "cal.out": { en: "Out", fr: "Sorties" },
+  "cal.swipeHint": {
+    en: "Swipe the grid sideways to change month.",
+    fr: "Glissez la grille sur le côté pour changer de mois.",
+  },
   "cal.gridHint": {
     en: "Day totals are rounded; tap a day for exact amounts. Stock is placed by its UTC day, since a quantity change is an instant rather than a date anybody chose.",
     fr: "Les totaux du jour sont arrondis ; touchez un jour pour les montants exacts. Le stock est placé selon son jour UTC, un changement de quantité étant un instant et non une date choisie.",

@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type TouchEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError, api } from "../api/client";
@@ -120,6 +120,9 @@ interface CellLine {
 /** A wide cell holds four lines; past that, three and a count, so a busy day is the same
  *  height as any other and no line is cut in half. */
 const CELL_LINES = 4;
+
+/** How far a finger has to travel sideways before the grid turns the period, in px. */
+const SWIPE_MIN = 50;
 
 /** A layer's name, in words. Mood's label is already a word, not a key. */
 function layerName(layer: (typeof LAYERS)[number], t: Translate): string {
@@ -393,6 +396,54 @@ export function CalendarPage() {
 
   const on = (key: LayerKey) => shownActive.includes(key);
 
+  /**
+   * The period in figures, above the grid (Epic 40.3): money in, out and net, and how many
+   * rows each other layer holds. Only the period's own days count — the ragged edges belong
+   * to the neighbouring periods, and the due list is not month-shaped at all — so the net
+   * here is the net of the grid's in-period cells, in cents (AD-5).
+   */
+  const summary = useMemo(() => {
+    const first = isoOf(periodStart);
+    const last = isoOf(periodEnd);
+    let inCents = 0;
+    let outCents = 0;
+    const counts = new Map<LayerKey, number>();
+    for (const [iso, bucket] of byDay) {
+      if (iso < first || iso > last) continue;
+      for (const entry of bucket.entries) {
+        if (entry.kind === "income") inCents += toCents(entry.amount);
+        else outCents += toCents(entry.amount);
+      }
+      for (const layer of LAYERS) {
+        counts.set(layer.key, (counts.get(layer.key) ?? 0) + countIn(bucket, layer.key));
+      }
+    }
+    return { inCents, outCents, counts };
+  }, [byDay, periodStart, periodEnd]);
+  const counted = LAYERS.filter(
+    (layer) => layer.key !== "money" && on(layer.key) && (summary.counts.get(layer.key) ?? 0) > 0,
+  );
+
+  // A horizontal swipe over the grid turns the period (Epic 40.3). Touch only: a mouse has
+  // the arrows beside the month. Decided on release, and only for a stroke that is clearly
+  // sideways, so a vertical scroll that drifts is still a scroll.
+  const swipeFrom = useRef<{ x: number; y: number } | null>(null);
+  function onSwipeStart(event: TouchEvent) {
+    const touch = event.touches[0];
+    swipeFrom.current =
+      event.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+  function onSwipeEnd(event: TouchEvent) {
+    const from = swipeFrom.current;
+    const touch = event.changedTouches[0];
+    swipeFrom.current = null;
+    if (!from || !touch) return;
+    const dx = touch.clientX - from.x;
+    const dy = touch.clientY - from.y;
+    if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < 2 * Math.abs(dy)) return;
+    goToMonth(shiftMonth(month, dx < 0 ? 1 : -1));
+  }
+
   const inPeriodIso = (iso: string | null): iso is string =>
     iso !== null && iso >= isoOf(periodStart) && iso <= isoOf(periodEnd);
   const onGrid = (iso: string | null): iso is string =>
@@ -595,6 +646,40 @@ export function CalendarPage() {
 
       <LayersMenu layers={available} isOn={on} onToggle={toggle} t={t} />
 
+      {(on("money") || counted.length > 0) && (
+        // A group, not a region: a named region is a landmark, and the day panel is the
+        // page's one landmark besides the grid.
+        <div role="group" aria-label={t("cal.summary", { month: dates.month(month) })}>
+        <dl className="cal-summary">
+          {on("money") && (
+            <>
+              <div>
+                <dt>{t("cal.in")}</dt>
+                <dd className="in">{money.amount(fromCents(summary.inCents))}</dd>
+              </div>
+              <div>
+                <dt>{t("cal.out")}</dt>
+                <dd className="out">{money.amount(fromCents(summary.outCents))}</dd>
+              </div>
+              <div>
+                <dt>{t("dash.net")}</dt>
+                <dd>{money.amount(fromCents(summary.inCents - summary.outCents))}</dd>
+              </div>
+            </>
+          )}
+          {counted.map((layer) => (
+            <div key={layer.key} className="cal-count">
+              <dt>
+                <span className="cal-swatch" data-layer={layer.key} aria-hidden="true" />
+                {layerName(layer, t)}
+              </dt>
+              <dd>{summary.counts.get(layer.key)}</dd>
+            </div>
+          ))}
+        </dl>
+        </div>
+      )}
+
       <div className={`cal-layout${phone && selected ? " cal-sheet-open" : ""}`}>
       <Card>
         <div
@@ -602,6 +687,8 @@ export function CalendarPage() {
           className="cal-grid"
           role="grid"
           aria-label={t("cal.gridAria", { month: dates.month(month) })}
+          onTouchStart={onSwipeStart}
+          onTouchEnd={onSwipeEnd}
         >
           {/* biome-ignore lint/a11y/useFocusableInteractive: the cells are the buttons; a row only groups them */}
           <div className="cal-head" role="row">
@@ -732,6 +819,7 @@ export function CalendarPage() {
         </ul>
         <p className="hint" style={{ marginTop: 10 }}>
           {t("cal.gridHint")}
+          {phone && ` ${t("cal.swipeHint")}`}
         </p>
       </Card>
 
