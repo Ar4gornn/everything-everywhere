@@ -54,3 +54,31 @@ a day view, any change to the Epic 39 feed.
   sweep at 320 and 375, EN and FR, viewport and card edges, left and right: clean.
 - Known: at 320 (EN) and 375 (FR) the panel's header wraps to two lines (date, then Add +
   Close), 92px of a 45vh panel. Left for 40.2, which reworks the phone cell and panel text.
+
+## 3. Story 40.2 — as built
+
+- **One colour per layer, one place.** `[data-layer="…"]` sets `--layer` from existing fill
+  tokens (money `--warning`, savings `--accent`, stock `--accent-2`, gym `--spend`, habits
+  `--text`, mood `--mood-4`, meals `--mood-2`, due `--muted` as an outline). No new token, so
+  no theme block to extend; never used as `color:`.
+- **Phone: bars.** One 3px full-width bar per layer with something on the day, in `LAYERS`
+  order, so a bar's place names it as well as its colour. Money counts entries, not the net,
+  so a day that nets to zero still shows. Hidden above 720px. A 4-layer day is 58px tall.
+- **Desktop: tinted lines.** Up to 4, each with a 3px start border in its layer's colour and
+  text in `--text`; past 4, three and "+n more", so a busy day is as tall as any other.
+- **Key** under the grid on both layouts, listing only the layers that are on.
+- **Layers menu.** The 8 chips became one "Layers (n/total)" button with a checkbox panel
+  (disclosure, not modal: Escape returns focus to the button, a tap outside closes). The last
+  layer on is disabled rather than silently refusing.
+- **Phone panel header.** "Add on this day" is a 44px "+" named by its `aria-label` on a
+  phone; the header is now one 44px line at 320/375, EN and FR (was 92px).
+
+### Verified
+
+- 5 new tests + 3 updated (`CalendarPage`, `App`, `modules`). 11 mutants, all killed. Full
+  suite 585/585, exit 0, no unhandled errors (one earlier run flaked on
+  `NotificationsCard` under load; passed alone and on the rerun). tsc clean, lint = the 2
+  old warnings.
+- `cal-verify` :8019: desktop 1280 lines tinted, busy day 3 + "+2 more", bars hidden;
+  320/375 EN+FR: 0 overflow (viewport and card edges, both sides) closed, with the menu
+  open and with the panel open; menu panel x 20→280.

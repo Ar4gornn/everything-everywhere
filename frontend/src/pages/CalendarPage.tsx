@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError, api } from "../api/client";
@@ -87,6 +87,39 @@ const LAYER_MODULE: Partial<Record<LayerKey, ModuleId>> = {
   mood: "mood",
   meals: "recipes",
 };
+
+/** How many rows a day holds in one layer. Money counts entries, not the net: a day whose
+ *  income and spending cancel out still happened. */
+function countIn(bucket: DayBucket, key: LayerKey): number {
+  switch (key) {
+    case "money":
+      return bucket.entries.length;
+    case "savings":
+      return bucket.contributions.length;
+    case "stock":
+      return bucket.stock.length;
+    case "gym":
+      return bucket.workouts.length;
+    case "habits":
+      return bucket.checkins.length;
+    case "mood":
+      return bucket.moods.length;
+    case "meals":
+      return bucket.meals.length;
+    case "due":
+      return bucket.due.length + bucket.expected.length;
+  }
+}
+
+/** A line of a wide cell: the words, and the layer that tints them. */
+interface CellLine {
+  layer: LayerKey;
+  text: string;
+}
+
+/** A wide cell holds four lines; past that, three and a count, so a busy day is the same
+ *  height as any other and no line is cut in half. */
+const CELL_LINES = 4;
 
 /** A layer's name, in words. Mood's label is already a word, not a key. */
 function layerName(layer: (typeof LAYERS)[number], t: Translate): string {
@@ -461,32 +494,27 @@ export function CalendarPage() {
   /**
    * What a day holds, in words, for the wide layout.
    *
-   * A dot is all that fits in a 43px phone cell, but a desktop cell is 142px and a row of
-   * anonymous dots there is a puzzle rather than a summary — it makes you click a day to
-   * learn it was the electricity bill. These lines are rendered alongside the dots and CSS
-   * shows whichever the width can afford, so the phone layout is untouched.
+   * A mark is all that fits in a 43px phone cell, but a desktop cell is 142px and a row of
+   * anonymous marks there is a puzzle rather than a summary — it makes you click a day to
+   * learn it was the electricity bill. Each line carries its layer, which tints it with the
+   * colour the phone's bars and the legend use (Epic 40.2), so the two layouts read alike.
    */
-  function labelsFor(bucket: DayBucket): string[] {
-    const lines: string[] = [];
-    if (on("money")) lines.push(...bucket.entries.map((e) => categoryName(e.category_id)));
-    if (on("savings")) {
-      lines.push(...bucket.contributions.map((c) => savingsName(c.savings_type_id)));
-    }
-    if (on("stock")) lines.push(...bucket.stock.map((row) => row.item_name));
-    if (on("gym")) lines.push(...bucket.workouts.map(() => t("cal.workout")));
-    if (on("habits")) lines.push(...bucket.checkins.map((row) => row.habit_name));
-    if (on("mood")) {
-      lines.push(
-        ...bucket.moods.map((row) => (row.mood === null ? "Mood" : moodWord(row.mood))),
-      );
-    }
-    if (on("meals")) {
-      lines.push(...bucket.meals.map((row) => row.recipe_name ?? row.food_name ?? ""));
-    }
-    if (on("due")) {
-      lines.push(...bucket.due.map((row) => row.category_name));
-      lines.push(...bucket.expected.map((row) => row.category_name));
-    }
+  function labelsFor(bucket: DayBucket): CellLine[] {
+    const lines: CellLine[] = [];
+    const add = (layer: LayerKey, texts: string[]) => {
+      if (on(layer)) lines.push(...texts.map((text) => ({ layer, text })));
+    };
+    add("money", bucket.entries.map((e) => categoryName(e.category_id)));
+    add("savings", bucket.contributions.map((c) => savingsName(c.savings_type_id)));
+    add("stock", bucket.stock.map((row) => row.item_name));
+    add("gym", bucket.workouts.map(() => t("cal.workout")));
+    add("habits", bucket.checkins.map((row) => row.habit_name));
+    add("mood", bucket.moods.map((row) => (row.mood === null ? "Mood" : moodWord(row.mood))));
+    add("meals", bucket.meals.map((row) => row.recipe_name ?? row.food_name ?? ""));
+    add("due", [
+      ...bucket.due.map((row) => row.category_name),
+      ...bucket.expected.map((row) => row.category_name),
+    ]);
     return lines;
   }
 
@@ -565,24 +593,7 @@ export function CalendarPage() {
         </div>
       )}
 
-      <div
-        className="chips"
-        role="group"
-        aria-label={t("cal.layers")}
-        style={{ marginBottom: 12 }}
-      >
-        {available.map((layer) => (
-          <button
-            key={layer.key}
-            type="button"
-            className={`chip ${on(layer.key) ? "on" : ""}`}
-            aria-pressed={on(layer.key)}
-            onClick={() => toggle(layer.key)}
-          >
-            <span aria-hidden="true">{layer.glyph}</span> {layerName(layer, t)}
-          </button>
-        ))}
-      </div>
+      <LayersMenu layers={available} isOn={on} onToggle={toggle} t={t} />
 
       <div className={`cal-layout${phone && selected ? " cal-sheet-open" : ""}`}>
       <Card>
@@ -609,26 +620,15 @@ export function CalendarPage() {
                 const inPeriod = day >= periodStart && day <= periodEnd;
                 const bucket = byDay.get(iso);
                 const net = bucket && on("money") ? netCents(bucket) : 0;
-                const dots = bucket
-                  ? LAYERS.filter(
-                      (layer) =>
-                        layer.key !== "money" &&
-                        on(layer.key) &&
-                        (layer.key === "savings"
-                          ? bucket.contributions.length
-                          : layer.key === "stock"
-                            ? bucket.stock.length
-                            : layer.key === "gym"
-                              ? bucket.workouts.length
-                              : layer.key === "habits"
-                                ? bucket.checkins.length
-                                : layer.key === "mood"
-                                  ? bucket.moods.length
-                                  : layer.key === "meals"
-                                    ? bucket.meals.length
-                                    : bucket.due.length + bucket.expected.length),
-                    )
+                // Every layer with something on the day, in the fixed order of LAYERS, so a
+                // bar's place says which layer it is as well as its colour does.
+                const present = bucket
+                  ? LAYERS.filter((layer) => on(layer.key) && countIn(bucket, layer.key) > 0)
                   : [];
+                // The net already names money in the label; a day that nets to zero does not.
+                const named = net ? present.filter((layer) => layer.key !== "money") : present;
+                const lines = inPeriod && bucket ? labelsFor(bucket) : [];
+                const drawn = lines.length > CELL_LINES ? lines.slice(0, CELL_LINES - 1) : lines;
                 // Built in pieces rather than one template: a day's accessible name is
                 // a date, then optionally a net, then optionally a list of layers, and
                 // French joins those differently from English.
@@ -636,10 +636,10 @@ export function CalendarPage() {
                   ? t("cal.dayNet", { date: iso, amount: money.plain(fromCents(net)) })
                   : iso;
                 const label = inPeriod
-                  ? dots.length
+                  ? named.length
                     ? t("cal.dayWith", {
                         label: withNet,
-                        layers: dots.map((d) => layerName(d, t)).join(", "),
+                        layers: named.map((d) => layerName(d, t)).join(", "),
                       })
                     : withNet
                   : t("cal.dayOutside", {
@@ -689,29 +689,31 @@ export function CalendarPage() {
                         {Math.abs(Math.round(net / 100))}
                       </span>
                     )}
-                    {inPeriod && bucket && labelsFor(bucket).length > 0 && (
+                    {drawn.length > 0 && (
                       <span className="cal-lines" aria-hidden="true">
-                        {labelsFor(bucket)
-                          .slice(0, 2)
-                          .map((line, index) => (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: two lines can read the same; at most two, never reordered
-                            <span key={`${line}-${index}`} className="cal-line">
-                              {line}
-                            </span>
-                          ))}
-                        {labelsFor(bucket).length > 2 && (
+                        {drawn.map((line, index) => (
+                          <span
+                            // biome-ignore lint/suspicious/noArrayIndexKey: two lines can read the same; never reordered
+                            key={`${line.text}-${index}`}
+                            className="cal-line"
+                            data-layer={line.layer}
+                          >
+                            {line.text}
+                          </span>
+                        ))}
+                        {lines.length > drawn.length && (
                           <span className="cal-line more">
-                            {t("cal.more", { count: labelsFor(bucket).length - 2 })}
+                            {t("cal.more", { count: lines.length - drawn.length })}
                           </span>
                         )}
                       </span>
                     )}
-                    {inPeriod && dots.length > 0 && (
-                      <span className="cal-dots">
-                        {dots.slice(0, 4).map((layer) => (
-                          <span key={layer.key} className={`cal-dot ${layer.key}`} />
+                    {inPeriod && present.length > 0 && (
+                      // The phone's summary: one bar per layer, full width, in LAYERS order.
+                      <span className="cal-bars" aria-hidden="true">
+                        {present.map((layer) => (
+                          <span key={layer.key} className="cal-bar" data-layer={layer.key} />
                         ))}
-                        {dots.length > 4 && <span className="cal-more">+{dots.length - 4}</span>}
                       </span>
                     )}
                   </button>
@@ -720,6 +722,14 @@ export function CalendarPage() {
             </div>
           ))}
         </div>
+        <ul className="cal-legend" aria-label={t("cal.legend")}>
+          {LAYERS.filter((layer) => on(layer.key)).map((layer) => (
+            <li key={layer.key}>
+              <span className="cal-swatch" data-layer={layer.key} aria-hidden="true" />
+              {layerName(layer, t)}
+            </li>
+          ))}
+        </ul>
         <p className="hint" style={{ marginTop: 10 }}>
           {t("cal.gridHint")}
         </p>
@@ -738,12 +748,15 @@ export function CalendarPage() {
             title={dates.day(selected)}
             actions={
               <>
+                {/* On a phone the words beside Close pushed the date onto a line of its own
+                    (92px of a 45vh panel, 40.1); a sign named by its label does not. */}
                 <button
                   type="button"
-                  className="quiet"
+                  className={phone ? "quiet cal-close" : "quiet"}
+                  aria-label={phone ? t("cal.addOnThisDay") : undefined}
                   onClick={() => navigate(`/entries?add=1&date=${selected}`)}
                 >
-                  {t("cal.addOnThisDay")}
+                  {phone ? "+" : t("cal.addOnThisDay")}
                 </button>
                 {phone && (
                   <button
@@ -781,6 +794,87 @@ export function CalendarPage() {
 
       {loading && <p className="hint">{t("state.loading")}</p>}
     </>
+  );
+}
+
+/**
+ * The layers, as one menu rather than a row of eight chips (Epic 40.2).
+ *
+ * The chips took two or three lines of a phone's screen above the month, every visit, for a
+ * choice made once. The button says how many are on, so a hidden layer is never a surprise.
+ * A disclosure, not a modal, for MoodCheckin's reasons: Escape and a tap outside put it
+ * away, nothing is trapped. The last layer on cannot be turned off — an empty grid reads as
+ * "no data" — and its box says so by being disabled rather than by ignoring a click.
+ */
+function LayersMenu({
+  layers,
+  isOn,
+  onToggle,
+  t,
+}: {
+  layers: typeof LAYERS;
+  isOn: (key: LayerKey) => boolean;
+  onToggle: (key: LayerKey) => void;
+  t: Translate;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const count = layers.filter((layer) => isOn(layer.key)).length;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    const onPointer = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open]);
+
+  return (
+    <div className="cal-layers" ref={wrapRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="quiet cal-layers-button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {t("cal.layersCount", { on: count, total: layers.length })}{" "}
+        <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <fieldset id={panelId} className="card cal-layers-panel">
+          <legend className="visually-hidden">{t("cal.layers")}</legend>
+          {layers.map((layer) => {
+            const checked = isOn(layer.key);
+            return (
+              <label key={layer.key} className="check cal-layer-option">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={checked && count === 1}
+                  onChange={() => onToggle(layer.key)}
+                />
+                <span className="cal-swatch" data-layer={layer.key} aria-hidden="true" />
+                {layerName(layer, t)}
+              </label>
+            );
+          })}
+        </fieldset>
+      )}
+    </div>
   );
 }
 

@@ -381,7 +381,8 @@ describe("CalendarPage", () => {
     const { unmount } = render(<CalendarPage />);
     await setMonth("2026-09");
 
-    await userEvent.click(await screen.findByRole("button", { name: /Habits/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Layers (8/8)" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Habits" }));
     await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
     let card = (await screen.findByText("Wed 2 September")).closest("section") as HTMLElement;
     expect(within(card).queryByText("Run")).toBeNull();
@@ -390,9 +391,84 @@ describe("CalendarPage", () => {
     unmount();
     render(<CalendarPage />);
     await setMonth("2026-09");
+    expect(screen.getByRole("button", { name: "Layers (7/8)" })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
     card = (await screen.findByText("Wed 2 September")).closest("section") as HTMLElement;
     expect(within(card).queryByText("Run")).toBeNull();
+  });
+
+  it("the layers menu counts what is on, keys it, and closes on Escape", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const button = screen.getByRole("button", { name: "Layers (8/8)" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Stock" }));
+    expect(button).toHaveTextContent("Layers (7/8)");
+
+    const key = screen.getByRole("list", { name: "Key" });
+    expect(within(key).queryByText("Stock")).toBeNull();
+    expect(within(key).getByText("Habits")).toBeInTheDocument();
+
+    screen.getByRole("checkbox", { name: "Habits" }).focus();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("checkbox")).toBeNull());
+    expect(document.activeElement).toBe(button);
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("the last layer on cannot be turned off", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    await userEvent.click(screen.getByRole("button", { name: "Layers (8/8)" }));
+    const boxes = screen.getAllByRole("checkbox");
+    for (const box of boxes.slice(1)) await userEvent.click(box);
+    expect(screen.getByRole("button", { name: "Layers (1/8)" })).toBeInTheDocument();
+    expect(boxes[0]).toBeChecked();
+    expect(boxes[0]).toBeDisabled();
+    expect(boxes[1]).toBeEnabled();
+  });
+
+  it("marks a day with one bar per layer, in the layers' own order", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+    await waitFor(() => expect(day.querySelectorAll(".cal-bar").length).toBe(4));
+    const bars = [...day.querySelectorAll(".cal-bar")].map((bar) => bar.getAttribute("data-layer"));
+    expect(bars).toEqual(["money", "stock", "habits", "meals"]);
+  });
+
+  it("writes four lines in a wide cell, or three and a count", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    // The 2nd holds five: Fuel, Milk, Run, and two meals.
+    const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+    await waitFor(() => expect(within(day).getByText("+2 more")).toBeInTheDocument());
+    const lines = [...day.querySelectorAll(".cal-line[data-layer]")].map((line) => [
+      line.getAttribute("data-layer"),
+      line.textContent,
+    ]);
+    expect(lines).toEqual([
+      ["money", "Fuel"],
+      ["stock", "Milk"],
+      ["habits", "Run"],
+    ]);
+
+    // Four fit as four: with meals off, no count.
+    await userEvent.click(screen.getByRole("button", { name: "Layers (8/8)" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Meals" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Stock" }));
+    expect(day.querySelectorAll(".cal-line[data-layer]")).toHaveLength(2);
+    expect(within(day).queryByText(/more$/)).toBeNull();
   });
 
   it("a day outside the period moves to the period it belongs to", async () => {
@@ -533,6 +609,17 @@ describe("CalendarPage", () => {
       await screen.findByRole("region", { name: "Wed 2 September" });
       await userEvent.click(day);
       await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+    });
+
+    it("keeps the panel's header on one line: Add is a sign named by its label", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+
+      await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
+      const panel = await screen.findByRole("region", { name: "Wed 2 September" });
+      const add = within(panel).getByRole("button", { name: "Add on this day" });
+      expect(add).toHaveTextContent("+");
     });
 
     it("a tap on another day swaps the panel rather than closing it", async () => {

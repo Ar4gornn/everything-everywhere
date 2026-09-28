@@ -126,7 +126,7 @@ describe("navigation", () => {
 
   it("reaches the calendar and the habits page by their own routes", async () => {
     renderAt("/calendar");
-    expect(await screen.findByRole("group", { name: "Layers" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Layers \(/ })).toBeInTheDocument();
   });
 
   it("shows quick add on the calendar, where a day is the thing you would record against", async () => {

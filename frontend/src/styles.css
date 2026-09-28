@@ -2217,7 +2217,7 @@ a.chip {
 }
 
 /* What is on a day, in words. Only where the width can afford it — under 720px the cell is
-   43px across and the dots below are the whole story. */
+   43px across and the bars below are the whole story. */
 .cal-lines {
   display: flex;
   flex-direction: column;
@@ -2236,56 +2236,144 @@ a.chip {
   text-overflow: ellipsis;
 }
 
+/* Epic 40.2: a line is tinted by its layer — a bar at its start, the colour the phone's
+   bars and the key use, so the two layouts read alike. The words stay a text colour. */
+.cal-line[data-layer] {
+  border-left: 3px solid var(--layer);
+  padding-left: 4px;
+  color: var(--text);
+}
+
 .cal-line.more {
   color: var(--faint);
 }
 
-.cal-dots {
+/* One colour per layer, in one place. Fill tokens only, and never as `color:` (see
+   theme.test.tsx): these paint bars, swatches and edges, not text. */
+[data-layer="money"] {
+  --layer: var(--warning);
+}
+
+[data-layer="savings"] {
+  --layer: var(--accent);
+}
+
+[data-layer="stock"] {
+  --layer: var(--accent-2);
+}
+
+[data-layer="gym"] {
+  --layer: var(--spend);
+}
+
+[data-layer="habits"] {
+  --layer: var(--text);
+}
+
+[data-layer="mood"] {
+  --layer: var(--mood-4);
+}
+
+[data-layer="meals"] {
+  --layer: var(--mood-2);
+}
+
+[data-layer="due"] {
+  --layer: var(--muted);
+}
+
+/* The phone's summary of a day: a bar per layer, full width, in the fixed layer order.
+   Above 720px the tinted lines say the same in words, so the bars step aside. */
+.cal-bars {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
   margin-top: auto;
 }
 
-.cal-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--muted);
+.cal-bar,
+.cal-swatch {
+  display: block;
+  background: var(--layer);
+  border-radius: 2px;
 }
 
-.cal-dot.savings {
-  background: var(--accent);
-}
-
-.cal-dot.stock {
-  background: var(--accent-2);
-}
-
-.cal-dot.gym {
-  background: var(--spend);
-}
-
-.cal-dot.habits {
-  background: var(--text);
-}
-
-.cal-dot.mood {
-  background: var(--mood-4);
+.cal-bar {
+  height: 3px;
 }
 
 /* What is due is not what happened: an outline rather than a fill, so a forecast never
    reads as a record at a glance. */
-.cal-dot.due {
+.cal-bar[data-layer="due"],
+.cal-swatch[data-layer="due"] {
   background: transparent;
-  border: 1px solid var(--muted);
-  width: 6px;
-  height: 6px;
+  border: 1px solid var(--layer);
 }
 
-.cal-more {
+.cal-line[data-layer="due"] {
+  border-left-style: dashed;
+}
+
+@media (min-width: 721px) {
+  .cal-bars {
+    display: none;
+  }
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
   font-size: var(--fs-small);
-  color: var(--faint);
+  color: var(--muted);
+}
+
+.cal-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cal-swatch {
+  flex: none;
+  width: 14px;
+  height: 4px;
+}
+
+/* The layers menu. Anchored at the start of its row, so the panel opens rightwards into
+   the page and never past its edge. */
+.cal-layers {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.cal-layers-button {
+  min-height: 44px;
+}
+
+.cal-layers-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: min(260px, calc(100vw - 40px));
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+/* `label` is a grid app-wide, which would stack the box above its words. */
+label.cal-layer-option {
+  display: flex;
+  min-height: 40px;
+  font-size: var(--fs-body) !important;
+  color: var(--text);
 }
 
 /* Epic 40.1: today, ringed. The number sits in a filled disc so it reads at a glance on a
@@ -2603,7 +2691,7 @@ a.chip {
     padding: 3px 2px 2px;
   }
 
-  /* No room for words at 43px across; the dots are the summary here. */
+  /* No room for words at 43px across; the bars are the summary here. */
   .cal-lines {
     display: none;
   }

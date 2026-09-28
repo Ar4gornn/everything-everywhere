@@ -11,6 +11,9 @@ import type { Entry } from "../catalogue";
  */
 export const calendar = {
   "cal.layers": { en: "Layers", fr: "Couches" },
+  // Epic 40.2: the layers menu and the key under the grid.
+  "cal.layersCount": { en: "Layers ({on}/{total})", fr: "Couches ({on}/{total})" },
+  "cal.legend": { en: "Key", fr: "Légende" },
   "cal.layerMoney": { en: "Money", fr: "Argent" },
   "cal.layerSavings": { en: "Savings", fr: "Épargne" },
   "cal.layerStock": { en: "Stock", fr: "Stock" },
