@@ -1056,3 +1056,30 @@ export interface Note extends NoteInput {
   created_at: string;
   updated_at: string;
 }
+
+/** Epic 39 (AD-55): the layers a calendar feed may carry. */
+export type FeedLayer =
+  | "due"
+  | "money"
+  | "savings"
+  | "stock"
+  | "gym"
+  | "habits"
+  | "schedule"
+  | "mood"
+  | "meals";
+
+/** The feed's settings. The URL is never here: it exists only in {@link MintedFeed}. */
+export interface CalendarFeed {
+  on: boolean;
+  layers: FeedLayer[];
+  detailed: boolean;
+  alarm: boolean;
+  created_at: string | null;
+  last_fetched_at: string | null;
+}
+
+/** The one answer that carries the feed's path: turning it on, or a new URL. */
+export interface MintedFeed extends CalendarFeed {
+  path: string;
+}

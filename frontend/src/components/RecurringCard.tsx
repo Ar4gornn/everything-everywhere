@@ -18,6 +18,8 @@ import { useT } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { dueEvent } from "../ics";
+import { AddToCalendar } from "./AddToCalendar";
 import { ListRow, useOpenRow } from "./ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
 import { NotifyBell, usePushEnabled } from "./NotifyBell";
@@ -235,6 +237,20 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
       {template.paused ? t("recurring.resume") : t("recurring.pause")}
     </button>
   );
+  // Epic 39: the next due date as an .ics file. A paused rule has no next date to add.
+  const calButton = (template: RecurringTemplate) =>
+    template.paused ? null : (
+      <AddToCalendar
+        name={nameOf(template.category_id)}
+        event={dueEvent(
+          template.id,
+          template.next_due,
+          nameOf(template.category_id),
+          money.amount(template.amount),
+          template.note,
+        )}
+      />
+    );
   const deleteButton = (template: RecurringTemplate) => (
     <button
       type="button"
@@ -474,6 +490,7 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                 details={
                   <div className="row" style={{ gap: 6 }}>
                     {bellButton(template)}
+                    {calButton(template)}
                     {pauseButton(template)}
                     {deleteButton(template)}
                   </div>
@@ -515,6 +532,7 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                   <td>
                     <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                       {bellButton(template)}
+                      {calButton(template)}
                       {pauseButton(template)}
                       {deleteButton(template)}
                     </div>

@@ -75,3 +75,34 @@ def source_key(client_host: str | None) -> str:
 
 def email_key(email: str) -> str:
     return f"email:{email.strip().lower()}"
+
+
+class WindowLimiter:
+    """At most ``limit`` hits per key in any ``window_seconds`` (AD-55, the calendar feed).
+
+    Same trade-off as :class:`LoginLimiter`: in memory, reset on restart. A calendar app
+    polls every few minutes at worst; this only stops a leaked URL being hammered.
+    """
+
+    def __init__(self, *, limit: int, window_seconds: int) -> None:
+        self._limit = limit
+        self._window = window_seconds
+        self._hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def hit(self, key: str) -> int | None:
+        """Count one hit. Returns seconds to wait when over the limit, else None."""
+        with self._lock:
+            now = time.monotonic()
+            recent = [t for t in self._hits.get(key, []) if now - t < self._window]
+            if len(recent) >= self._limit:
+                self._hits[key] = recent
+                return int(self._window - (now - recent[0])) + 1
+            recent.append(now)
+            self._hits[key] = recent
+            return None
+
+    def reset(self) -> None:
+        """Tests only."""
+        with self._lock:
+            self._hits.clear()

@@ -3469,6 +3469,13 @@ button.bell {
   line-height: 1;
 }
 
+/* Epic 39: "Add to calendar", icon-only, the bell's size for the same reason. */
+button.cal-add {
+  min-width: 36px;
+  padding-inline: 6px;
+  line-height: 1;
+}
+
 button.bell[aria-pressed="false"] {
   border-style: dashed;
 }

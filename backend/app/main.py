@@ -1,3 +1,6 @@
+import logging
+import re
+
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
@@ -11,6 +14,7 @@ from app.api import (
     auth,
     books,
     budgets,
+    calendar,
     categories,
     dashboard,
     entries,
@@ -31,6 +35,25 @@ from app.core.errors import Conflict, DomainError, Invalid, NotFound
 from app.core.months import InvalidMonth
 
 settings = get_settings()
+
+
+class _MaskFeedToken(logging.Filter):
+    """The calendar feed's URL is its credential (AD-55), so it never reaches a log line.
+
+    Uvicorn's access record carries the path as its third argument; the token in it is
+    replaced before the line is formatted. Caddy writes no access log (no ``log`` block).
+    """
+
+    _TOKEN = re.compile(r"(/api/calendar/feed/)[^/?.\s]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
+            record.args = (*args[:2], self._TOKEN.sub(r"\1***", args[2]), *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_MaskFeedToken())
 
 app = FastAPI(
     title="Everything Everywhere",
@@ -128,6 +151,7 @@ app.include_router(categories.router)
 app.include_router(entries.router)
 app.include_router(savings.router)
 app.include_router(budgets.router)
+app.include_router(calendar.router)
 app.include_router(dashboard.router)
 app.include_router(inventory.router)
 app.include_router(recurring.router)

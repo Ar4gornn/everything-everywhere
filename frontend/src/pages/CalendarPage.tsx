@@ -29,6 +29,8 @@ import { useMoney } from "../useMoney";
 import { type MessageKey, useT, type Translate } from "../i18n";
 import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
+import { dueEvent } from "../ics";
+import { AddToCalendar } from "../components/AddToCalendar";
 import { budgetMonth, monthBounds, monthOf, shiftMonth } from "../months";
 
 /**
@@ -797,7 +799,17 @@ function DayDetail({
           <span className="tag due">{t("cal.tagWaiting")}</span>{" "}
           <Link to="/">{row.category_name}</Link>{" "}
           <strong>{money.amount(row.amount)}</strong>
-          <span className="hint">{t("cal.proposedNotRecorded")}</span>
+          <span className="hint">{t("cal.proposedNotRecorded")}</span>{" "}
+          <AddToCalendar
+            name={row.category_name}
+            event={dueEvent(
+              row.template_id,
+              row.due_on,
+              row.category_name,
+              money.amount(row.amount),
+              row.note,
+            )}
+          />
         </li>,
       );
     }
@@ -810,7 +822,17 @@ function DayDetail({
               is nothing here to confirm or skip — saying so is the point. */}
           <span className="hint">
             {row.auto ? t("cal.willBeAutomatic") : t("cal.willBeProposed")}
-          </span>
+          </span>{" "}
+          <AddToCalendar
+            name={row.category_name}
+            event={dueEvent(
+              row.template_id,
+              row.due_on,
+              row.category_name,
+              money.amount(row.amount),
+              row.note,
+            )}
+          />
         </li>,
       );
     }

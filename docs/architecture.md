@@ -1103,6 +1103,40 @@ security-definer function
   code and link as separate lines (safer URL hygiene, one more paste for every invitee —
   the code is single-use and expiring, and the page strips it from the URL on arrival).
 
+### AD-55 — A calendar app reads a secret-URL feed; the server composes it from module services
+
+- **Binds:** `calendar_feeds`, `calendar_feed_lookup()` (migration 0032),
+  `services/calendar_feed.py`, `core/ical.py`, `api/calendar.py`, the access-log mask in
+  `main.py`, `components/CalendarFeedCard.tsx`, `frontend/src/ics.ts`,
+  `components/AddToCalendar.tsx`.
+- **Extends:** AD-19 (a SECURITY DEFINER lookup as the only way in without a tenant), 0005's
+  token reasoning (256 random bits, SHA-256, no slow hash), AD-8 (404 for every wrong URL),
+  AD-44 (the feed, like the push digest, writes its own prose in `users.language`), AD-43
+  (habit days come from `is_scheduled`, the one definition).
+- **Decision:** one feed per account, off until made. The URL `/api/calendar/feed/<token>.ics`
+  is the credential, because a calendar app cannot sign in; it is returned once, by the
+  create or the rotate, and stored only as a hash. "New link" replaces the hash in place, so
+  the old URL is dead in the same transaction; "Turn off" deletes the row. The person picks
+  the layers (bills due by default); titles are vague ("Bill due") unless "Show names and
+  amounts" is on, because the calendar provider stores whatever the feed says; an optional
+  09:00 alarm. All-day events only, from the first of last month to the end of six months
+  ahead. One event per layer per day, except bills, one per occurrence; UIDs are stable
+  (`<layer>-<day>`, `due-<template>-<day>`) so a change updates rather than duplicates.
+  Rate-limited per token (30 per 10 minutes, in memory), `Cache-Control: private`, and the
+  token is masked out of uvicorn's access log; Caddy writes none.
+- **Composition moves to the server for this one reader.** The web calendar composes layers
+  in the browser (AD-31, AD-37). A calendar app cannot, so `calendar_feed.render` calls each
+  module's own service function and joins nothing across modules. Reading bills due runs
+  `materialise` first, as `/pending` does (AD-33).
+- **"Add to calendar" is built on the device.** One event, as a file, from `ics.ts`; no
+  endpoint and nothing stored. It carries names and amounts because the file goes to the
+  person's own calendar, not through a provider's fetch. It sits on bills due and forecast
+  in the calendar's day view and on each recurring rule's next date in Plan.
+- **Rejected:** CalDAV and Google/Microsoft OAuth (two-way, far larger, and the second stores
+  provider tokens); a feed per layer (more URLs to leak and rotate); a URL that can be shown
+  again (it would have to be stored reversibly); timed events (VTIMEZONE, for little gain);
+  a server endpoint for single events (a round trip to build a file the browser can build).
+
 ## Consistency Conventions
 
 | Concern | Convention |

@@ -35,7 +35,10 @@ import type {
   ScheduleKind,
   HabitProgress,
   Heatmap,
+  CalendarFeed,
+  FeedLayer,
   Invite,
+  MintedFeed,
   IssuedInvite,
   Meal,
   Money,
@@ -1159,4 +1162,25 @@ export const api = {
 
   revokeInvite: (id: string) =>
     request<void>(`/api/admin/invites/${id}/revoke`, { method: "POST" }),
+
+  // --- Epic 39 (AD-55): the calendar feed
+  calendarFeed: () => request<CalendarFeed>("/api/calendar/feed"),
+
+  turnOnCalendarFeed: () => request<MintedFeed>("/api/calendar/feed", { method: "POST" }),
+
+  rotateCalendarFeed: () =>
+    request<MintedFeed>("/api/calendar/feed/rotate", { method: "POST" }),
+
+  updateCalendarFeed: (patch: { layers?: FeedLayer[]; detailed?: boolean; alarm?: boolean }) =>
+    request<CalendarFeed>("/api/calendar/feed", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+
+  turnOffCalendarFeed: () => request<void>("/api/calendar/feed", { method: "DELETE" }),
 };
+
+/** A path the API answered with, as an absolute URL a calendar app can fetch. */
+export function apiUrl(path: string): string {
+  return new URL(path, BASE || window.location.origin).toString();
+}
