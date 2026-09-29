@@ -2636,3 +2636,27 @@ Scoped 2026-09-28. AD-55. Migration `0032`.
 
 - A one-event .ics built in the browser, on bills due and forecast in the calendar's day view
   and on each recurring rule's next date in Plan.
+
+## Epic 40: The calendar, rebuilt for both screens
+
+Scoped 2026-09-28. AD-56. No migration. Brief and as-built notes: `docs/epic-40-calendar.md`.
+
+### Story 40.1: Today, the keyboard, and the day beside or over the grid
+
+- Today ringed and a Today button; arrows / Home / End with a roving tabindex, Enter opens.
+  Day detail pinned beside the grid at 1000px and up (today open on arrival), a non-modal
+  panel over the lower screen on phones (Close, Escape, tap outside).
+
+### Story 40.2: Readable cells and a layers menu
+
+### Story 40.3: Month summary and swipe
+
+- In / out / net and a count per layer that is on, for the period's own days, above the
+  grid; a sideways swipe over the grid turns the period (week view: 40.4).
+
+### Story 40.4: Week view
+
+- A Month / Week switch beside the layers menu, remembered per device. The week is seven
+  days, Monday first, every item in full with its amount; stacked one day per row on a
+  phone. Arrows, the nav buttons and a swipe turn it by seven days; a week across the
+  account's month boundary loads both budget months.

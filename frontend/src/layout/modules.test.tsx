@@ -173,12 +173,13 @@ describe("a module that is off", () => {
     expect(screen.getByRole("link", { name: /Notes/ })).toBeInTheDocument();
   });
 
-  it("loses its calendar layer: no chip, no request", async () => {
+  it("loses its calendar layer: no menu entry, no request", async () => {
     renderAt("/calendar", off("gym", "recipes", "mood", "stock", "habits"));
-    const layers = await screen.findByRole("group", { name: "Layers" });
+    // Money, savings and what is due are the budget's own and stay.
+    await userEvent.click(await screen.findByRole("button", { name: "Layers (3/3)" }));
     await waitFor(() => expect(asked("/api/entries")).toBe(true));
-    const chips = within(layers).getAllByRole("button").map((b) => b.textContent?.trim());
-    expect(chips.join(" ")).not.toMatch(/Gym|Stock|Habits|Mood|Meals/);
+    const names = screen.getAllByRole("checkbox").map((box) => box.closest("label")?.textContent);
+    expect(names).toEqual(["Money", "Savings", "Due"]);
     for (const path of ["/api/gym", "/api/inventory", "/api/habits", "/api/mood", "/api/meals"]) {
       expect(asked(path)).toBe(false);
     }
