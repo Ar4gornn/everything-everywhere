@@ -1153,6 +1153,32 @@ security-definer function
   to keep in step); selection following focus (every arrow press would re-render the panel
   and move a screen reader's context).
 
+### AD-57 — A day is active once, stored; a streak, a balance and a freeze's use are computed; only purchases are stored
+
+- **Binds:** `services/activity.py` (the route map, `record_activity`), `services/streaks.py`
+  (the walk, points, prices), `core/clock.py`, migrations 0033 and 0034, the preferences'
+  `streaks` and `points_name` keys, `components/StreakCard.tsx`, `CheckInButton.tsx`.
+- **Extends:** AD-40 (nothing stored that can be computed), AD-49 (sparse preferences, a
+  module off hides UI only), AD-52 (the account's local day; one digest a day), AD-30 (one
+  definition per question), AD-3 (tenancy on every row).
+- **Decision:** activity is the one fact that cannot be recomputed. No module's own rows
+  can say "something was done today", because edits and deletes leave no trace. So it is
+  stored: one append-only row per user, local day and module, written by a router
+  dependency inside the write's own transaction, only when the handler did not raise. A
+  check-in writes the same row. Everything else is computed on read: each streak's
+  current and best, which held freeze covered which missed day, the points earned, and
+  the balance. Purchases are the only other stored fact, also append-only. Earned points
+  never decrease: rows are never deleted, and a purchase can only lengthen a run. So a
+  balance checked under a per-user advisory lock at purchase time cannot go negative
+  later. Module ids are a Python tuple, not a CHECK, so a new module gets a streak without
+  a migration. A test fails any write route whose prefix is unclassified.
+- **Rejected:** a stored `streak` / `points` column updated on write (a second copy of the
+  truth that drifts on every bug, and wrong after a timezone change); a nightly cron that
+  finalises the day (AD-34 keeps cron read-only, and a missed run would break streaks);
+  deriving activity from each module's tables (edits invisible, a deletion rewrites the
+  past, eleven queries); earning only for the streaks that are shown (hiding one would take
+  points back); `SELECT … FOR UPDATE` on `users` (grants there are by column, AD-19).
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -1327,6 +1353,7 @@ Everything Everywhere/
 | What a closed month left over | `services/dashboard.py` (`leftover`, `dismiss_leftover`), migration 0030, `frontend/src/components/LeftoverCard.tsx`, `DashboardPage.tsx` | AD-51, AD-50, AD-49, AD-10 |
 | Notification control — kinds, muted items, local send time, preview, test | `services/push.py`, `api/push.py`, `notify.py`, migration 0028 (after 0030) | AD-52, AD-34, AD-30, AD-49, AD-19 |
 | Invites from the app — admin flag, issue, list, revoke, sign-up link | `api/admin.py`, `services/invites.py`, migration 0031, `backend/admin.py`, `frontend/src/pages/InvitesPage.tsx` | AD-54, AD-19, AD-8 |
+| Streaks and points — activity days, the walk, freeze, repair | `services/activity.py`, `services/streaks.py`, `api/streaks.py`, `core/clock.py`, migrations 0033 and 0034, `frontend/src/components/StreakCard.tsx` | AD-57, AD-40, AD-49, AD-52, AD-30 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred
