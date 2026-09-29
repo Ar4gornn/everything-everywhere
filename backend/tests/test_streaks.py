@@ -105,13 +105,15 @@ def test_sign_in_settings_and_preferences_do_not_count(client, user_a, clock, ow
             json={"timezone": "Europe/Paris", "digest_time": "19:00"},
             headers=headers,
         ),
-        client.patch("/api/auth/me/preferences", json={"layout": "phone"}, headers=headers),
+        client.patch(
+            "/api/auth/me/preferences", json={"modules": {"gym": False}}, headers=headers
+        ),
         client.post(
             "/api/auth/login",
             json={"email": user_a["email"], "password": user_a["password"]},
         ),
     ):
-        assert call.status_code in (200, 422), call.text
+        assert call.status_code == 200, call.text
     assert rows(owner_engine) == []
 
 
@@ -208,16 +210,16 @@ def test_23_30_and_00_30_local_land_on_two_days(
 
 
 def test_a_null_zone_uses_the_host_clock(client, user_a, clock, owner_engine):
-    first, second = at(5, 3), at(6, 3)
-    clock(first)
+    # An instant whose host date differs from its UTC date, or UTC and the host clock
+    # would agree and a fallback to UTC would pass unseen.
+    candidates = [i for i in (at(5, 23, 30), at(5, 0, 30)) if i.astimezone().date() != i.date()]
+    if not candidates:
+        pytest.skip("host clock is UTC: host and UTC dates cannot differ")
+    now = candidates[0]
+    clock(now)
     write(client, user_a)
-    clock(second)
-    write(client, user_a)
-    assert [day for day, _ in rows(owner_engine)] == [
-        str(first.astimezone().date()),
-        str(second.astimezone().date()),
-    ]
-    assert local_today(None, first) == first.astimezone().date()
+    assert [day for day, _ in rows(owner_engine)] == [str(now.astimezone().date())]
+    assert local_today(None, now) == now.astimezone().date() != now.date()
 
 
 def test_a_zone_that_no_longer_resolves_falls_back_to_the_host():
