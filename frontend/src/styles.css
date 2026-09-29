@@ -3843,3 +3843,58 @@ button.bell[aria-pressed="false"] {
   width: 100%;
   font: inherit;
 }
+
+/* Streaks (Epic 41). Every rule is qualified by `.streak-card` or a `.streak-` class: the
+   app's class names are global and some are reused (lab note 2026-09-27). Text is drawn only
+   in tokens the contrast test checks; the dots' state is their shape, not a colour. */
+.streak-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.streak-card .streak-card-figure {
+  margin: 0;
+}
+
+.streak-card .streak-card-number {
+  font-size: var(--fs-display);
+  line-height: 1;
+}
+
+.streak-card .streak-card-best {
+  margin: 0;
+}
+
+.streak-card .streak-card-checkin {
+  margin-top: 12px;
+  max-width: 100%;
+}
+
+.streak-card .streak-dots {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 260px;
+}
+
+.streak-card .streak-dot {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+}
+
+.streak-card .streak-dot-active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.streak-card .streak-dot-pending {
+  border-style: dashed;
+}

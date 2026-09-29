@@ -71,6 +71,8 @@ import type {
   SavingsType,
   ShoppingList,
   Space,
+  Streak,
+  StreaksOverview,
   Step,
   StockChange,
   Summary,
@@ -1134,6 +1136,17 @@ export const api = {
    */
   drawBookQuote: (exclude?: string) =>
     request<BookQuoteDraw | null>(`/api/books/quotes/draw${query({ exclude })}`),
+
+  // --- streaks (Epic 41). The server owns the day: nothing here sends one.
+
+  getStreaks: () => request<StreaksOverview>("/api/streaks"),
+
+  /** Idempotent: pressing it twice is one day. */
+  streakCheckIn: (streak: string) =>
+    request<Streak>("/api/streaks/check-in", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
 
   // --- notes (Epic 32). The id is the client's (AD-48): a note is written with PUT under
   // an id minted when the editor opened, so an offline draft retried after a lost response

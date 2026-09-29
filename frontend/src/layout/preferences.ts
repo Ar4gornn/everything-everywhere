@@ -31,6 +31,7 @@ const SECTIONS: [SectionId, "bar" | "top"][] = [
 export const MODULES: ModuleId[] = ["habits", "books", "mood", "stock", "gym", "recipes", "notes"];
 export const CARDS: CardId[] = [
   "stats",
+  "streaks",
   "pending",
   "leftover",
   "reading",

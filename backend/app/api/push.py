@@ -1,8 +1,7 @@
-import datetime as dt
-
 from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 
+from app.core.clock import Now, local_today
 from app.core.config import get_settings
 from app.core.deps import CurrentUserId, DbSession
 from app.core.errors import NotFound
@@ -70,13 +69,13 @@ def unsubscribe(payload: UnsubscribeIn, user_id: CurrentUserId, session: DbSessi
 
 
 @router.get("/preview", response_model=PreviewOut)
-def preview(user_id: CurrentUserId, session: DbSession) -> PreviewOut:
+def preview(user_id: CurrentUserId, session: DbSession, now: Now) -> PreviewOut:
     """Tonight's digest for this account, read-only. Answers even when push is off: it is
     the words, not a delivery, and a person choosing kinds wants to see what they change."""
     profile = auth_service.read_profile(session, user_id)
     if profile is None:  # pragma: no cover — the token names an account that exists
         raise NotFound("No such account")
-    today = push.local_now(profile.timezone, dt.datetime.now(dt.UTC)).date()
+    today = local_today(profile.timezone, now)
     found = push.digest(session, user_id, today=today)
     return PreviewOut(
         empty=found.empty,
@@ -98,7 +97,7 @@ def muted(user_id: CurrentUserId, session: DbSession) -> Page[MutedOut]:
 
 @router.post("/test", status_code=status.HTTP_204_NO_CONTENT)
 def send_test(
-    payload: TestIn, user_id: CurrentUserId, session: DbSession
+    payload: TestIn, user_id: CurrentUserId, session: DbSession, now: Now
 ) -> Response:
     """Send one push to the caller's own device now: tonight's digest if there is one to
     say, a plain "it works" otherwise.
@@ -108,7 +107,6 @@ def send_test(
     It never writes ``notified_on`` — a test must not eat the evening's digest.
     """
     _require_enabled()
-    now = dt.datetime.now(dt.UTC)
     try:
         subscription = push.claim_test(session, user_id, payload.endpoint, now)
     except push.TooSoon:
@@ -121,7 +119,7 @@ def send_test(
 
     profile = auth_service.read_profile(session, user_id)
     language = profile.language if profile else "en"
-    today = push.local_now(profile.timezone if profile else None, now).date()
+    today = local_today(profile.timezone if profile else None, now)
     found = push.digest(session, user_id, today=today)
     body = push.test_payload(language) if found.empty else found.payload()
 

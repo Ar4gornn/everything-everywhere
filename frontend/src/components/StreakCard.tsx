@@ -1,0 +1,127 @@
+import { useState } from "react";
+
+import { api } from "../api/client";
+import type { Streak, StreaksOverview } from "../api/types";
+import { errorMessage } from "../i18n/errors";
+import { useT } from "../i18n";
+import { useDates } from "../useDates";
+import { useLoad } from "../useLoad";
+import { Card, ErrorBanner } from "./ui";
+
+const NOTHING: StreaksOverview | null = null;
+
+/**
+ * The overall streak (Epic 41, AD-57): how many days in a row something was done, the best
+ * run, a Check in for a day when nothing else was written, and the last four weeks.
+ *
+ * **The server owns the day.** Nothing here sends one, so the account's own midnight (its
+ * time zone, AD-52) decides what "today" is and a device with the wrong clock cannot
+ * backdate anything. Today is *pending* until that midnight, so a streak is not lost while
+ * the day is still going.
+ *
+ * **Absent rather than broken.** A server older than this card answers something without a
+ * `streaks` list; the card then draws nothing rather than crashing the dashboard.
+ */
+export function StreakCard({ collapseKey }: { collapseKey: string }) {
+  const t = useT();
+  const dates = useDates();
+  const { data, setData, failure } = useLoad(
+    () => api.getStreaks(),
+    NOTHING,
+    [],
+    "streaks.couldNotLoad",
+  );
+  const [checkInFailed, setCheckInFailed] = useState<string | null>(null);
+  const [pressing, setPressing] = useState(false);
+
+  const overall = Array.isArray(data?.streaks)
+    ? data.streaks.find((streak) => streak.id === "overall")
+    : undefined;
+
+  async function checkIn() {
+    if (pressing) return;
+    setPressing(true);
+    setCheckInFailed(null);
+    try {
+      const updated = await api.streakCheckIn("overall");
+      setData((was) =>
+        was
+          ? {
+              ...was,
+              streaks: was.streaks.map((s) => (s.id === updated.id ? updated : s)),
+            }
+          : was,
+      );
+    } catch (caught) {
+      setCheckInFailed(errorMessage(t, caught, "streaks.couldNotCheckIn"));
+    } finally {
+      setPressing(false);
+    }
+  }
+
+  if (!overall) {
+    return failure ? (
+      <Card title={t("streaks.title")} collapseKey={collapseKey}>
+        <ErrorBanner message={failure} />
+      </Card>
+    ) : null;
+  }
+
+  return (
+    <div className="streak-card">
+      <Card
+        title={t("streaks.title")}
+        collapseKey={collapseKey}
+        summary={t.n("streaks.days", overall.current)}
+      >
+        <div className="streak-card-head">
+          <p className="streak-card-figure" data-stat="Streak">
+            <strong className="streak-card-number">{overall.current}</strong>{" "}
+            <span>{t.n("streaks.dayUnit", overall.current)}</span>
+          </p>
+          <p className="hint streak-card-best">{t("streaks.best", { count: overall.best })}</p>
+        </div>
+
+        <button
+          type="button"
+          className="streak-card-checkin"
+          onClick={() => void checkIn()}
+          disabled={overall.today_active || pressing}
+        >
+          {overall.today_active ? t("streaks.checkedIn") : t("streaks.checkIn")}
+        </button>
+        <ErrorBanner message={checkInFailed} />
+
+        <Dots streak={overall} label={t("streaks.recent")} day={dates.day} />
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Twenty-eight days, oldest first, seven to a row. Three shapes — a filled disc, an empty
+ * ring, a dashed ring — so the state is never carried by colour alone, and each dot is a
+ * list item read as "day: state".
+ */
+function Dots({
+  streak,
+  label,
+  day,
+}: {
+  streak: Streak;
+  label: string;
+  day: (iso: string) => string;
+}) {
+  const t = useT();
+  return (
+    <ol className="streak-dots" aria-label={label}>
+      {streak.recent.map((entry) => (
+        <li key={entry.day} className={`streak-dot streak-dot-${entry.state}`}>
+          <span className="visually-hidden">
+            {t(`streaks.dot.${entry.state}` as const, { day: day(entry.day) })}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}

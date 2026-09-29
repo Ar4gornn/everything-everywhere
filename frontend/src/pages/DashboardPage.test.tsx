@@ -67,7 +67,12 @@ function mockApi(
   } = {},
 ) {
   const fetchMock = vi.fn(async (url: string) => {
-      const body = url.includes("/api/dashboard/leftover")
+      const body = url.includes("/api/streaks")
+        ? {
+            today: "2026-08-15",
+            streaks: [{ id: "overall", current: 4, best: 9, today_active: false, recent: [] }],
+          }
+        : url.includes("/api/dashboard/leftover")
         ? (overrides.leftover ?? { ...nothingLeft })
         : url.includes("/api/savings/types")
           ? { items: [{ id: "p1", name: "Holidays", created_at: "" }] }
@@ -617,7 +622,7 @@ describe("the default card order", () => {
     return found;
   }
 
-  it("is totals, to confirm, reading, quote, restock, budgets, savings, trends, categories", async () => {
+  it("is totals, streak, to confirm, reading, quote, restock, budgets, savings, trends, categories", async () => {
     mockApi({
       pending: [{ id: "o1", category_name: "Rent", due_on: "2026-09-01" }],
       reading: [
@@ -642,8 +647,10 @@ describe("the default card order", () => {
     await screen.findByText("Restock");
     await screen.findByText("Reading now");
     await screen.findByText("To confirm");
+    await screen.findByText("days in a row");
     expect(cardOrder()).toEqual([
       "stats",
+      "Streak",
       "To confirm",
       "Reading now",
       "A line from the shelf",
@@ -714,10 +721,12 @@ describe("cards chosen by the account (Epic 33, story 33.5)", () => {
     withCards(reordered);
     await screen.findByText("Expense by category");
     await waitFor(() => expect(cardOrder()[0]).toBe("Expense by category"));
+    await screen.findByText("days in a row");
     expect(cardOrder()).toEqual([
       "Expense by category",
       "Savings progress",
       "stats",
+      "Streak",
       "Budget vs actual",
       "Last 6 months",
     ]);
@@ -736,6 +745,20 @@ describe("cards chosen by the account (Epic 33, story 33.5)", () => {
     }
     expect(urls.some((url) => url.includes("/api/dashboard/summary"))).toBe(true);
     expect(screen.queryByText("To confirm")).toBeNull();
+  });
+
+  it("draws the streak card by default, and does not ask for it when it is hidden", async () => {
+    const shown = withCards(all);
+    expect(await screen.findByText("days in a row")).toBeInTheDocument();
+    expect(shown().some((url) => url.includes("/api/streaks"))).toBe(true);
+  });
+
+  it("does not ask for the streak when its card is off", async () => {
+    const asked = withCards(only("stats"));
+    await waitFor(() => expect(document.querySelector(".grid")).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(asked().some((url) => url.includes("/api/streaks"))).toBe(false);
+    expect(screen.queryByText("days in a row")).toBeNull();
   });
 
   it("skips the summary when every card that reads it is hidden", async () => {

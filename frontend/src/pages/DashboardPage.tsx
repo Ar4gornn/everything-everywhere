@@ -20,6 +20,7 @@ import { TrendChart } from "../charts/TrendChart";
 import { MoodCheckin } from "../components/MoodCheckin";
 import { LeftoverCard } from "../components/LeftoverCard";
 import { QuoteCard } from "../components/QuoteCard";
+import { StreakCard } from "../components/StreakCard";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { CARD_MODULE, useModules } from "../layout/modules";
@@ -381,6 +382,7 @@ export function DashboardPage() {
         </Card>
       ),
     quote: () => <QuoteCard collapseKey="dashboard.quote" />,
+    streaks: () => <StreakCard collapseKey="dashboard.streaks" />,
     restock: () =>
       lowItems &&
       lowItems.length > 0 && (

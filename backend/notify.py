@@ -112,7 +112,9 @@ def run_for(session, user_id, now, settings, push_service, auth_service, *, dry_
     if not due:
         return 0, len(subscriptions), 0
 
-    today = push_service.local_now(profile.timezone, now).date()
+    from app.core.clock import local_today
+
+    today = local_today(profile.timezone, now)
     digest = push_service.digest(session, user_id, today=today)
     if digest.empty:
         return 0, 0, 0

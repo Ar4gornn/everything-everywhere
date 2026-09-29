@@ -5,6 +5,7 @@ Constraints that carry an architectural invariant (composite foreign keys per AD
 here. The migration is the authority; these declarations keep the ORM honest about them.
 """
 
+from app.models.activity import ActivityDay
 from app.models.base import Base
 from app.models.books import Book, BookSeries, BookStatus
 from app.models.calendar import CalendarFeed
@@ -44,6 +45,7 @@ from app.models.user import User
 
 __all__ = [
     "Base",
+    "ActivityDay",
     "Book",
     "BookSeries",
     "BookStatus",

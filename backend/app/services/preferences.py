@@ -42,6 +42,7 @@ MODULES: tuple[str, ...] = ("habits", "books", "mood", "stock", "gym", "recipes"
 #: Dashboard cards in today's render order, all shown by default.
 CARDS: tuple[str, ...] = (
     "stats",
+    "streaks",
     "pending",
     "leftover",
     "reading",

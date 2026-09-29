@@ -101,6 +101,7 @@ export type SectionId =
   | "recipes";
 export type CardId =
   | "stats"
+  | "streaks"
   | "pending"
   | "leftover"
   | "reading"
@@ -997,6 +998,23 @@ export interface BookQuoteDraw {
   page: number | null;
   title: string;
   author: string;
+}
+
+/** Epic 41 (AD-57): one day of a streak, as the four-week dots draw it. */
+export type StreakState = "active" | "pending" | "missed";
+
+export interface Streak {
+  id: string;
+  current: number;
+  best: number;
+  today_active: boolean;
+  recent: { day: string; state: StreakState }[];
+}
+
+export interface StreaksOverview {
+  /** The account's local date, worked out by the server: the client never sends a day. */
+  today: string;
+  streaks: Streak[];
 }
 
 /** A series exists exactly as long as one book names it, so `books` is never zero. */

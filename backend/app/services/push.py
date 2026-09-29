@@ -11,11 +11,11 @@ import datetime as dt
 import json
 import sys
 import uuid
-import zoneinfo
 
 from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
+from app.core.clock import local_now
 from app.core.errors import NotFound
 from app.models.push import PushSubscription
 
@@ -256,27 +256,6 @@ def test_payload(language: str) -> str:
 
 
 # ------------------------------------------------------------ when (Epic 36)
-
-
-def zone_of(timezone: str | None) -> dt.tzinfo | None:
-    """The account's zone, or None for the host's clock. A name that no longer resolves
-    (a zone retired from the tz database) falls back to the host rather than failing the
-    whole run for everyone after this account."""
-    if timezone is None:
-        return None
-    try:
-        return zoneinfo.ZoneInfo(timezone)
-    except (zoneinfo.ZoneInfoNotFoundError, ValueError):
-        return None
-
-
-def local_now(timezone: str | None, now: dt.datetime) -> dt.datetime:
-    """``now`` (aware) on the account's clock. Naive only when the account has no zone and
-    ``now`` was naive, which is the host's clock as it always was."""
-    zone = zone_of(timezone)
-    if zone is None:
-        return now.astimezone() if now.tzinfo is not None else now
-    return now.astimezone(zone)
 
 
 def is_due(

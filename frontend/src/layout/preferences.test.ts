@@ -59,7 +59,7 @@ describe("the defaults", () => {
       { id: "recipes", slot: "top" },
     ];
     const cards = [
-      "stats", "pending", "leftover", "reading", "quote", "restock",
+      "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
       "budgets", "savings", "trends", "categories",
     ].map((id) => ({ id, on: true }));
     expect(DEFAULT_PREFERENCES).toEqual({

@@ -49,6 +49,7 @@ export const SECTION_LABEL: Record<SectionId, MessageKey> = {
 /** A dashboard card's name in the editor (Epic 33): its own title where it has one. */
 export const CARD_LABEL: Record<CardId, MessageKey> = {
   stats: "card.stats",
+  streaks: "streaks.title",
   pending: "dash.toConfirm",
   leftover: "leftover.title",
   reading: "dash.readingNow",
