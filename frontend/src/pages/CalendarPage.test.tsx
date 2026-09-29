@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CalendarPage } from "./CalendarPage";
 import { AuthProvider } from "../auth/AuthContext";
+import { monthOf } from "../months";
 
 /**
  * The calendar grid (Epic 22, stories 22.2 and 22.3).
@@ -119,6 +120,8 @@ interface Options {
   failStock?: boolean;
   /** One deposit and one withdrawal on 2026-09-03 (Epic 34). */
   savings?: boolean;
+  /** Entries answered per requested month, as the server does, not all of them every time. */
+  windowed?: boolean;
 }
 
 function mockApi(options: Options = {}) {
@@ -143,7 +146,16 @@ function mockApi(options: Options = {}) {
         ],
       });
     }
-    if (url.includes("/api/entries")) return json({ items: entries });
+    if (url.includes("/api/entries")) {
+      // The server's window, not every row: a week across the boundary asks for two months,
+      // and a fixture that answered both with everything would count each entry twice.
+      const month = new URL(url, "http://x").searchParams.get("month");
+      return json({
+        items: entries.filter(
+          (row) => !options.windowed || !month || monthOf(new Date(`${row.occurred_on}T00:00:00`), options.startDay ?? 26) === month,
+        ),
+      });
+    }
     if (url.includes("/api/categories")) {
       return json({
         items: [
@@ -609,6 +621,123 @@ describe("CalendarPage", () => {
     expect(figure(group, "Net")).toBe("-$40.00");
   });
 
+  describe("the week (Epic 40.4)", () => {
+    const heading = () => screen.getByRole("heading", { level: 1 });
+    const cells = () => screen.getAllByRole("gridcell").map((cell) => cell.dataset.iso);
+
+    it("switches to the week and remembers it on this device", async () => {
+      mockApi({ startDay: 1 });
+      const first = render(<CalendarPage />);
+      await screen.findByRole("gridcell", { name: /^2026-08-10/ });
+
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+
+      // "Now" is Monday 10 August: the week that holds it, Monday first.
+      await waitFor(() => expect(cells()).toHaveLength(7));
+      expect(cells()[0]).toBe("2026-08-10");
+      expect(cells()[6]).toBe("2026-08-16");
+      expect(heading()).toHaveTextContent("10 Aug – 16 Aug 2026");
+      expect(screen.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "true");
+      expect(window.localStorage.getItem("everything-everywhere.calendarView")).toBe("week");
+
+      first.unmount();
+      render(<CalendarPage />);
+      await waitFor(() => expect(cells()).toHaveLength(7));
+      expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    });
+
+    it("draws every item of a day in full, with its amount, and keeps the chosen day", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const monthCell = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+      // Five lines: the month shows three and a count.
+      await waitFor(() => expect(within(monthCell).getByText("+2 more")).toBeInTheDocument());
+      await userEvent.click(monthCell);
+
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+
+      await waitFor(() => expect(cells()).toHaveLength(7));
+      expect(heading()).toHaveTextContent("31 Aug – 6 Sep 2026");
+      const cell = screen.getByRole("gridcell", { name: /^2026-09-02/ });
+      for (const text of ["Fuel", "Milk", "Run", "Rice and eggs", "Rice"]) {
+        expect(within(cell).getByText(text)).toBeInTheDocument();
+      }
+      expect(within(cell).queryByText(/more$/)).toBeNull();
+      // Exact rather than rounded: the net, and the entry's own line.
+      expect(within(cell).getAllByText("-$40.00")).toHaveLength(2);
+      expect(screen.getByRole("region", { name: "Wed 2 September" })).toBeInTheDocument();
+    });
+
+    it("asks for both months when a week crosses the account's boundary", async () => {
+      const { seen } = mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-21/ }));
+
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+
+      // 21 to 25 September close this account's September; 26 and 27 open its October.
+      await waitFor(() => expect(heading()).toHaveTextContent("21 Sep – 27 Sep 2026"));
+      await waitFor(() => {
+        expect(seen.some((url) => url.includes("/api/entries?month=2026-10"))).toBe(true);
+      });
+      for (const path of [
+        "/api/savings/contributions?month=2026-10",
+        "/api/inventory/changes?month=2026-10",
+        "/api/habits/checkins?month=2026-10",
+        "/api/recurring/expected?month=2026-10",
+        "/api/meals?month=2026-10",
+      ]) {
+        expect(seen.some((url) => url.includes(path))).toBe(true);
+      }
+    });
+
+    it("turns by seven days, sums only its own, and an arrow past Sunday opens the next", async () => {
+      mockApi({ startDay: 26, windowed: true });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+
+      // Nothing chosen and today elsewhere: the week holding the period's first day.
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+      await waitFor(() => expect(heading()).toHaveTextContent("24 Aug – 30 Aug 2026"));
+      const group = await screen.findByRole("group", { name: /in figures$/ });
+      await waitFor(() => expect(figure(group, "In")).toBe("$1,200.00"));
+      expect(figure(group, "Out")).toBe("$0.00");
+
+      await userEvent.click(screen.getByRole("button", { name: "Next week" }));
+      await waitFor(() => expect(heading()).toHaveTextContent("31 Aug – 6 Sep 2026"));
+
+      (await screen.findByRole("gridcell", { name: /^2026-09-06/ })).focus();
+      await userEvent.keyboard("{ArrowRight}");
+      await waitFor(() => expect(heading()).toHaveTextContent("7 Sep – 13 Sep 2026"));
+      await waitFor(() => {
+        expect((document.activeElement as HTMLElement).dataset.iso).toBe("2026-09-07");
+      });
+    });
+
+    it("back to the month keeps the chosen day, in the month it belongs to", async () => {
+      // 26 September opens this account's October; the week began in its September.
+      window.localStorage.setItem("everything-everywhere.calendarView", "week");
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      // A picked month opens the week that holds its first day.
+      await setMonth("2026-10");
+      await waitFor(() => expect(heading()).toHaveTextContent("21 Sep – 27 Sep 2026"));
+      await userEvent.click(screen.getByRole("gridcell", { name: /^2026-09-26/ }));
+
+      await userEvent.click(screen.getByRole("button", { name: "Month" }));
+
+      await waitFor(() => expect(screen.getByLabelText("Month")).toHaveValue("2026-10"));
+      expect(screen.getByRole("region", { name: "Sat 26 September" })).toBeInTheDocument();
+      expect(window.localStorage.getItem("everything-everywhere.calendarView")).toBe("month");
+    });
+  });
+
   describe("on a phone", () => {
     beforeEach(() => {
       vi.stubGlobal("matchMedia", (query: string) => ({
@@ -721,6 +850,21 @@ describe("CalendarPage", () => {
       fireEvent.touchEnd(grid, { touches: [], changedTouches: [{ clientX: 50, clientY: 300 }] });
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(input.value).toBe("2026-09");
+    });
+
+    it("in the week, a swipe turns the week and the hint says so", async () => {
+      window.localStorage.setItem("everything-everywhere.calendarView", "week");
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const heading = screen.getByRole("heading", { level: 1 });
+      await waitFor(() => expect(heading).toHaveTextContent("24 Aug – 30 Aug 2026"));
+      expect(screen.getByText(/change week\.$/)).toBeInTheDocument();
+
+      swipe([250, 300], [100, 310]);
+      await waitFor(() => expect(heading).toHaveTextContent("31 Aug – 6 Sep 2026"));
+      swipe([100, 300], [250, 290]);
+      await waitFor(() => expect(heading).toHaveTextContent("24 Aug – 30 Aug 2026"));
     });
   });
 });

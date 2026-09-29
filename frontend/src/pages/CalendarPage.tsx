@@ -111,10 +111,12 @@ function countIn(bucket: DayBucket, key: LayerKey): number {
   }
 }
 
-/** A line of a wide cell: the words, and the layer that tints them. */
+/** A line of a wide cell: the words, the layer that tints them, and — in the week, where
+ *  there is room for everything — the amount, when the row has one. */
 interface CellLine {
   layer: LayerKey;
   text: string;
+  amount?: string;
 }
 
 /** A wide cell holds four lines; past that, three and a count, so a busy day is the same
@@ -158,6 +160,28 @@ function writeLayers(keys: LayerKey[]): void {
   }
 }
 
+/** Month or week (Epic 40.4). */
+type View = "month" | "week";
+
+const VIEW_KEY = "everything-everywhere.calendarView";
+
+/** Remembered per device, like the layers: a phone may prefer the week and a desk the month. */
+function readView(): View {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === "week" ? "week" : "month";
+  } catch {
+    return "month";
+  }
+}
+
+function writeView(view: View): void {
+  try {
+    window.localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    /* a forgotten preference is not worth a crash */
+  }
+}
+
 /** Local calendar day as `YYYY-MM-DD`. Built from the local parts, never from toISOString,
  *  which would shift the day for anybody west of UTC. */
 function isoOf(date: Date): string {
@@ -171,6 +195,12 @@ const weekIndex = (date: Date): number => (date.getDay() + 6) % 7;
 
 const addDays = (date: Date, by: number): Date =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate() + by);
+
+/** The Monday a week starts on, Monday first like every schedule in the app. */
+const mondayOf = (date: Date): Date => addDays(date, -weekIndex(date));
+
+/** `YYYY-MM-DD` as local midnight — never `new Date(iso)`, which is UTC midnight. */
+const dateOf = (iso: string): Date => new Date(`${iso}T00:00:00`);
 
 /**
  * The UTC day a stored instant falls on.
@@ -243,6 +273,11 @@ export function CalendarPage() {
   const navigate = useNavigate();
 
   const [month, setMonth] = useState(() => budgetMonth(startDay));
+  // Epic 40.4: the week is its own position, a Monday, rather than a place inside the
+  // month — a week crosses a month's boundary whenever it likes.
+  const [view, setView] = useState<View>(readView);
+  const [week, setWeek] = useState(() => isoOf(mondayOf(new Date())));
+  const weekly = view === "week";
   const [active, setActive] = useState<LayerKey[]>(readLayers);
   // A module that is off loses its chip, its dots and its request (Epic 33). The stored
   // choice of layers is left alone, so switching the module back on restores it.
@@ -284,24 +319,41 @@ export function CalendarPage() {
     };
   }, []);
 
+  const [periodStart, periodEnd] = useMemo((): [Date, Date] => {
+    if (!weekly) return monthBounds(month, startDay);
+    const monday = dateOf(week);
+    return [monday, addDays(monday, 6)];
+  }, [weekly, week, month, startDay]);
+
+  // Every endpoint below speaks in budget months (AD-10). A month is one of them; a week is
+  // one or, when it straddles the account's boundary, two — asked for separately and
+  // joined here, since no module has a date-range query to ask instead.
+  const firstMonth = monthOf(periodStart, startDay);
+  const lastMonth = monthOf(periodEnd, startDay);
+
   const {
     data: { layers: data, missing, stale, allFailed },
     loading,
     failure,
   } = useLoad(
     async () => {
+      const months = firstMonth === lastMonth ? [firstMonth] : [firstMonth, lastMonth];
+      // One layer, over every month the period touches: it fails as one, as it always has.
+      const each = <T,>(fetch: (month: string) => Promise<T[]>): Promise<T[]> =>
+        Promise.all(months.map(fetch)).then((parts) => parts.flat());
+      const none = Promise.resolve([]);
       // allSettled, not all: this page is a composition of six independent modules, and one
       // of them being down must cost that layer only. `Promise.all` would blank the month.
       const results = await Promise.allSettled([
-        api.listEntries({ month }),
-        api.listContributions({ month }),
-        modules.gym ? api.listWorkouts({ month, limit: 200 }) : Promise.resolve([]),
-        modules.stock ? api.stockChanges(month) : Promise.resolve([]),
-        modules.habits ? api.listCheckins({ month }) : Promise.resolve([]),
-        modules.mood ? api.moodDays(month) : Promise.resolve([]),
-        modules.recipes ? api.listMeals({ month }) : Promise.resolve([]),
+        each((month) => api.listEntries({ month })),
+        each((month) => api.listContributions({ month })),
+        modules.gym ? each((month) => api.listWorkouts({ month, limit: 200 })) : none,
+        modules.stock ? each((month) => api.stockChanges(month)) : none,
+        modules.habits ? each((month) => api.listCheckins({ month })) : none,
+        modules.mood ? each((month) => api.moodDays(month)) : none,
+        modules.recipes ? each((month) => api.listMeals({ month })) : none,
         api.listPending(),
-        api.expectedEntries(month),
+        each((month) => api.expectedEntries(month)),
       ]);
       const [entries, contributions, workouts, stock, checkins, moods, meals, due, expected] =
         results;
@@ -339,7 +391,7 @@ export function CalendarPage() {
       };
     },
     UNLOADED,
-    [month, modules.gym, modules.stock, modules.habits, modules.mood, modules.recipes],
+    [firstMonth, lastMonth, modules.gym, modules.stock, modules.habits, modules.mood, modules.recipes],
     "cal.couldNotLoad",
   );
   // Nothing above throws (allSettled), so `failure` is only ever a bug's; the page's own
@@ -356,10 +408,19 @@ export function CalendarPage() {
     return (id: string) => lookup.get(id) ?? "—";
   }, [savingsTypes]);
 
-  const [periodStart, periodEnd] = useMemo(
-    () => monthBounds(month, startDay),
-    [month, startDay],
-  );
+  /** What the period is called: the month's name, or the week's first and last days. */
+  const periodName = weekly
+    ? `${t("date.range", {
+        from: t("date.dayShort", {
+          day: periodStart.getDate(),
+          month: dates.monthNameShort(periodStart.getMonth() + 1),
+        }),
+        to: t("date.dayShort", {
+          day: periodEnd.getDate(),
+          month: dates.monthNameShort(periodEnd.getMonth() + 1),
+        }),
+      })} ${periodEnd.getFullYear()}`
+    : dates.month(month);
 
   // Whole weeks, Monday first. The period's own first and last days sit wherever they fall.
   const weeks = useMemo(() => {
@@ -441,7 +502,7 @@ export function CalendarPage() {
     const dx = touch.clientX - from.x;
     const dy = touch.clientY - from.y;
     if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < 2 * Math.abs(dy)) return;
-    goToMonth(shiftMonth(month, dx < 0 ? 1 : -1));
+    turn(dx < 0 ? 1 : -1);
   }
 
   const inPeriodIso = (iso: string | null): iso is string =>
@@ -477,6 +538,35 @@ export function CalendarPage() {
     setSelected(null);
     setFocusIso(null);
     setMonth(next);
+  }
+
+  /** The period, in the view on screen, that holds this day. */
+  function goToDay(day: Date) {
+    if (!weekly) return goToMonth(monthOf(day, startDay));
+    setSelected(null);
+    setFocusIso(null);
+    setWeek(isoOf(mondayOf(day)));
+  }
+
+  /** The next period, or the previous one: a month, or seven days. */
+  function turn(by: number) {
+    if (weekly) goToDay(addDays(periodStart, 7 * by));
+    else goToMonth(shiftMonth(month, by));
+  }
+
+  /**
+   * Month to week and back, keeping the place: the chosen day if there is one, else today
+   * if it is on screen, else the period's first day. The chosen day stays chosen — it is
+   * inside the new period by construction.
+   */
+  function changeView(next: View) {
+    if (next === view) return;
+    const anchor = dateOf(selected ?? (inPeriodIso(today) ? today : isoOf(periodStart)));
+    if (next === "week") setWeek(isoOf(mondayOf(anchor)));
+    else setMonth(monthOf(anchor, startDay));
+    setFocusIso(null);
+    setView(next);
+    writeView(next);
   }
 
   function closeDay(refocus: boolean) {
@@ -526,7 +616,7 @@ export function CalendarPage() {
     event.preventDefault();
     const iso = isoOf(target);
     // Off the drawn grid is the neighbouring period, exactly as tapping a muted day is.
-    if (!onGrid(iso)) goToMonth(monthOf(target, startDay));
+    if (!onGrid(iso)) goToDay(target);
     setFocusIso(iso);
     pendingFocus.current = iso;
   }
@@ -550,21 +640,39 @@ export function CalendarPage() {
    * learn it was the electricity bill. Each line carries its layer, which tints it with the
    * colour the phone's bars and the legend use (Epic 40.2), so the two layouts read alike.
    */
-  function labelsFor(bucket: DayBucket): CellLine[] {
+  function labelsFor(bucket: DayBucket, withAmounts: boolean): CellLine[] {
     const lines: CellLine[] = [];
-    const add = (layer: LayerKey, texts: string[]) => {
-      if (on(layer)) lines.push(...texts.map((text) => ({ layer, text })));
+    const add = (layer: LayerKey, rows: { text: string; amount?: string }[]) => {
+      if (on(layer)) lines.push(...rows.map((row) => ({ layer, ...row })));
     };
-    add("money", bucket.entries.map((e) => categoryName(e.category_id)));
-    add("savings", bucket.contributions.map((c) => savingsName(c.savings_type_id)));
-    add("stock", bucket.stock.map((row) => row.item_name));
-    add("gym", bucket.workouts.map(() => t("cal.workout")));
-    add("habits", bucket.checkins.map((row) => row.habit_name));
-    add("mood", bucket.moods.map((row) => (row.mood === null ? "Mood" : moodWord(row.mood))));
-    add("meals", bucket.meals.map((row) => row.recipe_name ?? row.food_name ?? ""));
+    // Exact and signed, the way the day panel writes them; only where there is room.
+    const sum = (value: string) => (withAmounts ? money.amount(value) : undefined);
+    add(
+      "money",
+      bucket.entries.map((e) => ({
+        text: categoryName(e.category_id),
+        amount: sum(e.kind === "income" ? e.amount : `-${e.amount}`),
+      })),
+    );
+    add(
+      "savings",
+      bucket.contributions.map((c) => ({
+        text: savingsName(c.savings_type_id),
+        // AD-50: a withdrawal is money out of the pot.
+        amount: sum(c.kind === "withdrawal" ? `-${c.amount}` : c.amount),
+      })),
+    );
+    add("stock", bucket.stock.map((row) => ({ text: row.item_name })));
+    add("gym", bucket.workouts.map(() => ({ text: t("cal.workout") })));
+    add("habits", bucket.checkins.map((row) => ({ text: row.habit_name })));
+    add(
+      "mood",
+      bucket.moods.map((row) => ({ text: row.mood === null ? "Mood" : moodWord(row.mood) })),
+    );
+    add("meals", bucket.meals.map((row) => ({ text: row.recipe_name ?? row.food_name ?? "" })));
     add("due", [
-      ...bucket.due.map((row) => row.category_name),
-      ...bucket.expected.map((row) => row.category_name),
+      ...bucket.due.map((row) => ({ text: row.category_name, amount: sum(row.amount) })),
+      ...bucket.expected.map((row) => ({ text: row.category_name, amount: sum(row.amount) })),
     ]);
     return lines;
   }
@@ -584,8 +692,8 @@ export function CalendarPage() {
     <>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 18, margin: 0 }}>{dates.month(month)}</h1>
-          {dates.monthRange(month, startDay) && (
+          <h1 style={{ fontSize: 18, margin: 0 }}>{periodName}</h1>
+          {!weekly && dates.monthRange(month, startDay) && (
             <p className="hint" style={{ margin: 0 }}>
               {dates.monthRange(month, startDay)}
             </p>
@@ -597,33 +705,39 @@ export function CalendarPage() {
             <button
               type="button"
               className="quiet"
-              aria-label={t("month.previous")}
-              onClick={() => goToMonth(shiftMonth(month, -1))}
+              aria-label={t(weekly ? "cal.previousWeek" : "month.previous")}
+              onClick={() => turn(-1)}
             >
               ←
             </button>
             <label style={{ textTransform: "none" }}>
+              {/* In the week, the month a week ends in — which is the month picked, since
+                  a picked month opens on the week holding its first day. */}
               <input
                 type="month"
                 aria-label={t("dash.month")}
-                value={month}
-                onChange={(event) => goToMonth(event.target.value || budgetMonth(startDay))}
+                value={weekly ? lastMonth : month}
+                onChange={(event) => {
+                  const next = event.target.value || budgetMonth(startDay);
+                  if (weekly) goToDay(monthBounds(next, startDay)[0]);
+                  else goToMonth(next);
+                }}
               />
             </label>
             <button
               type="button"
               className="quiet"
-              aria-label={t("month.next")}
-              onClick={() => goToMonth(shiftMonth(month, 1))}
+              aria-label={t(weekly ? "cal.nextWeek" : "month.next")}
+              onClick={() => turn(1)}
             >
               →
             </button>
             <button
               type="button"
               className="quiet"
-              disabled={month === budgetMonth(startDay) && (phone || selected === today)}
+              disabled={inPeriodIso(today) && (phone || selected === today)}
               onClick={() => {
-                goToMonth(budgetMonth(startDay));
+                goToDay(dateOf(today));
                 if (!phone) setSelected(today);
                 setFocusIso(today);
               }}
@@ -637,19 +751,36 @@ export function CalendarPage() {
       <ErrorBanner message={error} />
       {missing.length > 0 && !error && (
         <div className="error" role="status">
-          {t("cal.partial", {
+          {t(weekly ? "cal.partialWeek" : "cal.partial", {
             layers: missing.map((label) => (label === "Mood" ? label : t(label))).join(", "),
           })}
           {stale && t("cal.partialStale")}
         </div>
       )}
 
-      <LayersMenu layers={available} isOn={on} onToggle={toggle} t={t} />
+      <div className="cal-toolbar">
+        <LayersMenu layers={available} isOn={on} onToggle={toggle} t={t} />
+        {/* Two pressed-or-not buttons rather than a ViewSwitch: that one changes the page,
+            this one changes how much of it the grid shows. */}
+        <div className="cal-views" role="group" aria-label={t("cal.view")}>
+          {(["month", "week"] as const).map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="quiet"
+              aria-pressed={view === name}
+              onClick={() => changeView(name)}
+            >
+              {t(name === "month" ? "cal.viewMonth" : "cal.viewWeek")}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {(on("money") || counted.length > 0) && (
         // A group, not a region: a named region is a landmark, and the day panel is the
         // page's one landmark besides the grid.
-        <div role="group" aria-label={t("cal.summary", { month: dates.month(month) })}>
+        <div role="group" aria-label={t("cal.summary", { month: periodName })}>
         <dl className="cal-summary">
           {on("money") && (
             <>
@@ -684,21 +815,29 @@ export function CalendarPage() {
       <Card>
         <div
           ref={gridRef}
-          className="cal-grid"
+          className={weekly ? "cal-grid week" : "cal-grid"}
           role="grid"
-          aria-label={t("cal.gridAria", { month: dates.month(month) })}
+          aria-label={
+            weekly
+              ? t("cal.weekGridAria", { range: periodName })
+              : t("cal.gridAria", { month: dates.month(month) })
+          }
           onTouchStart={onSwipeStart}
           onTouchEnd={onSwipeEnd}
         >
-          {/* biome-ignore lint/a11y/useFocusableInteractive: the cells are the buttons; a row only groups them */}
-          <div className="cal-head" role="row">
-            {[0, 1, 2, 3, 4, 5, 6].map((weekday) => (
-              // biome-ignore lint/a11y/useFocusableInteractive: a weekday heading has nothing to do on focus
-              <div key={weekday} role="columnheader" className="cal-weekday">
-                {dates.weekdayShort(weekday)}
-              </div>
-            ))}
-          </div>
+          {/* The week names its own days in each cell: on a phone they are stacked, and a
+              row of headings would sit over the first one only. */}
+          {!weekly && (
+            // biome-ignore lint/a11y/useFocusableInteractive: the cells are the buttons; a row only groups them
+            <div className="cal-head" role="row">
+              {[0, 1, 2, 3, 4, 5, 6].map((weekday) => (
+                // biome-ignore lint/a11y/useFocusableInteractive: a weekday heading has nothing to do on focus
+                <div key={weekday} role="columnheader" className="cal-weekday">
+                  {dates.weekdayShort(weekday)}
+                </div>
+              ))}
+            </div>
+          )}
           {weeks.map((row) => (
             // biome-ignore lint/a11y/useFocusableInteractive: the cells are the buttons; a row only groups them
             <div key={isoOf(row[0] as Date)} className="cal-week" role="row">
@@ -714,8 +853,11 @@ export function CalendarPage() {
                   : [];
                 // The net already names money in the label; a day that nets to zero does not.
                 const named = net ? present.filter((layer) => layer.key !== "money") : present;
-                const lines = inPeriod && bucket ? labelsFor(bucket) : [];
-                const drawn = lines.length > CELL_LINES ? lines.slice(0, CELL_LINES - 1) : lines;
+                // The week draws every line, with its amount (Epic 40.4); the month keeps a
+                // busy day as tall as any other.
+                const lines = inPeriod && bucket ? labelsFor(bucket, weekly) : [];
+                const drawn =
+                  !weekly && lines.length > CELL_LINES ? lines.slice(0, CELL_LINES - 1) : lines;
                 // Built in pieces rather than one template: a day's accessible name is
                 // a date, then optionally a net, then optionally a list of layers, and
                 // French joins those differently from English.
@@ -757,7 +899,7 @@ export function CalendarPage() {
                     onFocus={() => setFocusIso(iso)}
                     onClick={() => {
                       if (!inPeriod) {
-                        goToMonth(monthOf(day, startDay));
+                        goToDay(day);
                         setFocusIso(iso);
                         return;
                       }
@@ -766,14 +908,18 @@ export function CalendarPage() {
                       setSelected(phone && selected === iso ? null : iso);
                     }}
                   >
-                    <span className="cal-num">{day.getDate()}</span>
+                    <span className="cal-num">
+                      {weekly ? `${dates.weekdayShort(weekIndex(day))} ${day.getDate()}` : day.getDate()}
+                    </span>
                     {inPeriod && net !== 0 && (
-                      // Rounded to whole units in the cell, exact in the day panel below —
+                      // Rounded to whole units in a month's cell, exact in the day panel —
                       // a cell is about 47px wide on a phone and two decimals do not fit.
-                      // The rounding is display only; the arithmetic above is in cents.
+                      // The week has the room, so it is exact there too. The rounding is
+                      // display only; the arithmetic above is in cents.
                       <span className={`cal-net ${net > 0 ? "in" : "out"}`}>
-                        {net > 0 ? "+" : "−"}
-                        {Math.abs(Math.round(net / 100))}
+                        {weekly
+                          ? `${net > 0 ? "+" : ""}${money.amount(fromCents(net))}`
+                          : `${net > 0 ? "+" : "−"}${Math.abs(Math.round(net / 100))}`}
                       </span>
                     )}
                     {drawn.length > 0 && (
@@ -785,7 +931,8 @@ export function CalendarPage() {
                             className="cal-line"
                             data-layer={line.layer}
                           >
-                            {line.text}
+                            <span className="cal-line-text">{line.text}</span>
+                            {line.amount && <span className="cal-line-amount">{line.amount}</span>}
                           </span>
                         ))}
                         {lines.length > drawn.length && (
@@ -818,8 +965,8 @@ export function CalendarPage() {
           ))}
         </ul>
         <p className="hint" style={{ marginTop: 10 }}>
-          {t("cal.gridHint")}
-          {phone && ` ${t("cal.swipeHint")}`}
+          {t(weekly ? "cal.gridHintWeek" : "cal.gridHint")}
+          {phone && ` ${t(weekly ? "cal.swipeHintWeek" : "cal.swipeHint")}`}
         </p>
       </Card>
 

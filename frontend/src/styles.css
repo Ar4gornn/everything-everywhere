@@ -2384,7 +2384,42 @@ a.chip {
    the page and never past its edge. */
 .cal-layers {
   position: relative;
+}
+
+/* The layers menu and the Month / Week switch, on one line that wraps if it must. */
+.cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
   margin-bottom: 12px;
+}
+
+/* Epic 40.4: two joined buttons, the pressed one filled. */
+.cal-views {
+  display: inline-flex;
+}
+
+.cal-views button {
+  min-height: 44px;
+  border-radius: 0;
+}
+
+.cal-views button:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.cal-views button:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-left: -1px;
+}
+
+.cal-views button[aria-pressed="true"],
+.cal-views button[aria-pressed="true"]:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
 }
 
 .cal-layers-button {
@@ -2483,6 +2518,61 @@ label.cal-layer-option {
 
   .cal-sheet-open .cal-day {
     scroll-margin-bottom: calc(64px + 45vh + 8px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Epic 40.4: the week. Seven days with every item in full: lines wrap instead of being cut,
+   carry their amounts, and none is folded into "+n more". Beside the panel a desktop
+   column is about 98px, so a line breaks its amount onto a row of its own. */
+.cal-grid.week .cal-day {
+  min-height: 160px;
+}
+
+.cal-grid.week .cal-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.cal-line-amount {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The words already say what the bars would. */
+.cal-grid.week .cal-bars {
+  display: none;
+}
+
+/* "Mon 10" in a disc would be a pill with no room either side. */
+.cal-grid.week .cal-day.today .cal-num {
+  padding-inline: 0.5em;
+}
+
+/* On a phone the seven days stack, one full-width row each, which is the only way a
+   day's items fit in full at 320px. */
+@media (max-width: 720px) {
+  .cal-grid.week {
+    margin-inline: 0;
+  }
+
+  .cal-grid.week .cal-week {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .cal-grid.week .cal-day {
+    min-height: 44px;
+    padding: 6px 8px;
+  }
+
+  .cal-grid.week .cal-lines {
+    display: flex;
   }
 }
 

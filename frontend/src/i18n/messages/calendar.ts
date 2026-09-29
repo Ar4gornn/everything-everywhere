@@ -43,6 +43,25 @@ export const calendar = {
     en: "Day totals are rounded; tap a day for exact amounts. Stock is placed by its UTC day, since a quantity change is an instant rather than a date anybody chose.",
     fr: "Les totaux du jour sont arrondis ; touchez un jour pour les montants exacts. Le stock est placé selon son jour UTC, un changement de quantité étant un instant et non une date choisie.",
   },
+  // Epic 40.4: the week view.
+  "cal.view": { en: "Calendar view", fr: "Vue du calendrier" },
+  "cal.viewMonth": { en: "Month", fr: "Mois" },
+  "cal.viewWeek": { en: "Week", fr: "Semaine" },
+  "cal.previousWeek": { en: "Previous week", fr: "Semaine précédente" },
+  "cal.nextWeek": { en: "Next week", fr: "Semaine suivante" },
+  "cal.weekGridAria": { en: "Calendar, week of {range}", fr: "Calendrier, semaine du {range}" },
+  "cal.swipeHintWeek": {
+    en: "Swipe the grid sideways to change week.",
+    fr: "Glissez la grille sur le côté pour changer de semaine.",
+  },
+  "cal.gridHintWeek": {
+    en: "Stock is placed by its UTC day, since a quantity change is an instant rather than a date anybody chose.",
+    fr: "Le stock est placé selon son jour UTC, un changement de quantité étant un instant et non une date choisie.",
+  },
+  "cal.partialWeek": {
+    en: "Some of this week could not be loaded: {layers}. Everything else is shown.",
+    fr: "Une partie de cette semaine n’a pas pu être chargée : {layers}. Tout le reste est affiché.",
+  },
   "cal.addOnThisDay": { en: "Add on this day", fr: "Ajouter ce jour-là" },
   // Epic 40.1: the day panel, beside the grid or over it.
   "cal.today": { en: "Today", fr: "Aujourd'hui" },

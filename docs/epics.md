@@ -2655,3 +2655,8 @@ Scoped 2026-09-28. AD-56. No migration. Brief and as-built notes: `docs/epic-40-
   grid; a sideways swipe over the grid turns the period (week view: 40.4).
 
 ### Story 40.4: Week view
+
+- A Month / Week switch beside the layers menu, remembered per device. The week is seven
+  days, Monday first, every item in full with its amount; stacked one day per row on a
+  phone. Arrows, the nav buttons and a swipe turn it by seven days; a week across the
+  account's month boundary loads both budget months.

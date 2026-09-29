@@ -1,6 +1,6 @@
 # Epic 40: The calendar, rebuilt for both screens
 
-**Status:** Scoped 2026-09-28, building on `feat/calendar-ux` (worktree `ee-cal`)
+**Status:** Scoped 2026-09-28, all four stories built on `feat/calendar-ux` (worktree `ee-cal`)
 **New decision record:** AD-56 (the day panel sits beside the grid on a wide screen, over it on a phone, and is never a modal)
 **Migration:** none. No backend change.
 
@@ -111,3 +111,46 @@ a day view, any change to the Epic 39 feed.
   320 EN summary 90px, 0 overflow; synthetic `TouchEvent`s in Chromium turned 2026-09 →
   2026-10 → 2026-09 and a drifting stroke did nothing. French not measured in the pane
   (fixture account is EN); the row wraps by construction.
+
+## 5. Story 40.4 — as built
+
+- **A position of its own.** The week is a Monday (`week` state), not a place inside the
+  month, so it crosses the account's boundary freely. `periodStart..periodEnd` is either the
+  budget month or those seven days, and everything downstream — cells, keyboard, summary,
+  swipe — already spoke in "the period", so it follows unchanged.
+- **Two months when it must.** Every layer's endpoint takes a budget month (AD-10) and none
+  has a date range. A week touches one or two; each layer asks for each month and joins
+  them, and fails as one layer, as before. The due list is not month-shaped and is asked
+  once.
+- **Every item in full.** All of a day's lines, none folded into "+n more"; lines wrap
+  instead of being cut; money, savings and due lines carry their exact signed amount; the
+  day's net is exact rather than rounded. The weekday names sit in each cell ("Mon 28"),
+  since on a phone the seven days stack one per row — the only way a busy day fits in full
+  at 320px — and a heading row would sit over the first day only. Bars step aside.
+- **The switch.** Two `aria-pressed` buttons in a group beside the layers menu, not a
+  `ViewSwitch` (that one changes page). Remembered per device like the layers
+  (`everything-everywhere.calendarView`). Switching keeps the place: the chosen day stays
+  chosen and decides the other view's period; else today if on screen; else the period's
+  first day.
+- **Navigation.** ← / → and a swipe turn seven days; an arrow past either end of the week
+  opens the neighbouring one with focus following; Today opens today's week. The month
+  input shows the month the week ends in, and picking a month opens the week holding its
+  first day — so the picked month is the one the input then shows.
+- Rejected: a phone week as seven narrow columns (43px holds no words, which is the whole
+  point of the view); a new date-range query on nine endpoints for a view that needs at
+  most two months; dedupe by id across the two answers (the server's month windows do not
+  overlap, so there is nothing to dedupe).
+
+### Verified
+
+- 6 new tests (switch + remembered, every line with amounts + chosen day kept, both months
+  asked for, turn + summary + arrow past Sunday, back to the month by the chosen day, phone
+  swipe + hint). The fixture answers entries per month only when asked (`windowed`), so the
+  ragged-edge test keeps receiving the salary it proves is excluded. 12 mutants, all killed.
+  Full suite 595/595, exit 0, 0 unhandled. tsc clean, lint = the 2 old warnings.
+- `cal-verify` :8019, bundle `index-DyGJiOXF.js`, fresh fixture: 1280 grid 670px + panel
+  320px beside, today open and the one tab stop, 7 equal 232px columns, 0 overflow; 375 EN
+  and 320 FR 0 overflow (viewport and card edges, both sides), toolbar one row at 375 and two
+  (96px) at 320 FR, both switch buttons 44px. Live toggle 35 ↔ 7 cells, choice stored.
+- Known, not from this story: the month input at 320 FR is cut to "octob", and it names the
+  month in the machine's locale (UX round 3 finding).
