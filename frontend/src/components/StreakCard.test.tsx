@@ -137,6 +137,15 @@ describe("StreakCard", () => {
     expect(items[27]).toHaveClass("streak-dot-pending");
   });
 
+  it("reads a day before the streak began as that, not as missed", async () => {
+    mockApi(overall({ recent: recent("pending", "before") }));
+    render();
+    const list = await screen.findByRole("list", { name: "The last four weeks" });
+    const item = within(list).getAllByRole("listitem")[10];
+    expect(item).toHaveTextContent(/: before you started$/);
+    expect(item).toHaveClass("streak-dot-before");
+  });
+
   it("says what went wrong when the check-in is refused", async () => {
     mockApi(overall(), {
       checkIn: () => json({ detail: "x", code: "streak_unknown" }, 422),

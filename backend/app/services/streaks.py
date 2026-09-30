@@ -15,6 +15,9 @@ Rules, defined here once (§2.3 of ``docs/epic-41-streaks.md``):
   midnight;
 * ``missed``: anything else.
 
+A day before the first active one is outside the walk. The four-week dots call it
+``before``: it was not missed, there was simply no streak yet.
+
 **Current** is the run after the walk; **best** is the highest run seen at any point.
 Activity dated after local today (an account that moved to a zone further west) is ignored
 rather than counted early: a streak never runs ahead of the clock.
@@ -38,6 +41,7 @@ RECENT_DAYS = 28
 ACTIVE = "active"
 PENDING = "pending"
 MISSED = "missed"
+BEFORE = "before"
 
 
 @dataclass(frozen=True)
@@ -72,9 +76,9 @@ def walk(active: set[dt.date], today: dt.date) -> tuple[int, int, dict[dt.date, 
 
 def _recent(states: dict[dt.date, str], today: dt.date) -> list[tuple[dt.date, str]]:
     window = [today - dt.timedelta(days=n) for n in range(RECENT_DAYS - 1, -1, -1)]
-    # A day before the first active one has no history: it was not "missed", but the dots
-    # have nothing else to say about it.
-    return [(d, states.get(d, PENDING if d == today else MISSED)) for d in window]
+    # The walk covers the first active day to today without a gap, so a past day it did
+    # not reach came before the streak began.
+    return [(d, states.get(d, PENDING if d == today else BEFORE)) for d in window]
 
 
 def _active_days(session: Session, user_id: uuid.UUID) -> dict[str, set[dt.date]]:

@@ -95,6 +95,9 @@ For streak `s` and each day `d`, from its first active day up to local today `T`
 | `pending` | `d = T` and not active |
 | `missed` | anything else |
 
+A day before the first active one is outside the walk; the dots show it as `before` (a small
+speck, read "before you started"), never as `missed` (decided 2026-09-30).
+
 *Covered* means `active`, `repaired` or `frozen`. The walk runs forward in time and keeps
 `run`, the current length:
 
@@ -232,7 +235,7 @@ Every new code has an English and a French sentence (AD-44).
   with best beside it, and the dashboard's **Check in** (shows "Checked in ✓" when today is
   active). Below it, one compact row per shown tab streak (`ListRow`, AD-53: name, current,
   best, a ✓ for today). Then 28 dots for the overall streak (active / frozen / repaired /
-  missed / pending, each with a text alternative, never colour alone), and the balance under
+  missed / pending / before, each with a text alternative, never colour alone), and the balance under
   the chosen name.
 - **Shop**, a disclosure inside the card, not a modal (house rule since Epic 24). Each shown
   streak plus overall gets "Freeze · 20 · held 1/2" with Buy. A repair offer is a banner at

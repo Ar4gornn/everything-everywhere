@@ -134,8 +134,9 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
 }
 
 /**
- * Twenty-eight days, oldest first, seven to a row. Three shapes — a filled disc, an empty
- * ring, a dashed ring — so the state is never carried by colour alone, and each dot is a
+ * Twenty-eight days, oldest first, seven to a row. Four shapes — a filled disc, an empty
+ * ring, a dashed ring, a small speck for a day before the streak began — so the state is
+ * never carried by colour alone, and each dot is a
  * list item read as "day: state".
  */
 function Dots({

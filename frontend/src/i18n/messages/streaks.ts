@@ -36,6 +36,7 @@ export const streaks = {
   "streaks.dot.active": { en: "{day}: active", fr: "{day} : jour actif" },
   "streaks.dot.missed": { en: "{day}: missed", fr: "{day} : manqué" },
   "streaks.dot.pending": { en: "{day}: today, not yet", fr: "{day} : aujourd’hui, pas encore" },
+  "streaks.dot.before": { en: "{day}: before you started", fr: "{day} : avant le début" },
   "streaks.couldNotLoad": {
     en: "Could not load your streak.",
     fr: "Impossible de charger votre série.",

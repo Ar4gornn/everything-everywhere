@@ -1017,7 +1017,8 @@ export interface BookQuoteDraw {
 }
 
 /** Epic 41 (AD-57): one day of a streak, as the four-week dots draw it. */
-export type StreakState = "active" | "pending" | "missed";
+/** `before`: a day before the first active one — no streak yet, so not missed either. */
+export type StreakState = "active" | "pending" | "missed" | "before";
 
 export interface Streak {
   id: string;

@@ -268,6 +268,18 @@ def test_walk_with_no_activity_is_zero():
     assert streaks.walk(set(), today=d(4))[:2] == (0, 0)
 
 
+def test_days_before_the_first_active_one_are_before_not_missed(client, user_a, clock):
+    clock(at(10))
+    _, streak = overall(client, user_a)
+    assert [s["state"] for s in streak["recent"]] == ["before"] * 27 + ["pending"]
+
+    write(client, user_a)
+    clock(at(12))  # the 11th missed; the days before the 10th stay "before"
+    _, streak = overall(client, user_a)
+    states = [s["state"] for s in streak["recent"]]
+    assert states == ["before"] * 25 + ["active", "missed", "pending"]
+
+
 def test_the_streak_over_the_api_follows_the_clock(client, user_a, clock):
     for day in (1, 2, 3):
         clock(at(day))

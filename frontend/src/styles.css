@@ -3899,6 +3899,13 @@ button.bell[aria-pressed="false"] {
   border-style: dashed;
 }
 
+/* Before the first active day: no streak yet, so a speck rather than a missed ring. */
+.streak-card .streak-dot-before {
+  border: none;
+  background: var(--border-strong);
+  transform: scale(0.3);
+}
+
 /* A tab's Check in (Epic 41.2). Qualified by the button's own class; it sits in a page
    header, so it must stay one short line in French on a phone. */
 .streak-checkin-bar {
