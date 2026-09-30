@@ -10,6 +10,7 @@ two slot names) are the request schema's; everything that needs to know the cata
 below — unknown ids, duplicates, completeness, the phone's caps — is here, with a code.
 """
 
+import unicodedata
 import uuid
 
 from sqlalchemy import bindparam, update
@@ -64,6 +65,7 @@ STREAKS: tuple[str, ...] = STREAK_MODULES
 #: The person's name for points (Epic 41, AD-57): 1 to 24 characters once trimmed, shown
 #: verbatim beside the number. Null or empty means the client's default label.
 POINTS_NAME_MAX = 24
+_REFUSED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 
 #: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
 #: three that existed before stay on; the two new ones are opt-in, so the digest keeps
@@ -146,7 +148,9 @@ def clean_points_name(raw: str) -> str:
     name = raw.strip()
     if len(name) > POINTS_NAME_MAX:
         raise ValueError(f"at most {POINTS_NAME_MAX} characters")
-    if not name.isprintable():
+    # Only control and line/paragraph separators: `isprintable()` would also refuse a
+    # zero-width joiner (emoji sequences) and a no-break space (French typography).
+    if any(unicodedata.category(c) in _REFUSED_CATEGORIES for c in name):
         raise ValueError("no control characters")
     return name
 

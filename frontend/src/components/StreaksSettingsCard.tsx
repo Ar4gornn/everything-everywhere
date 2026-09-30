@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type { StreakModuleId } from "../api/types";
 import { useT } from "../i18n";
@@ -21,8 +21,14 @@ export function StreaksSettingsCard() {
   const { preferences, update } = usePreferences();
   const [failed, setFailed] = useState(false);
   const [name, setName] = useState(preferences.points_name ?? "");
+  // Set from the moment a save starts until it succeeds or the person types again. While it
+  // is set the field is theirs: a refused save rolls the stored name back, and re-syncing
+  // then would throw away what they typed.
+  const holdDraft = useRef(false);
   // The account may load after this card first draws, and a save comes back resolved.
-  useEffect(() => setName(preferences.points_name ?? ""), [preferences.points_name]);
+  useEffect(() => {
+    if (!holdDraft.current) setName(preferences.points_name ?? "");
+  }, [preferences.points_name]);
 
   const listed = STREAKS.filter((id) => {
     const module = STREAK_MODULE[id];
@@ -40,7 +46,13 @@ export function StreaksSettingsCard() {
     setFailed(false);
     const trimmed = name.trim();
     setName(trimmed);
-    update({ points_name: trimmed }).catch(() => setFailed(true));
+    holdDraft.current = true;
+    update({ points_name: trimmed }).then(
+      () => {
+        holdDraft.current = false;
+      },
+      () => setFailed(true),
+    );
   }
 
   return (
@@ -71,7 +83,10 @@ export function StreaksSettingsCard() {
             value={name}
             maxLength={24}
             placeholder={t("streaks.pointsDefault")}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              holdDraft.current = false;
+              setName(event.target.value);
+            }}
           />
         </label>
         <p className="hint" style={{ margin: "4px 0 8px" }}>

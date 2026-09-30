@@ -179,6 +179,29 @@ def test_hiding_a_streak_or_a_module_does_not_change_the_balance(
         assert points(client, user_a) == base
 
 
+# ---------------------------------------------------------------- earned never decreases
+
+
+def test_a_timezone_move_west_does_not_take_points_back(client, user_a, clock, owner_engine):
+    """UTC+14 records local day D; UTC-11 makes local today D-1. Earned must not drop,
+    neither the day's points nor a milestone bonus that day completed (§2.6)."""
+    zone = "/api/auth/me/notification-schedule"
+    east = {"timezone": "Pacific/Kiritimati", "digest_time": "19:00"}
+    west = {"timezone": "Pacific/Pago_Pago", "digest_time": "19:00"}
+    assert client.patch(zone, json=east, headers=user_a["headers"]).status_code == 200
+    seed(owner_engine, user_a, 5, 10)  # six days, so the check-in below makes the seventh
+    clock(10)  # 12:00 UTC is already the next day at UTC+14
+    check_in(client, user_a, "gym")  # a module day too, so both counts are exercised
+    body = client.get("/api/streaks", headers=user_a["headers"]).json()
+    assert body["today"] == str(day(11))
+    before = body["points"]
+    assert before["earned"] == 7 + 10 + 1
+    assert client.patch(zone, json=west, headers=user_a["headers"]).status_code == 200
+    after = client.get("/api/streaks", headers=user_a["headers"]).json()
+    assert after["today"] == str(day(10))  # the day already recorded is now in the future
+    assert after["points"] == before
+
+
 # ---------------------------------------------------------------- tenancy
 
 
@@ -224,11 +247,20 @@ def test_empty_falls_back_to_the_default(client, user_a, empty):
     assert _prefs(client, user_a)["points_name"] is None
 
 
-@pytest.mark.parametrize("bad", [5, True, ["a"], {"a": 1}, "a\nb", "a\x00b"])
+@pytest.mark.parametrize(
+    "bad", [5, True, ["a"], {"a": 1}, "a\nb", "a\x00b", "a\x07b", "a\u2028b", "a\u2029b"]
+)
 def test_a_name_that_is_not_plain_text_is_a_422_not_a_500(client, user_a, bad):
     answer = _patch(client, user_a, {"points_name": bad})
     assert answer.status_code == 422, answer.text
     assert _prefs(client, user_a)["points_name"] is None
+
+
+@pytest.mark.parametrize("good", ["\u2764\ufe0f\u200d\U0001f525", "Mes\u00a0points", "Étincelles"])
+def test_emoji_sequences_and_no_break_spaces_are_fine(client, user_a, good):
+    answer = _patch(client, user_a, {"points_name": good})
+    assert answer.status_code == 200, answer.text
+    assert _prefs(client, user_a)["points_name"] == good
 
 
 def test_a_stored_unusable_name_is_read_not_refused():

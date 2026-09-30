@@ -37,6 +37,7 @@ function mockApi(
     pointsName?: string | null;
     language?: string;
     streaks?: Preferences["streaks"];
+    refuseSave?: boolean;
   } = {},
 ) {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
@@ -52,6 +53,7 @@ function mockApi(
       const method = init?.method ?? "GET";
       calls.push({ url, method, body: (init?.body as string) ?? null });
       if (url.endsWith("/api/auth/me/preferences") && method === "PATCH") {
+        if (options.refuseSave) return json({ detail: "no", code: "error" }, 422);
         prefs = { ...prefs, ...JSON.parse(String(init?.body)) };
       }
       if (url.includes("/api/auth/me")) {
@@ -187,6 +189,20 @@ describe("the points name in Settings", () => {
     const patch = calls.find((c) => c.method === "PATCH");
     expect(JSON.parse(patch?.body ?? "{}")).toEqual({ points_name: "" });
     await waitFor(() => expect(balance()).toHaveTextContent("42 · Points"));
+  });
+
+  it("keeps what was typed when the save is refused, and says so", async () => {
+    mockApi({ refuseSave: true });
+    const user = userEvent.setup();
+    render();
+    const input = (await field()) as HTMLInputElement;
+    await user.type(input, "Nova");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+    expect(await screen.findByText("Could not save that change.")).toBeInTheDocument();
+    // The rollback of the stored name must not wipe the draft, even a moment later.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(input.value).toBe("Nova");
+    expect(balance()).toHaveTextContent("42 · Points");
   });
 
   it("speaks French", async () => {

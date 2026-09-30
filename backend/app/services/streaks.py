@@ -61,8 +61,6 @@ class Streak:
     best: int
     today_active: bool
     recent: list[tuple[dt.date, str]]
-    #: Milestone bonus this streak has paid, for the points total (§2.6).
-    bonus: int = 0
 
 
 @dataclass(frozen=True)
@@ -130,26 +128,35 @@ def _of(by_module: dict[str, set[dt.date]], streak_id: str) -> set[dt.date]:
 
 
 def _streak(streak_id: str, active: set[dt.date], today: dt.date) -> Streak:
-    current, best, bonus, states = _walk(active, today)
+    current, best, _, states = _walk(active, today)
     return Streak(
         id=streak_id,
         current=current,
         best=best,
         today_active=states.get(today) == ACTIVE,
         recent=_recent(states, today),
-        bonus=bonus,
     )
 
 
-def points(by_module: dict[str, set[dt.date]], found: list[Streak], today: dt.date) -> Points:
+def points(by_module: dict[str, set[dt.date]], today: dt.date) -> Points:
     """Earned, spent and the balance (§2.6). Earned is read off activity alone: a day
     overall is active, a day each of the ten module streaks is active (``app`` pays only
     through overall), and every milestone bonus. Nothing here looks at preferences, so
-    switching a streak or a module off cannot move it. Days after local ``today`` are
-    ignored, as the walk ignores them."""
-    overall_days = {d for d in _of(by_module, OVERALL) if d <= today}
-    module_days = sum(len({d for d in by_module.get(m, ()) if d <= today}) for m in MODULES)
-    earned = len(overall_days) + module_days + sum(s.bonus for s in found)
+    switching a streak or a module off cannot move it.
+
+    Every stored row counts, with no ``<= today`` filter: an account moved to a zone further
+    west has a local today *before* a day it already recorded, and earned must never
+    decrease (§2.6). The bonuses come from a walk that runs to the later of ``today`` and
+    the last active day, for the same reason. ``current``, ``best`` and the dots stay bound
+    to ``today``."""
+    overall_days = _of(by_module, OVERALL)
+    module_days = sum(len(by_module.get(m, ())) for m in MODULES)
+    bonus = 0
+    for streak_id in (OVERALL, *MODULES):
+        days = _of(by_module, streak_id)
+        if days:
+            bonus += _walk(days, max(today, max(days)))[2]
+    earned = len(overall_days) + module_days + bonus
     spent = 0  # purchases arrive with 41.4
     return Points(balance=earned - spent, earned=earned, spent=spent)
 
@@ -162,7 +169,7 @@ def read(
     today = local_day(session, user_id, now)
     by_module = _active_days(session, user_id)
     found = [_streak(sid, _of(by_module, sid), today) for sid in (OVERALL, *MODULES)]
-    return today, found, points(by_module, found, today)
+    return today, found, points(by_module, today)
 
 
 def check_in(
