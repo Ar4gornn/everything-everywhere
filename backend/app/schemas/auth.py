@@ -92,6 +92,9 @@ class PreferencesUpdate(BaseModel):
     # Epic 36 (AD-52): which kinds the daily digest may mention. Strict for the same reason
     # as `Card.on`.
     notifications: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 41 (AD-57): which module streaks are shown. Strict, so {"gym": "off"} is a 422
+    # rather than a streak quietly switched on.
+    streaks: dict[str, StrictBool] | None = Field(default=None, max_length=32)
     phone: LayoutIn | None = None
     desktop: LayoutIn | None = None
 
@@ -106,6 +109,7 @@ class PreferencesOut(BaseModel):
 
     modules: dict[str, bool]
     notifications: dict[str, bool]
+    streaks: dict[str, bool]
     phone: LayoutOut
     desktop: LayoutOut
 

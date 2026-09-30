@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { Note, NoteInput } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { CheckInButton } from "../components/CheckInButton";
 import { useToast } from "../components/Toast";
 import { Empty, ErrorBanner } from "../components/ui";
 import { useT } from "../i18n";
@@ -152,6 +153,7 @@ export function NotesPage() {
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <h1 style={{ fontSize: 18, margin: 0 }}>{t("notes.title")}</h1>
         <div className="row">
+          <CheckInButton streak="notes" />
           <button type="button" onClick={() => navigate("/notes/new")}>
             {t("notes.newText")}
           </button>

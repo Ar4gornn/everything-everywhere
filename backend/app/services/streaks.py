@@ -4,8 +4,9 @@ Nothing here is stored. A streak is a walk forward over the days on which someth
 done (``services/activity.py``), so a later fix to the rules corrects the past too, and a
 timezone change cannot leave a stale copy behind.
 
-Story 41.1 walks the **overall** streak only and has no freezes or repairs; the walk is
-written so that a covered day is one of several states, which is where those arrive.
+Stories 41.1 and 41.2 walk the **overall** streak and one streak per module, without
+freezes or repairs; the walk is written so that a covered day is one of several states,
+which is where those arrive.
 
 Rules, defined here once (§2.3 of ``docs/epic-41-streaks.md``):
 
@@ -21,6 +22,7 @@ rather than counted early: a streak never runs ahead of the clock.
 
 import datetime as dt
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -28,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import Invalid
 from app.models.activity import ActivityDay
-from app.services.activity import ACTIVITY_MODULES, APP, local_day, record
+from app.services.activity import ACTIVITY_MODULES, APP, MODULES, local_day, record
 
 OVERALL = "overall"
 RECENT_DAYS = 28
@@ -75,14 +77,25 @@ def _recent(states: dict[dt.date, str], today: dt.date) -> list[tuple[dt.date, s
     return [(d, states.get(d, PENDING if d == today else MISSED)) for d in window]
 
 
-def _active_days(session: Session, user_id: uuid.UUID) -> set[dt.date]:
-    """Every day with any known module active: the overall streak's input."""
+def _active_days(session: Session, user_id: uuid.UUID) -> dict[str, set[dt.date]]:
+    """Every active day by module, for one read of the whole history. A row whose module
+    has left the catalogue is ignored (§2.2)."""
     rows = session.execute(
-        select(ActivityDay.day)
-        .where(ActivityDay.user_id == user_id, ActivityDay.module.in_(ACTIVITY_MODULES))
-        .distinct()
-    ).scalars()
-    return set(rows)
+        select(ActivityDay.module, ActivityDay.day).where(
+            ActivityDay.user_id == user_id, ActivityDay.module.in_(ACTIVITY_MODULES)
+        )
+    )
+    by_module: dict[str, set[dt.date]] = defaultdict(set)
+    for module, day in rows:
+        by_module[module].add(day)
+    return by_module
+
+
+def _of(by_module: dict[str, set[dt.date]], streak_id: str) -> set[dt.date]:
+    """The days a streak counts: any module for ``overall``, its own for a module."""
+    if streak_id == OVERALL:
+        return set().union(*by_module.values())
+    return by_module.get(streak_id, set())
 
 
 def _streak(streak_id: str, active: set[dt.date], today: dt.date) -> Streak:
@@ -97,17 +110,24 @@ def _streak(streak_id: str, active: set[dt.date], today: dt.date) -> Streak:
 
 
 def read(session: Session, user_id: uuid.UUID, now: dt.datetime) -> tuple[dt.date, list[Streak]]:
-    """Today on the account's clock, and every streak this story computes."""
+    """Today on the account's clock, and every streak: overall, then one per module. Which
+    are shown is the client's call (§2.7); earning never depends on it."""
     today = local_day(session, user_id, now)
-    return today, [_streak(OVERALL, _active_days(session, user_id), today)]
+    by_module = _active_days(session, user_id)
+    return today, [_streak(sid, _of(by_module, sid), today) for sid in (OVERALL, *MODULES)]
 
 
 def check_in(
     session: Session, user_id: uuid.UUID, streak_id: str, now: dt.datetime
 ) -> tuple[dt.date, Streak]:
-    """Make today active for ``streak_id`` and answer with it. Idempotent."""
-    if streak_id != OVERALL:
+    """Make today active for ``streak_id`` and answer with it. Idempotent. ``overall``
+    writes ``app`` (the dashboard's own activity); a module id writes itself."""
+    if streak_id == OVERALL:
+        module = APP
+    elif streak_id in MODULES:
+        module = streak_id
+    else:
         raise Invalid(f"{streak_id!r} is not a streak", "streak_unknown")
     today = local_day(session, user_id, now)
-    record(session, user_id, APP, today)
-    return today, _streak(OVERALL, _active_days(session, user_id), today)
+    record(session, user_id, module, today)
+    return today, _streak(streak_id, _of(_active_days(session, user_id), streak_id), today)

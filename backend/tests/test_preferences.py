@@ -40,6 +40,14 @@ DEFAULT = {
         "due_tomorrow": False,
         "savings": False,
     },
+    # Epic 41 (AD-57): every tab streak is opt-in.
+    "streaks": {
+        streak: False
+        for streak in (
+            "entries", "plan", "grow", "habits", "mood", "books", "stock", "gym", "recipes",
+            "notes",
+        )
+    },
     "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
     "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
 }

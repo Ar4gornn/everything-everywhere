@@ -17,6 +17,21 @@ export const streaks = {
   "streaks.best": { en: "Best: {count}", fr: "Record : {count}" },
   "streaks.checkIn": { en: "Check in", fr: "Valider aujourd’hui" },
   "streaks.checkedIn": { en: "Checked in ✓", fr: "Journée validée ✓" },
+  // A tab's own Check in sits in a page header, so it is the short form.
+  "streaks.tabCheckIn": { en: "Check in", fr: "Valider" },
+  "streaks.tabCheckedIn": { en: "Checked in ✓", fr: "Validé ✓" },
+  "streaks.tabs": { en: "Streaks by tab", fr: "Séries par onglet" },
+  "streaks.rowActiveToday": { en: "active today", fr: "actif aujourd’hui" },
+  "streaks.settingsTitle": { en: "Streaks", fr: "Séries" },
+  "streaks.settingsHint": {
+    en: "Choose which tabs show their own streak and a Check in button. Every tab keeps counting whether or not it is shown.",
+    fr: "Choisissez les onglets qui affichent leur propre série et un bouton Valider. Chaque onglet continue de compter, affiché ou non.",
+  },
+  "streaks.show": { en: "Show the {name} streak", fr: "Afficher la série {name}" },
+  "streaks.couldNotSave": {
+    en: "Could not save that change.",
+    fr: "Impossible d’enregistrer ce changement.",
+  },
   "streaks.recent": { en: "The last four weeks", fr: "Les quatre dernières semaines" },
   "streaks.dot.active": { en: "{day}: active", fr: "{day} : jour actif" },
   "streaks.dot.missed": { en: "{day}: missed", fr: "{day} : manqué" },

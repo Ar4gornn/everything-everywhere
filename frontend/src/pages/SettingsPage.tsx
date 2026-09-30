@@ -12,6 +12,7 @@ import { InvitesCard } from "../components/InvitesCard";
 import { LayoutCard } from "../components/LayoutCard";
 import { NotificationsCard } from "../components/NotificationsCard";
 import { SecurityCard } from "../components/SecurityCard";
+import { StreaksSettingsCard } from "../components/StreaksSettingsCard";
 import { useTutorial } from "../components/Tutorial/useTutorial";
 import { Card, ErrorBanner } from "../components/ui";
 import { useMoney } from "../useMoney";
@@ -226,6 +227,8 @@ export function SettingsPage() {
       </Card>
 
       <LayoutCard />
+
+      <StreaksSettingsCard />
 
       <Card title={t("settings.budgetMonth")}>
         <div className="row">

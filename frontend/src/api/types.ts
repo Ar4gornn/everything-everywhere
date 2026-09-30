@@ -124,9 +124,25 @@ export interface Layout {
 /** Epic 36 (AD-52): what the daily digest may talk about. */
 export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings";
 
+/** Epic 41 (AD-57): a module with a streak of its own. `overall` is the dashboard card and
+ *  has no switch. */
+export type StreakModuleId =
+  | "entries"
+  | "plan"
+  | "grow"
+  | "habits"
+  | "mood"
+  | "books"
+  | "stock"
+  | "gym"
+  | "recipes"
+  | "notes";
+
 export interface Preferences {
   modules: Record<ModuleId, boolean>;
   notifications: Record<NotificationKind, boolean>;
+  /** Which tab streaks are shown; every one is off until switched on. */
+  streaks: Record<StreakModuleId, boolean>;
   phone: Layout;
   desktop: Layout;
 }

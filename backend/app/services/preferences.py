@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import Invalid
 from app.models.user import User
+from app.services.activity import MODULES as STREAK_MODULES
 
 #: The eight sections, in their default order, with the slot each starts in. The first
 #: five are the bottom tab bar on a phone (``.nav`` on a desktop); the last three are the
@@ -55,6 +56,10 @@ CARDS: tuple[str, ...] = (
 )
 
 LAYOUTS: tuple[str, ...] = ("phone", "desktop")
+
+#: Streaks a person may show (Epic 41, AD-57): one per module streak, all **off** by
+#: default so tab streaks stay optional. ``overall`` is not here: it is the dashboard card.
+STREAKS: tuple[str, ...] = STREAK_MODULES
 
 #: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
 #: three that existed before stay on; the two new ones are opt-in, so the digest keeps
@@ -136,6 +141,7 @@ def resolve(stored: object) -> dict:
     prefs = stored if isinstance(stored, dict) else {}
     modules = prefs.get("modules") if isinstance(prefs.get("modules"), dict) else {}
     kinds = prefs.get("notifications") if isinstance(prefs.get("notifications"), dict) else {}
+    shown = prefs.get("streaks") if isinstance(prefs.get("streaks"), dict) else {}
     return {
         "modules": {
             module: modules[module] if isinstance(modules.get(module), bool) else True
@@ -144,6 +150,10 @@ def resolve(stored: object) -> dict:
         "notifications": {
             kind: kinds[kind] if isinstance(kinds.get(kind), bool) else default
             for kind, default in NOTIFICATIONS
+        },
+        "streaks": {
+            streak: shown[streak] if isinstance(shown.get(streak), bool) else False
+            for streak in STREAKS
         },
         **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
     }
@@ -170,6 +180,12 @@ def _check_notifications(kinds: dict[str, bool]) -> None:
     for kind in kinds:
         if kind not in _NOTIFICATION_DEFAULT:
             raise Invalid(f"no notification called {kind!r}", "pref_unknown_id")
+
+
+def _check_streaks(shown: dict[str, bool]) -> None:
+    for streak in shown:
+        if streak not in STREAKS:
+            raise Invalid(f"no streak called {streak!r}", "pref_unknown_id")
 
 
 def _check_layout(name: str, layout: dict) -> None:
@@ -205,6 +221,8 @@ def validate(patch: dict) -> None:
         _check_modules(patch["modules"])
     if "notifications" in patch:
         _check_notifications(patch["notifications"])
+    if "streaks" in patch:
+        _check_streaks(patch["streaks"])
     for layout in LAYOUTS:
         if layout in patch:
             _check_layout(layout, patch[layout])

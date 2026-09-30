@@ -1,7 +1,7 @@
-import type { CardId, ModuleId, SectionId } from "../api/types";
+import type { CardId, ModuleId, SectionId, StreakModuleId } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import type { MessageKey } from "../i18n";
-import { preferencesOf } from "./preferences";
+import { preferencesOf, shownStreaks } from "./preferences";
 
 /**
  * Which modules the account uses (Epic 33, AD-49). Off hides a module's UI — its tab, its
@@ -75,6 +75,25 @@ export const SECTION_MODULE: Partial<Record<SectionId, ModuleId>> = {
   gym: "gym",
   recipes: "recipes",
 };
+
+/** A streak's name on its row and in Settings (Epic 41): the section's own name. */
+export const STREAK_NAME: Record<StreakModuleId, MessageKey> = {
+  entries: "nav.entries",
+  plan: "nav.plan",
+  grow: "nav.grow",
+  habits: "module.habits",
+  mood: "module.mood",
+  books: "module.books",
+  stock: "module.stock",
+  gym: "module.gym",
+  recipes: "module.recipes",
+  notes: "module.notes",
+};
+
+/** Tab streaks shown right now (preference on and module on). Defaults outside a provider. */
+export function useShownStreaks(): StreakModuleId[] {
+  return shownStreaks(preferencesOf(useOptionalAuth()?.user));
+}
 
 /**
  * All on outside an auth provider, like `useMoney`'s currency: a component rendered in

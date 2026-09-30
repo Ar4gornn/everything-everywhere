@@ -3898,3 +3898,20 @@ button.bell[aria-pressed="false"] {
 .streak-card .streak-dot-pending {
   border-style: dashed;
 }
+
+/* A tab's Check in (Epic 41.2). Qualified by the button's own class; it sits in a page
+   header, so it must stay one short line in French on a phone. */
+.streak-checkin-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+button.streak-checkin {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.streak-card .streak-tab-rows {
+  margin: 16px 0 0;
+}

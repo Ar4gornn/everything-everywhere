@@ -65,6 +65,11 @@ describe("the defaults", () => {
     expect(DEFAULT_PREFERENCES).toEqual({
       modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true },
       notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false },
+      // Epic 41: every tab streak is opt-in, and the list is pinned against the server's.
+      streaks: {
+        entries: false, plan: false, grow: false, habits: false, mood: false,
+        books: false, stock: false, gym: false, recipes: false, notes: false,
+      },
       phone: { tabs, cards },
       desktop: { tabs, cards },
     });
@@ -77,11 +82,13 @@ describe("the defaults", () => {
   });
 
   it("fill in the notification kinds for a server between 0025 and 0028", () => {
-    const { notifications: _dropped, ...older } = DEFAULT_PREFERENCES;
+    const { notifications: _dropped, streaks: _alsoDropped, ...older } = DEFAULT_PREFERENCES;
     const prefs = preferencesOf({ id: "u", email: "", currency: "USD", weight_unit: "kg",
       budget_start_day: 1, language: "en", created_at: "",
       preferences: older as typeof DEFAULT_PREFERENCES });
     expect(prefs.notifications).toEqual(DEFAULT_PREFERENCES.notifications);
+    // ...and for one older than Epic 41, which has no streak switches either.
+    expect(prefs.streaks).toEqual(DEFAULT_PREFERENCES.streaks);
   });
 
   it("a patch replaces whole subtrees, like the server", () => {

@@ -5,7 +5,9 @@ import type { Streak, StreaksOverview } from "../api/types";
 import { errorMessage } from "../i18n/errors";
 import { useT } from "../i18n";
 import { useDates } from "../useDates";
+import { STREAK_NAME, useShownStreaks } from "../layout/modules";
 import { useLoad } from "../useLoad";
+import { ListRow } from "./ListRow";
 import { Card, ErrorBanner } from "./ui";
 
 const NOTHING: StreaksOverview | null = null;
@@ -34,6 +36,10 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
   const [checkInFailed, setCheckInFailed] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
 
+  // A tab streak is a row only while it is shown (preference on, module on), decided at
+  // render from the account as it is now: a module switched off hides its row at once, and
+  // the server keeps counting for it either way.
+  const shown = useShownStreaks();
   const overall = Array.isArray(data?.streaks)
     ? data.streaks.find((streak) => streak.id === "overall")
     : undefined;
@@ -58,6 +64,11 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
       setPressing(false);
     }
   }
+
+  const rows = shown.flatMap((id) => {
+    const found = Array.isArray(data?.streaks) ? data.streaks.find((s) => s.id === id) : undefined;
+    return found ? [{ ...found, id }] : [];
+  });
 
   if (!overall) {
     return failure ? (
@@ -91,6 +102,30 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
           {overall.today_active ? t("streaks.checkedIn") : t("streaks.checkIn")}
         </button>
         <ErrorBanner message={checkInFailed} />
+
+        {rows.length > 0 && (
+          <ul className="list-rows streak-tab-rows" aria-label={t("streaks.tabs")}>
+            {rows.map((row) => (
+              <ListRow
+                key={row.id}
+                title={
+                  <>
+                    {t(STREAK_NAME[row.id])}
+                    {row.today_active && (
+                      <>
+                        {" "}
+                        <span aria-hidden="true">✓</span>
+                        <span className="visually-hidden">{t("streaks.rowActiveToday")}</span>
+                      </>
+                    )}
+                  </>
+                }
+                meta={t("streaks.best", { count: row.best })}
+                amount={t.n("streaks.days", row.current)}
+              />
+            ))}
+          </ul>
+        )}
 
         <Dots streak={overall} label={t("streaks.recent")} day={dates.day} />
       </Card>
