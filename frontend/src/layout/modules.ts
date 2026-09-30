@@ -95,6 +95,11 @@ export function useShownStreaks(): StreakModuleId[] {
   return shownStreaks(preferencesOf(useOptionalAuth()?.user));
 }
 
+/** The person's own word for points, trimmed; null means the default label. No provider: null. */
+export function usePointsName(): string | null {
+  return preferencesOf(useOptionalAuth()?.user).points_name?.trim() || null;
+}
+
 /**
  * All on outside an auth provider, like `useMoney`'s currency: a component rendered in
  * isolation has an obvious default, and throwing for want of context would be worse.

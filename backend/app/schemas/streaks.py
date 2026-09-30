@@ -18,8 +18,27 @@ class StreakOut(BaseModel):
     recent: list[DayOut]
 
 
+class PointsOut(BaseModel):
+    # Signed on purpose: a balance is a difference, and a type that forbids a negative one
+    # would turn a bug into a 500 (lab note 2026-09-26). The invariant keeps it >= 0.
+    balance: int
+    earned: int
+    spent: int
+
+
+class MilestoneOut(BaseModel):
+    days: int
+    bonus: int
+
+
+class PricesOut(BaseModel):
+    milestones: list[MilestoneOut]
+
+
 class StreaksOut(BaseModel):
     today: dt.date
+    points: PointsOut
+    prices: PricesOut
     streaks: list[StreakOut]
 
 

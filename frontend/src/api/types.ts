@@ -143,6 +143,8 @@ export interface Preferences {
   notifications: Record<NotificationKind, boolean>;
   /** Which tab streaks are shown; every one is off until switched on. */
   streaks: Record<StreakModuleId, boolean>;
+  /** The person's word for points (Epic 41.3), or null for the default label. */
+  points_name: string | null;
   phone: Layout;
   desktop: Layout;
 }
@@ -1028,9 +1030,19 @@ export interface Streak {
   recent: { day: string; state: StreakState }[];
 }
 
+/** Points are computed by the server from activity alone (AD-57); `spent` is 0 until the shop. */
+export interface StreakPoints {
+  balance: number;
+  earned: number;
+  spent: number;
+}
+
 export interface StreaksOverview {
   /** The account's local date, worked out by the server: the client never sends a day. */
   today: string;
+  /** Absent on a server older than Story 41.3: the card then shows no balance. */
+  points?: StreakPoints;
+  prices?: { milestones: { days: number; bonus: number }[] };
   streaks: Streak[];
 }
 

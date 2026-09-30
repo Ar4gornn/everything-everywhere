@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import type { StreakModuleId } from "../api/types";
 import { useT } from "../i18n";
@@ -20,6 +20,9 @@ export function StreaksSettingsCard() {
   const t = useT();
   const { preferences, update } = usePreferences();
   const [failed, setFailed] = useState(false);
+  const [name, setName] = useState(preferences.points_name ?? "");
+  // The account may load after this card first draws, and a save comes back resolved.
+  useEffect(() => setName(preferences.points_name ?? ""), [preferences.points_name]);
 
   const listed = STREAKS.filter((id) => {
     const module = STREAK_MODULE[id];
@@ -29,6 +32,15 @@ export function StreaksSettingsCard() {
   function set(id: StreakModuleId, on: boolean) {
     setFailed(false);
     update({ streaks: { ...preferences.streaks, [id]: on } }).catch(() => setFailed(true));
+  }
+
+  // Trimmed here as the server trims: empty is sent as "" and means the default.
+  function saveName(event: FormEvent) {
+    event.preventDefault();
+    setFailed(false);
+    const trimmed = name.trim();
+    setName(trimmed);
+    update({ points_name: trimmed }).catch(() => setFailed(true));
   }
 
   return (
@@ -51,6 +63,22 @@ export function StreaksSettingsCard() {
           </li>
         ))}
       </ul>
+      <form className="streak-points-name" onSubmit={saveName}>
+        <label>
+          {t("streaks.pointsNameLabel")}
+          <input
+            type="text"
+            value={name}
+            maxLength={24}
+            placeholder={t("streaks.pointsDefault")}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <p className="hint" style={{ margin: "4px 0 8px" }}>
+          {t("streaks.pointsNameHint")}
+        </p>
+        <button type="submit">{t("streaks.pointsNameSave")}</button>
+      </form>
       <ErrorBanner message={failed ? t("streaks.couldNotSave") : null} />
     </Card>
   );

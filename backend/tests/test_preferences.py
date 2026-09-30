@@ -48,6 +48,8 @@ DEFAULT = {
             "notes",
         )
     },
+    # Epic 41 (AD-57): no name chosen means the client's default label.
+    "points_name": None,
     "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
     "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
 }

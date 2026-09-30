@@ -5,7 +5,7 @@ import type { Streak, StreaksOverview } from "../api/types";
 import { errorMessage } from "../i18n/errors";
 import { useT } from "../i18n";
 import { useDates } from "../useDates";
-import { STREAK_NAME, useShownStreaks } from "../layout/modules";
+import { STREAK_NAME, usePointsName, useShownStreaks } from "../layout/modules";
 import { useLoad } from "../useLoad";
 import { ListRow } from "./ListRow";
 import { Card, ErrorBanner } from "./ui";
@@ -40,6 +40,8 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
   // render from the account as it is now: a module switched off hides its row at once, and
   // the server keeps counting for it either way.
   const shown = useShownStreaks();
+  // The person's word for points, verbatim; the default label when none is chosen.
+  const pointsName = usePointsName() ?? t("streaks.pointsDefault");
   const overall = Array.isArray(data?.streaks)
     ? data.streaks.find((streak) => streak.id === "overall")
     : undefined;
@@ -128,6 +130,13 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
         )}
 
         <Dots streak={overall} label={t("streaks.recent")} day={dates.day} />
+
+        {data?.points && (
+          <p className="streak-card-points">
+            <span className="visually-hidden">{t("streaks.pointsBalance")} </span>
+            <strong>{data.points.balance}</strong> · <span>{pointsName}</span>
+          </p>
+        )}
       </Card>
     </div>
   );

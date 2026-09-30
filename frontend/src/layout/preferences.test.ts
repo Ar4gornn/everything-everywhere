@@ -70,6 +70,7 @@ describe("the defaults", () => {
         entries: false, plan: false, grow: false, habits: false, mood: false,
         books: false, stock: false, gym: false, recipes: false, notes: false,
       },
+      points_name: null,
       phone: { tabs, cards },
       desktop: { tabs, cards },
     });

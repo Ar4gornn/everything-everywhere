@@ -2,7 +2,15 @@ from fastapi import APIRouter
 
 from app.core.clock import Now
 from app.core.deps import CurrentUserId, DbSession
-from app.schemas.streaks import CheckInIn, DayOut, StreakOut, StreaksOut
+from app.schemas.streaks import (
+    CheckInIn,
+    DayOut,
+    MilestoneOut,
+    PointsOut,
+    PricesOut,
+    StreakOut,
+    StreaksOut,
+)
 from app.services import streaks
 
 # Counts nothing in the activity map (AD-57): a check-in writes its own row through the
@@ -22,8 +30,15 @@ def _out(streak: streaks.Streak) -> StreakOut:
 
 @router.get("", response_model=StreaksOut)
 def read_streaks(user_id: CurrentUserId, session: DbSession, now: Now) -> StreaksOut:
-    today, found = streaks.read(session, user_id, now)
-    return StreaksOut(today=today, streaks=[_out(s) for s in found])
+    today, found, earned = streaks.read(session, user_id, now)
+    return StreaksOut(
+        today=today,
+        points=PointsOut(balance=earned.balance, earned=earned.earned, spent=earned.spent),
+        prices=PricesOut(
+            milestones=[MilestoneOut(days=d, bonus=b) for d, b in streaks.MILESTONES]
+        ),
+        streaks=[_out(s) for s in found],
+    )
 
 
 @router.post("/check-in", response_model=StreakOut)

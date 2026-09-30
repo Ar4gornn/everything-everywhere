@@ -37,6 +37,15 @@ export const streaks = {
   "streaks.dot.missed": { en: "{day}: missed", fr: "{day} : manqué" },
   "streaks.dot.pending": { en: "{day}: today, not yet", fr: "{day} : aujourd’hui, pas encore" },
   "streaks.dot.before": { en: "{day}: before you started", fr: "{day} : avant le début" },
+  // The name is the person's own and is shown verbatim, never inflected: one default word.
+  "streaks.pointsDefault": { en: "Points", fr: "Points" },
+  "streaks.pointsNameLabel": { en: "Name for points", fr: "Nom des points" },
+  "streaks.pointsNameHint": {
+    en: "Up to 24 characters. Leave it empty to use “Points”.",
+    fr: "24 caractères au plus. Laissez vide pour utiliser « Points ».",
+  },
+  "streaks.pointsNameSave": { en: "Save name", fr: "Enregistrer le nom" },
+  "streaks.pointsBalance": { en: "Balance:", fr: "Solde :" },
   "streaks.couldNotLoad": {
     en: "Could not load your streak.",
     fr: "Impossible de charger votre série.",

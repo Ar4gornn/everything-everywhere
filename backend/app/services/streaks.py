@@ -15,6 +15,11 @@ Rules, defined here once (§2.3 of ``docs/epic-41-streaks.md``):
   midnight;
 * ``missed``: anything else.
 
+Points (§2.6), also computed and never stored: +1 for each day overall is active, +1 for
+each (day, module) active for **all ten** module streaks (shown or not: hiding a streak
+must never take points back), and a bonus each time a run reaches exactly 7, 30, 100 or
+365 days. Spending arrives with the shop (41.4), so ``spent`` is 0 until purchases exist.
+
 A day before the first active one is outside the walk. The four-week dots call it
 ``before``: it was not missed, there was simply no streak yet.
 
@@ -38,6 +43,11 @@ from app.services.activity import ACTIVITY_MODULES, APP, MODULES, local_day, rec
 OVERALL = "overall"
 RECENT_DAYS = 28
 
+#: A run that reaches exactly ``days`` pays ``bonus`` once, for any streak (§2.6). Module
+#: constants, returned by ``GET`` so the client never hardcodes one.
+MILESTONES: tuple[tuple[int, int], ...] = ((7, 10), (30, 30), (100, 100), (365, 365))
+_BONUS = dict(MILESTONES)
+
 ACTIVE = "active"
 PENDING = "pending"
 MISSED = "missed"
@@ -51,19 +61,30 @@ class Streak:
     best: int
     today_active: bool
     recent: list[tuple[dt.date, str]]
+    #: Milestone bonus this streak has paid, for the points total (§2.6).
+    bonus: int = 0
 
 
-def walk(active: set[dt.date], today: dt.date) -> tuple[int, int, dict[dt.date, str]]:
-    """``(current, best, state by day)`` for the days from the first active one to ``today``."""
+@dataclass(frozen=True)
+class Points:
+    balance: int
+    earned: int
+    spent: int
+
+
+def _walk(active: set[dt.date], today: dt.date) -> tuple[int, int, int, dict[dt.date, str]]:
+    """``(current, best, bonus, state by day)``. The bonus is paid on the day a run reaches
+    a milestone length, so a run that breaks and climbs again pays again."""
     days = {day for day in active if day <= today}
     states: dict[dt.date, str] = {}
-    run = best = 0
+    run = best = bonus = 0
     if days:
         day = min(days)
         while day <= today:
             if day in days:
                 states[day] = ACTIVE
                 run += 1
+                bonus += _BONUS.get(run, 0)
             elif day == today:
                 states[day] = PENDING
             else:
@@ -71,7 +92,13 @@ def walk(active: set[dt.date], today: dt.date) -> tuple[int, int, dict[dt.date, 
                 run = 0
             best = max(best, run)
             day += dt.timedelta(days=1)
-    return run, best, states
+    return run, best, bonus, states
+
+
+def walk(active: set[dt.date], today: dt.date) -> tuple[int, int, dict[dt.date, str]]:
+    """``(current, best, state by day)`` for the days from the first active one to ``today``."""
+    current, best, _, states = _walk(active, today)
+    return current, best, states
 
 
 def _recent(states: dict[dt.date, str], today: dt.date) -> list[tuple[dt.date, str]]:
@@ -103,22 +130,39 @@ def _of(by_module: dict[str, set[dt.date]], streak_id: str) -> set[dt.date]:
 
 
 def _streak(streak_id: str, active: set[dt.date], today: dt.date) -> Streak:
-    current, best, states = walk(active, today)
+    current, best, bonus, states = _walk(active, today)
     return Streak(
         id=streak_id,
         current=current,
         best=best,
         today_active=states.get(today) == ACTIVE,
         recent=_recent(states, today),
+        bonus=bonus,
     )
 
 
-def read(session: Session, user_id: uuid.UUID, now: dt.datetime) -> tuple[dt.date, list[Streak]]:
-    """Today on the account's clock, and every streak: overall, then one per module. Which
-    are shown is the client's call (§2.7); earning never depends on it."""
+def points(by_module: dict[str, set[dt.date]], found: list[Streak], today: dt.date) -> Points:
+    """Earned, spent and the balance (§2.6). Earned is read off activity alone: a day
+    overall is active, a day each of the ten module streaks is active (``app`` pays only
+    through overall), and every milestone bonus. Nothing here looks at preferences, so
+    switching a streak or a module off cannot move it. Days after local ``today`` are
+    ignored, as the walk ignores them."""
+    overall_days = {d for d in _of(by_module, OVERALL) if d <= today}
+    module_days = sum(len({d for d in by_module.get(m, ()) if d <= today}) for m in MODULES)
+    earned = len(overall_days) + module_days + sum(s.bonus for s in found)
+    spent = 0  # purchases arrive with 41.4
+    return Points(balance=earned - spent, earned=earned, spent=spent)
+
+
+def read(
+    session: Session, user_id: uuid.UUID, now: dt.datetime
+) -> tuple[dt.date, list[Streak], Points]:
+    """Today on the account's clock, every streak (overall, then one per module) and the
+    points. Which streaks are shown is the client's call (§2.7); earning never depends on it."""
     today = local_day(session, user_id, now)
     by_module = _active_days(session, user_id)
-    return today, [_streak(sid, _of(by_module, sid), today) for sid in (OVERALL, *MODULES)]
+    found = [_streak(sid, _of(by_module, sid), today) for sid in (OVERALL, *MODULES)]
+    return today, found, points(by_module, found, today)
 
 
 def check_in(

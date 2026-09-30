@@ -3932,3 +3932,15 @@ button.streak-checkin {
 .streak-card .streak-tab-rows {
   margin: 16px 0 0;
 }
+
+/* The balance and the person's own word for points: up to 24 characters with no spaces
+   must wrap rather than push the card wider. */
+.streak-card .streak-card-points {
+  margin: 16px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.streak-points-name {
+  margin-top: 16px;
+  min-width: 0;
+}

@@ -61,6 +61,10 @@ LAYOUTS: tuple[str, ...] = ("phone", "desktop")
 #: default so tab streaks stay optional. ``overall`` is not here: it is the dashboard card.
 STREAKS: tuple[str, ...] = STREAK_MODULES
 
+#: The person's name for points (Epic 41, AD-57): 1 to 24 characters once trimmed, shown
+#: verbatim beside the number. Null or empty means the client's default label.
+POINTS_NAME_MAX = 24
+
 #: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
 #: three that existed before stay on; the two new ones are opt-in, so the digest keeps
 #: meaning "something is exceptional" for everyone who never opens Settings.
@@ -135,6 +139,29 @@ def _resolve_layout(stored: object) -> dict:
     return {"tabs": tabs, "cards": cards}
 
 
+def clean_points_name(raw: str) -> str:
+    """Trimmed, with no control characters; raises ``ValueError`` (a pydantic validator may
+    raise nothing else) when longer than :data:`POINTS_NAME_MAX`. Empty is allowed: it
+    means "use the default"."""
+    name = raw.strip()
+    if len(name) > POINTS_NAME_MAX:
+        raise ValueError(f"at most {POINTS_NAME_MAX} characters")
+    if not name.isprintable():
+        raise ValueError("no control characters")
+    return name
+
+
+def _resolve_points_name(stored: object) -> str | None:
+    """The stored name, or None (the default) for anything that is not a usable one. Read,
+    never refused: a value from an older rule must not break ``/me``."""
+    if not isinstance(stored, str):
+        return None
+    try:
+        return clean_points_name(stored) or None
+    except ValueError:
+        return None
+
+
 def resolve(stored: object) -> dict:
     """The full preferences for a stored value, defaults filled in. Never raises: a stored
     value from an older catalogue is read, not refused."""
@@ -155,6 +182,7 @@ def resolve(stored: object) -> dict:
             streak: shown[streak] if isinstance(shown.get(streak), bool) else False
             for streak in STREAKS
         },
+        "points_name": _resolve_points_name(prefs.get("points_name")),
         **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
     }
 

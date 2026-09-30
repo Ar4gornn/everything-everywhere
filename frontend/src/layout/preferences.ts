@@ -79,6 +79,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   modules: Object.fromEntries(MODULES.map((id) => [id, true])) as Record<ModuleId, boolean>,
   notifications: Object.fromEntries(NOTIFICATIONS) as Record<NotificationKind, boolean>,
   streaks: Object.fromEntries(STREAKS.map((id) => [id, false])) as Record<StreakModuleId, boolean>,
+  points_name: null,
   phone: defaultLayout(),
   desktop: defaultLayout(),
 };
@@ -86,15 +87,16 @@ export const DEFAULT_PREFERENCES: Preferences = {
 /** The account's preferences, or the app as it was when the server predates them. */
 export function preferencesOf(user: User | null | undefined): Preferences {
   if (!user?.preferences) return DEFAULT_PREFERENCES;
-  const { notifications, streaks } = user.preferences;
+  const { notifications, streaks, points_name } = user.preferences;
   // A server between 0025 and 0028 resolves everything but the notification kinds, and one
   // older than Epic 41 has no streak switches: each falls back to its default.
-  return notifications && streaks
+  return notifications && streaks && points_name !== undefined
     ? user.preferences
     : {
         ...user.preferences,
         notifications: notifications ?? DEFAULT_PREFERENCES.notifications,
         streaks: streaks ?? DEFAULT_PREFERENCES.streaks,
+        points_name: points_name ?? null,
       };
 }
 
