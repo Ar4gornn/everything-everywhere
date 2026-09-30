@@ -101,7 +101,7 @@ def test_a_dashboard_check_in_moves_overall_only(client, user_a, clock, owner_en
         assert [r[0] for r in conn.execute(text("SELECT module FROM activity_days"))] == ["app"]
 
 
-@pytest.mark.parametrize("module", MODULE_IDS)
+@pytest.mark.parametrize("module", [m for m in MODULE_IDS if m != "mood"])
 def test_a_tab_check_in_moves_that_tab_and_overall(client, user_a, clock, module):
     response = client.post(
         "/api/streaks/check-in", json={"streak": module}, headers=user_a["headers"]
@@ -110,6 +110,16 @@ def test_a_tab_check_in_moves_that_tab_and_overall(client, user_a, clock, module
     assert response.json()["id"] == module
     assert response.json()["today_active"] is True
     assert moved(client, user_a) == {module, "overall"}
+
+
+def test_mood_has_no_check_in(client, user_a, clock, owner_engine):
+    response = client.post(
+        "/api/streaks/check-in", json={"streak": "mood"}, headers=user_a["headers"]
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "streak_unknown"
+    with owner_engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM activity_days")).scalar_one() == 0
 
 
 def test_a_tab_check_in_is_idempotent(client, user_a, clock, owner_engine):

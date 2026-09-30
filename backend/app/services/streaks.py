@@ -121,10 +121,11 @@ def check_in(
     session: Session, user_id: uuid.UUID, streak_id: str, now: dt.datetime
 ) -> tuple[dt.date, Streak]:
     """Make today active for ``streak_id`` and answer with it. Idempotent. ``overall``
-    writes ``app`` (the dashboard's own activity); a module id writes itself."""
+    writes ``app`` (the dashboard's own activity); a module id writes itself. Mood has no
+    check-in: recording a mood is its check-in (§2.2), so a bare press cannot earn it."""
     if streak_id == OVERALL:
         module = APP
-    elif streak_id in MODULES:
+    elif streak_id in MODULES and streak_id != "mood":
         module = streak_id
     else:
         raise Invalid(f"{streak_id!r} is not a streak", "streak_unknown")

@@ -60,15 +60,17 @@ export function CheckInButton({ streak, bar = false }: { streak: StreakModuleId;
       {done ? t("streaks.tabCheckedIn") : t("streaks.tabCheckIn")}
     </button>
   );
+  // The banner stays out of the flex row that holds the button: in the row it would be
+  // squeezed against the right edge beside it.
   return bar ? (
-    <div className="streak-checkin-bar">
+    <>
+      <div className="streak-checkin-bar">{button}</div>
+      <ErrorBanner message={failed} />
+    </>
+  ) : (
+    <div className="streak-checkin-slot">
       {button}
       <ErrorBanner message={failed} />
     </div>
-  ) : (
-    <>
-      {button}
-      <ErrorBanner message={failed} />
-    </>
   );
 }

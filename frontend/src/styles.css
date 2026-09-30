@@ -3912,6 +3912,16 @@ button.streak-checkin {
   flex: 0 0 auto;
 }
 
+/* In a heading row the slot is the flex item; an error wraps below the button. */
+.streak-checkin-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .streak-card .streak-tab-rows {
   margin: 16px 0 0;
 }
