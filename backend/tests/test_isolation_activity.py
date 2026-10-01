@@ -74,8 +74,12 @@ def test_b_cannot_write_a_row_owned_by_a(user_a, user_b, runtime_connection):
         conn.close()
 
 
+# The UPDATE touches one row on purpose: set on both of today's rows it would collide on the
+# primary key and be refused for that reason even with UPDATE granted (found by mutating the
+# grant, 41.7).
 @pytest.mark.parametrize(
-    "statement", ["UPDATE activity_days SET module = 'gym'", "DELETE FROM activity_days"]
+    "statement",
+    ["UPDATE activity_days SET module = 'gym' WHERE module = 'mood'", "DELETE FROM activity_days"],
 )
 def test_the_table_is_append_only_even_for_the_owner_of_the_rows(
     client, user_a, clock, runtime_connection, statement
