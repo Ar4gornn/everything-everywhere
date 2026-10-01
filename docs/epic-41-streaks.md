@@ -139,13 +139,18 @@ the local midnight. **Best** is the highest `run` seen at any point.
 - +1 for each day on which `overall` is active;
 - +1 for each `(day, module)` active, for all ten module streaks, shown or not;
 - a bonus each time a run reaches exactly 7, 30, 100 or 365 days: +10, +30, +100, +365, for
-  any streak, once per run. It is paid on the day the run reaches the length, frozen or
-  repaired days included.
+  any streak, once per run. Bonuses are counted on a walk of **activity and freezes only,
+  never repairs**, run to the streak's last active day (no clock). So a milestone reached on
+  a frozen day is paid once a later active day closes the run, not while today is pending
+  (built in 41.4). Repairs keep the displayed run alive but never add or remove a bonus:
+  joining two runs that each paid +10 would otherwise take one back (decided 2026-10-01,
+  rejected: paying the larger of both walks; letting earned drop on a repair).
 
 **Balance** = earned − the sum of purchase costs.
 
-**Invariant, tested:** earned never decreases. Activity rows are never deleted, and every
-purchase can only turn a missed day into a covered one, which can only lengthen a run. So a
+**Invariant, tested:** earned never decreases. Activity rows are never deleted, repairs do
+not enter the earning walk, and a freeze is bought today so the run it extends after a gap
+is at most two days long — it cannot join two runs that each paid a bonus. So a
 balance checked at purchase time cannot go negative later. Purchases take
 `pg_advisory_xact_lock` on the user's id before they recompute the balance, so a double
 click cannot spend the same points twice. `users` is not locked: its grants are by column

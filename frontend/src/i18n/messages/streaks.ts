@@ -88,8 +88,9 @@ export const streaks = {
     fr: "Cette série détient déjà le maximum de gels.",
   },
   "error.points_insufficient": {
-    en: "You do not have enough points for that.",
-    fr: "Vous n’avez pas assez de points pour cela.",
+    // No unit named: the person may have renamed points (§2.6), and this text cannot know.
+    en: "Your balance is too low for that.",
+    fr: "Votre solde est insuffisant pour cela.",
   },
   "error.streak_unknown": {
     en: "That streak does not exist.",

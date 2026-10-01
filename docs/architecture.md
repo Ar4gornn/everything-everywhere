@@ -1168,7 +1168,8 @@ security-definer function
   check-in writes the same row. Everything else is computed on read: each streak's
   current and best, which held freeze covered which missed day, the points earned, and
   the balance. Purchases are the only other stored fact, also append-only. Earned points
-  never decrease: rows are never deleted, and a purchase can only lengthen a run. So a
+  never decrease: rows are never deleted, bonuses are walked over activity and freezes to
+  the last active day with no clock, and repairs never enter that walk (2026-10-01). So a
   balance checked under a per-user advisory lock at purchase time cannot go negative
   later. Module ids are a Python tuple, not a CHECK, so a new module gets a streak without
   a migration. A test fails any write route whose prefix is unclassified.

@@ -288,7 +288,7 @@ describe("StreakCard shop (Story 41.4)", () => {
 
   it.each([
     ["freeze_limit", "That streak already holds as many freezes as it can."],
-    ["points_insufficient", "You do not have enough points for that."],
+    ["points_insufficient", "Your balance is too low for that."],
   ])("says what the %s refusal means", async (code, sentence) => {
     mockApi(held(0), { shop: true, buy: () => json({ detail: "x", code }, 409) });
     const user = userEvent.setup();
@@ -315,7 +315,7 @@ describe("StreakCard shop (Story 41.4)", () => {
     await user.click(screen.getByRole("button", { name: "Acheter un gel pour Général" }));
     await user.click(screen.getByRole("button", { name: /^Confirmer : dépenser 20 Étincelles/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Vous n’avez pas assez de points pour cela.",
+      "Votre solde est insuffisant pour cela.",
     );
   });
 
