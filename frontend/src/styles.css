@@ -3847,11 +3847,19 @@ button.bell[aria-pressed="false"] {
 /* Streaks (Epic 41). Every rule is qualified by `.streak-card` or a `.streak-` class: the
    app's class names are global and some are reused (lab note 2026-09-27). Text is drawn only
    in tokens the contrast test checks; the dots' state is their shape, not a colour. */
+
+/* The run and Check in share the first line and part when the width runs out (French at
+   320px puts the button under the number). */
 .streak-card-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.streak-card .streak-card-run {
+  min-width: 0;
 }
 
 .streak-card .streak-card-figure {
@@ -3864,26 +3872,55 @@ button.bell[aria-pressed="false"] {
 }
 
 .streak-card .streak-card-best {
-  margin: 0;
+  margin: 4px 0 0;
 }
 
 .streak-card .streak-card-checkin {
-  margin-top: 12px;
   max-width: 100%;
+}
+
+/* The balance and the Shop toggle, straight under the run. */
+.streak-card .streak-card-wallet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Weekday initials over seven columns of small dots. Fixed sizes: the grid is a calendar
+   strip, not a chart that should fill the card. */
+.streak-card .streak-dots-grid {
+  margin-top: 16px;
+}
+
+.streak-card .streak-dots-head,
+.streak-card .streak-dots {
+  display: grid;
+  grid-template-columns: repeat(7, 16px);
+  gap: 8px;
+}
+
+.streak-card .streak-dots-head {
+  margin-bottom: 6px;
+  color: var(--faint);
+  font-size: var(--fs-small);
+  line-height: 1;
+  text-align: center;
 }
 
 .streak-card .streak-dots {
   list-style: none;
-  margin: 16px 0 0;
+  margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  max-width: 260px;
 }
 
 .streak-card .streak-dot {
-  aspect-ratio: 1;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   box-sizing: border-box;
   border: 2px solid var(--border-strong);
@@ -3895,8 +3932,24 @@ button.bell[aria-pressed="false"] {
   border-color: var(--accent);
 }
 
+/* A missed day: a cross, so it differs from today's dashed ring by shape, not by stroke. */
+.streak-card .streak-dot-missed {
+  border: none;
+  border-radius: 0;
+  background:
+    linear-gradient(45deg, transparent 43%, var(--border-strong) 43% 57%, transparent 57%),
+    linear-gradient(-45deg, transparent 43%, var(--border-strong) 43% 57%, transparent 57%);
+  transform: scale(0.75);
+}
+
 .streak-card .streak-dot-pending {
   border-style: dashed;
+}
+
+/* Today, whatever its state: a ring around the dot. The gap is wider than the ring. */
+.streak-card .streak-dot-today {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
 }
 
 /* A day a freeze covered: a diamond, so it differs from the disc, the rings and the speck
@@ -3914,15 +3967,15 @@ button.bell[aria-pressed="false"] {
   background: radial-gradient(circle, var(--accent) 0 34%, transparent 38%);
 }
 
-/* The repair offer: a banner at the top of the card. The text wraps and the actions drop
-   under it, so a French sentence at 320px pushes nothing wider. */
+/* The repair offer: a banner under the run. The text wraps and the actions drop under it,
+   so a French sentence at 320px pushes nothing wider. */
 .streak-card .streak-repair {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
-  margin: 0 0 16px;
+  margin: 16px 0 0;
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -3934,6 +3987,48 @@ button.bell[aria-pressed="false"] {
   flex: 1 1 200px;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Several offers: a heading, then one row per streak, each wrapping its actions under its
+   words rather than pushing the card wider. */
+.streak-card .streak-repairs {
+  display: block;
+}
+
+.streak-card .streak-repairs-heading {
+  font-weight: 600;
+}
+
+.streak-card .streak-repair-rows {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.streak-card .streak-repair-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.streak-card .streak-repair-row-text {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The days and the price sit under the name as one line of their own. */
+.streak-card .streak-repair-row-price {
+  display: block;
+}
+
+.streak-card .streak-repairs-more {
+  margin-top: 4px;
 }
 
 /* Before the first active day: no streak yet, so a speck rather than a missed ring. */
@@ -3966,14 +4061,41 @@ button.streak-checkin {
   min-width: 0;
 }
 
-.streak-card .streak-tab-rows {
+.streak-card .streak-chips {
+  list-style: none;
   margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A tab streak: its name, its run and a tick for today, on one line. */
+.streak-card .streak-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: var(--fs-tip);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* A tab at zero steps back, in a checked text token, so the live ones read first. */
+.streak-card .streak-chip-idle {
+  color: var(--muted);
+  border-style: dashed;
+  border-color: var(--border);
 }
 
 /* The balance and the person's own word for points: up to 24 characters with no spaces
    must wrap rather than push the card wider. */
 .streak-card .streak-card-points {
-  margin: 16px 0 0;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
@@ -3987,12 +4109,8 @@ button.streak-checkin {
   margin-top: 4px;
 }
 
-/* The shop: a disclosure under the dots. Its rows wrap, so a French confirm sentence at 320px
-   drops under the name instead of pushing the card wider. */
-.streak-card .streak-shop {
-  margin-top: 16px;
-}
-
+/* The shop: a disclosure under the balance. Its rows wrap, so a French confirm sentence at
+   320px drops under the name instead of pushing the card wider. */
 .streak-card .streak-shop-panel {
   margin-top: 12px;
   min-width: 0;

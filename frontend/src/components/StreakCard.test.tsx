@@ -633,3 +633,177 @@ describe("QA polish (Story 41.7)", () => {
     }
   });
 });
+
+describe("Card layout (run first, folded repairs, chips, weekday head)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const showing = (...ids: string[]) => ({
+    ...DEFAULT_PREFERENCES,
+    streaks: {
+      ...DEFAULT_PREFERENCES.streaks,
+      ...Object.fromEntries(ids.map((id) => [id, true])),
+    },
+  });
+  const broken = (id: string, cost: number, days = 1): Streak => ({
+    ...overall({ current: 0 }),
+    id: id as Streak["id"],
+    repair: { days, cost },
+  });
+  const repairButton = (streak: string) =>
+    screen.queryByRole("button", { name: `Repair the ${streak} streak` });
+
+  it("puts the run before any repair offer", async () => {
+    mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }));
+    render();
+    const offer = await screen.findByText(/^You missed yesterday on your Overall streak/);
+    const figure = document.querySelector(".streak-card-figure");
+    expect(figure).not.toBeNull();
+    expect(
+      (figure as Node).compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("folds several offers into one block, a row each, overall first, the rest behind a toggle", async () => {
+    mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      extra: [broken("gym", 70, 2), broken("notes", 40), broken("habits", 40)],
+      preferences: showing("gym", "notes", "habits"),
+    });
+    const user = userEvent.setup();
+    render();
+    expect(await screen.findByText("4 streaks broke")).toBeInTheDocument();
+    // One heading for all of them, not a sentence each.
+    expect(screen.queryByText(/^You missed/)).toBeNull();
+    const rows = document.querySelectorAll(".streak-repair-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Overall missed yesterday · 36 Points");
+    // Tab rows follow the tabs' own order, as the chips do.
+    expect(rows[1]).toHaveTextContent("Habits missed yesterday · 40 Points");
+    expect(repairButton("Gym")).toBeNull();
+    expect(repairButton("Notes")).toBeNull();
+
+    const more = screen.getByRole("button", { name: "Show 2 more" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    await user.click(more);
+    expect(repairButton("Gym")).toBeEnabled();
+    expect(repairButton("Notes")).toBeEnabled();
+    const fewer = screen.getByRole("button", { name: "Show fewer" });
+    expect(fewer).toHaveAttribute("aria-expanded", "true");
+    await user.click(fewer);
+    expect(repairButton("Notes")).toBeNull();
+  });
+
+  it("has no toggle when every offer fits", async () => {
+    mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      extra: [broken("gym", 40)],
+      preferences: showing("gym"),
+    });
+    render();
+    expect(await screen.findByText("2 streaks broke")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Show / })).toBeNull();
+  });
+
+  it("repairs one row with the same two presses, naming that streak and its price", async () => {
+    const calls = mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      extra: [broken("gym", 70, 2)],
+      preferences: showing("gym"),
+    });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Repair the Gym streak" }));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    // Only the pressed row asks; the other still offers its plain Repair.
+    expect(repairButton("Overall")).toBeEnabled();
+    await user.click(
+      screen.getByRole("button", { name: "Confirm: spend 70 Points to repair Gym" }),
+    );
+    await waitFor(() => expect(calls.filter((c) => c.method === "POST")).toHaveLength(1));
+    const post = calls.find((c) => c.method === "POST");
+    expect(post?.url).toMatch(/\/api\/streaks\/repairs$/);
+    expect(JSON.parse(post?.body ?? "{}")).toEqual({ streak: "gym", cost: 70 });
+  });
+
+  it("disables only the rows the balance cannot pay, and says so on those rows", async () => {
+    mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      shop: true,
+      balance: 50,
+      extra: [broken("gym", 70, 2)],
+      preferences: showing("gym"),
+    });
+    render();
+    await screen.findByText("2 streaks broke");
+    expect(repairButton("Overall")).toBeEnabled();
+    expect(repairButton("Gym")).toBeDisabled();
+    const lines = screen.getAllByText("Your balance is too low to repair it yet.");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.closest(".streak-repair-row")).toHaveTextContent(/^Gym/);
+  });
+
+  it("speaks French in the folded block", async () => {
+    mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      language: "fr",
+      extra: [broken("gym", 70, 2), broken("notes", 40)],
+      preferences: showing("gym", "notes"),
+    });
+    render();
+    expect(await screen.findByText("3 séries interrompues")).toBeInTheDocument();
+    const rows = document.querySelectorAll(".streak-repair-row");
+    expect(rows[0]).toHaveTextContent("manqué hier · 36 Points");
+    expect(rows[1]).toHaveTextContent("2 jours manqués · 70 Points");
+    expect(screen.getByRole("button", { name: "Afficher 1 de plus" })).toBeInTheDocument();
+  });
+
+  it("draws each shown tab streak as a chip, dimmed at zero, read with its days and best", async () => {
+    mockApi(overall(), {
+      extra: [
+        { ...overall({ current: 3, best: 9, today_active: true }), id: "gym" },
+        { ...overall({ current: 0, best: 4 }), id: "notes" },
+      ],
+      preferences: showing("gym", "notes"),
+    });
+    render();
+    const list = await screen.findByRole("list", { name: "Streaks by tab" });
+    const [gym, notes] = within(list).getAllByRole("listitem");
+    expect(gym).toHaveTextContent("Gym 33 days ✓ active today Best: 9");
+    expect(gym).toHaveClass("streak-chip");
+    expect(gym).not.toHaveClass("streak-chip-idle");
+    expect(notes).toHaveClass("streak-chip-idle");
+    expect(notes).toHaveTextContent("Best: 4");
+  });
+
+  it("heads the dots with the weekday of each of the first seven days, in the account's language", async () => {
+    // 2031-03-01 is a Saturday, so the columns run Saturday to Friday.
+    for (const [language, initials] of [
+      ["en", "SSMTWTF"],
+      ["fr", "SDLMMJV"],
+    ] as const) {
+      mockApi(overall(), { language });
+      const { unmount } = render();
+      await screen.findByText("24");
+      await waitFor(() =>
+        expect(document.querySelector(".streak-dots-head")?.textContent).toBe(initials),
+      );
+      expect(document.querySelector(".streak-dots-head")).toHaveAttribute("aria-hidden", "true");
+      unmount();
+    }
+  });
+
+  it("rings today and no other day", async () => {
+    mockApi(overall());
+    render();
+    const list = await screen.findByRole("list", { name: "The last four weeks" });
+    const items = within(list).getAllByRole("listitem");
+    expect(items[27]).toHaveClass("streak-dot-today");
+    expect(items.filter((item) => item.classList.contains("streak-dot-today"))).toHaveLength(1);
+  });
+
+  it("gives a missed day a shape of its own, not a ring like pending", () => {
+    const css = readFileSync(join(__dirname, "..", "styles.css"), "utf-8");
+    const missed = css.match(/\.streak-card \.streak-dot-missed\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(missed).toMatch(/border:\s*none/);
+    expect(missed).toMatch(/linear-gradient\(45deg/);
+    expect(missed).toMatch(/linear-gradient\(-45deg/);
+  });
+});
