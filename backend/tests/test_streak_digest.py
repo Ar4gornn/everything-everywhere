@@ -261,6 +261,31 @@ def test_a_tab_with_its_own_freeze_is_not_named_as_at_risk(client, user_a, owner
     assert _digest(user_a).streak_tabs == ["notes"]
 
 
+def test_a_freeze_bought_after_the_local_today_does_not_promise_tonight(
+    client, user_a, owner_engine
+):
+    # After a move west a freeze can carry a later bought_on than the local today. It is
+    # held, but tomorrow's walk will not use it, so the digest must still say "at risk"
+    # and still name the tab.
+    _on(client, user_a)
+    _active(owner_engine, user_a, _days(3))
+    _active(owner_engine, user_a, _days(3), module="gym")
+    _prefs(client, user_a, streaks={"gym": True})
+    _freeze(owner_engine, user_a, "overall", TODAY + dt.timedelta(days=2))
+    _freeze(owner_engine, user_a, "gym", TODAY + dt.timedelta(days=1))
+    found = _digest(user_a)
+    assert found.streak_frozen is False
+    assert "at risk" in found.body
+    assert found.streak_tabs == ["gym"]
+
+
+def test_a_freeze_bought_today_does_cover_tonight(client, user_a, owner_engine):
+    _on(client, user_a)
+    _active(owner_engine, user_a, _days(3))
+    _freeze(owner_engine, user_a, "overall", TODAY)
+    assert _digest(user_a).streak_frozen is True
+
+
 # ------------------------------------------------------------------ French
 
 

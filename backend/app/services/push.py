@@ -438,7 +438,7 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
         overall = found[streaks_service.OVERALL]
         if overall.current >= 1 and not overall.today_active:
             streak_days = overall.current
-            streak_frozen = overall.held_freezes > 0
+            streak_frozen = overall.freeze_tonight
             shown = profile.preferences["streaks"] if profile else {}
             streak_tabs = [
                 tab
@@ -447,7 +447,7 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
                 and modules.get(tab, True)
                 and found[tab].current >= 1
                 and not found[tab].today_active
-                and found[tab].held_freezes == 0
+                and not found[tab].freeze_tonight
             ]
 
     return Digest(

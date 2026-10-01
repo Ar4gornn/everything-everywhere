@@ -105,6 +105,11 @@ class Streak:
     held_freezes: int
     recent: list[tuple[dt.date, str]]
     repair: Repair | None = None
+    #: Tonight's miss would be frozen: the run is alive, today is still pending, and the
+    #: oldest held freeze was bought on or before today, which is what tomorrow's walk asks.
+    #: ``held_freezes > 0`` is not enough: after a move west a freeze can carry a later
+    #: ``bought_on`` than the local today, and the walk will not use it yet (41.6 review).
+    freeze_tonight: bool = False
 
 
 @dataclass(frozen=True)
@@ -252,9 +257,11 @@ def _repairs(bought: list[Purchase], streak_id: str) -> frozenset[dt.date]:
 def _streak(
     streak_id: str, active: set[dt.date], today: dt.date, bought: list[Purchase]
 ) -> Streak:
+    freezes = sorted(_freezes(bought, streak_id))
     current, best, _, states, held, runs = _walk(
-        active, today, _freezes(bought, streak_id), _repairs(bought, streak_id)
+        active, today, tuple(freezes), _repairs(bought, streak_id)
     )
+    next_up = freezes[len(freezes) - held] if held else None
     return Streak(
         id=streak_id,
         current=current,
@@ -263,6 +270,12 @@ def _streak(
         held_freezes=held,
         recent=_recent(states, today),
         repair=_offer(states, runs, today),
+        freeze_tonight=(
+            current > 0
+            and states.get(today) == PENDING
+            and next_up is not None
+            and next_up <= today
+        ),
     )
 
 
