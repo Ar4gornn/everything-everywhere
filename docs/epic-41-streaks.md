@@ -245,7 +245,8 @@ Every new code has an English and a French sentence (AD-44).
 - **Shop**, a disclosure inside the card, not a modal (house rule since Epic 24). Each shown
   streak plus overall gets "Freeze · 20 · held 1/2" with Buy. A repair offer is a banner at
   the top of the card whenever one exists: "Your 12-day Gym streak broke yesterday. Repair
-  for 36 Sparks?" Both need a second press to confirm, because they spend.
+  for 36 Sparks?" (built as "You missed yesterday on your Gym streak. Repair it for 36 Sparks?":
+  `repair` carries `days` and `cost` only, so the banner cannot name the run length) Both need a second press to confirm, because they spend.
 - **`components/CheckInButton.tsx`** sits in the header of each section view whose streak
   is shown and whose module is on. Mood has none. The button is idempotent, so a stale
   "Check in" after a write on the same page is harmless; it reloads on mount.

@@ -3908,6 +3908,34 @@ button.bell[aria-pressed="false"] {
   transform: rotate(45deg) scale(0.72);
 }
 
+/* A day a repair covered: a ring with a filled core, which no other state is. */
+.streak-card .streak-dot-repaired {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 34%, transparent 38%);
+}
+
+/* The repair offer: a banner at the top of the card. The text wraps and the actions drop
+   under it, so a French sentence at 320px pushes nothing wider. */
+.streak-card .streak-repair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.streak-card .streak-repair-text {
+  margin: 0;
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Before the first active day: no streak yet, so a speck rather than a missed ring. */
 .streak-card .streak-dot-before {
   border: none;

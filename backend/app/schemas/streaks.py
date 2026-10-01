@@ -10,12 +10,20 @@ class DayOut(BaseModel):
     state: str
 
 
+class RepairOut(BaseModel):
+    """The repair on offer: how many days it covers and what it costs in all."""
+
+    days: int
+    cost: int
+
+
 class StreakOut(BaseModel):
     id: str
     current: int
     best: int
     today_active: bool
     held_freezes: int
+    repair: RepairOut | None
     recent: list[DayOut]
 
 
@@ -35,6 +43,7 @@ class MilestoneOut(BaseModel):
 class PricesOut(BaseModel):
     freeze: int
     max_held: int
+    repair_per_day: int
     milestones: list[MilestoneOut]
 
 

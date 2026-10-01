@@ -68,6 +68,7 @@ function mockApi(
     checkIn?: () => Response;
     shop?: boolean;
     buy?: () => Response;
+    repair?: () => Response;
     preferences?: unknown;
     extra?: Streak[];
   } = {},
@@ -87,6 +88,17 @@ function mockApi(
           language: options.language ?? "en",
           ...(options.preferences ? { preferences: options.preferences } : {}),
         });
+      }
+      if (url.endsWith("/api/streaks/repairs")) {
+        return options.repair
+          ? options.repair()
+          : json(
+              {
+                points: { balance: 8, earned: 44, spent: 36 },
+                streak: { ...(streak as Streak), current: 13, repair: null },
+              },
+              201,
+            );
       }
       if (url.endsWith("/api/streaks/freezes")) {
         return options.buy
@@ -332,5 +344,151 @@ describe("StreakCard shop (Story 41.4)", () => {
     render();
     await user.click(await screen.findByRole("button", { name: "Shop" }));
     expect(await screen.findByRole("button", { name: "Buy a freeze for Gym" })).toBeInTheDocument();
+  });
+});
+
+describe("StreakCard repair (Story 41.5)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const offered = (days = 1, cost = 36) => overall({ current: 0, repair: { days, cost } });
+
+  it("draws a repaired day with a shape of its own and says so in words", async () => {
+    const last = recent("pending");
+    last[10] = { day: last[10]?.day ?? "", state: "repaired" };
+    mockApi(overall({ recent: last }));
+    render();
+    const list = await screen.findByRole("list", { name: "The last four weeks" });
+    const item = within(list).getAllByRole("listitem")[10];
+    expect(item).toHaveTextContent(/: repaired, covered by a repair$/);
+    expect(item).toHaveClass("streak-dot-repaired");
+    for (const other of ["active", "missed", "pending", "before", "frozen"]) {
+      expect(item).not.toHaveClass(`streak-dot-${other}`);
+    }
+  });
+
+  it("shows no offer when there is none, or on a server that predates repairs", async () => {
+    mockApi(overall({ repair: null }));
+    render();
+    await screen.findByText("24");
+    expect(screen.queryByRole("button", { name: /^Repair/ })).toBeNull();
+  });
+
+  it("offers the repair at the top of the card with its price in the person's word", async () => {
+    mockApi(offered(), {
+      preferences: { ...DEFAULT_PREFERENCES, points_name: "Sparks" },
+    });
+    render();
+    expect(
+      await screen.findByText(
+        "You missed yesterday on your Overall streak. Repair it for 36 Sparks?",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repair the Overall streak" })).toBeEnabled();
+  });
+
+  it("says how many days when there are two", async () => {
+    mockApi(offered(2, 72));
+    render();
+    expect(
+      await screen.findByText(
+        "You missed the last 2 days of your Overall streak. Repair them for 72 Points?",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("asks for a second press, then repairs once and refreshes the card from the answer", async () => {
+    const calls = mockApi(offered(), { shop: true });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Repair the Overall streak" }));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+
+    await user.click(
+      screen.getByRole("button", { name: "Confirm: spend 36 Points to repair Overall" }),
+    );
+    await screen.findByText("13");
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.url).toMatch(/\/api\/streaks\/repairs$/);
+    // The body names the streak and nothing else: no price, no day.
+    expect(JSON.parse(posts[0]?.body ?? "{}")).toEqual({ streak: "overall" });
+    // The offer is gone and the balance is the one the answer carried.
+    expect(screen.queryByRole("button", { name: "Repair the Overall streak" })).toBeNull();
+    expect(document.querySelector(".streak-card-points")).toHaveTextContent("8 · Points");
+  });
+
+  it("backs out of a repair without sending anything", async () => {
+    const calls = mockApi(offered());
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Repair the Overall streak" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Repair the Overall streak" })).toBeEnabled();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
+  it("says what points_insufficient means and offers the repair again", async () => {
+    mockApi(offered(), {
+      repair: () => json({ detail: "x", code: "points_insufficient" }, 409),
+    });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Repair the Overall streak" }));
+    await user.click(screen.getByRole("button", { name: /^Confirm: spend 36 Points/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your balance is too low for that.");
+    expect(screen.getByRole("button", { name: "Repair the Overall streak" })).toBeEnabled();
+  });
+
+  it("reads the card afresh when the offer turns out to be gone", async () => {
+    const calls = mockApi(offered(), {
+      repair: () => json({ detail: "x", code: "repair_unavailable" }, 409),
+    });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Repair the Overall streak" }));
+    await user.click(screen.getByRole("button", { name: /^Confirm: spend 36 Points/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That streak can no longer be repaired.",
+    );
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.method === "GET" && c.url.endsWith("/api/streaks")),
+      ).toHaveLength(2),
+    );
+  });
+
+  it("offers a repair for a shown tab streak as well", async () => {
+    mockApi(overall(), {
+      extra: [{ ...overall(), id: "gym", repair: { days: 2, cost: 70 } }],
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        streaks: { ...DEFAULT_PREFERENCES.streaks, gym: true },
+      },
+    });
+    render();
+    expect(await screen.findByRole("button", { name: "Repair the Gym streak" })).toBeEnabled();
+  });
+
+  it("speaks French, in the person's own word for points", async () => {
+    mockApi(offered(), {
+      language: "fr",
+      preferences: { ...DEFAULT_PREFERENCES, points_name: "Étincelles" },
+    });
+    const user = userEvent.setup();
+    render();
+    expect(
+      await screen.findByText(
+        "Vous avez manqué hier sur votre série Général. La réparer pour 36 Étincelles ?",
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Réparer la série Général" }));
+    expect(
+      screen.getByRole("button", {
+        name: "Confirmer : dépenser 36 Étincelles pour réparer Général",
+      }),
+    ).toBeInTheDocument();
   });
 });

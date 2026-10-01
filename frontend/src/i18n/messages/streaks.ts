@@ -40,6 +40,10 @@ export const streaks = {
     en: "{day}: frozen, covered by a freeze",
     fr: "{day} : gelé, couvert par un gel",
   },
+  "streaks.dot.repaired": {
+    en: "{day}: repaired, covered by a repair",
+    fr: "{day} : réparé, couvert par une réparation",
+  },
   "streaks.dot.before": { en: "{day}: before you started", fr: "{day} : avant le début" },
   // The name is the person's own and is shown verbatim, never inflected: one default word.
   "streaks.pointsDefault": { en: "Points", fr: "Points" },
@@ -82,6 +86,30 @@ export const streaks = {
   "streaks.couldNotBuy": {
     en: "Could not buy that freeze.",
     fr: "Impossible d’acheter ce gel.",
+  },
+  // The repair offer (Story 41.5): a banner at the top of the card. The unit is `{name}`,
+  // the person's own word for points, never written here.
+  "streaks.repairOffer_one": {
+    en: "You missed yesterday on your {streak} streak. Repair it for {cost} {name}?",
+    fr: "Vous avez manqué hier sur votre série {streak}. La réparer pour {cost} {name} ?",
+  },
+  "streaks.repairOffer_other": {
+    en: "You missed the last {count} days of your {streak} streak. Repair them for {cost} {name}?",
+    fr: "Vous avez manqué les {count} derniers jours de votre série {streak}. Les réparer pour {cost} {name} ?",
+  },
+  "streaks.repair": { en: "Repair", fr: "Réparer" },
+  "streaks.repairFor": { en: "Repair the {streak} streak", fr: "Réparer la série {streak}" },
+  "streaks.confirmRepairFor": {
+    en: "Confirm: spend {price} {name} to repair {streak}",
+    fr: "Confirmer : dépenser {price} {name} pour réparer {streak}",
+  },
+  "streaks.couldNotRepair": {
+    en: "Could not repair that streak.",
+    fr: "Impossible de réparer cette série.",
+  },
+  "error.repair_unavailable": {
+    en: "That streak can no longer be repaired.",
+    fr: "Cette série ne peut plus être réparée.",
   },
   "error.freeze_limit": {
     en: "That streak already holds as many freezes as it can.",

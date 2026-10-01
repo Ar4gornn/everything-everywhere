@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import type { Streak, StreakModuleId, StreaksOverview } from "../api/types";
 import { errorMessage } from "../i18n/errors";
 import { useT } from "../i18n";
@@ -27,7 +27,7 @@ const NOTHING: StreaksOverview | null = null;
 export function StreakCard({ collapseKey }: { collapseKey: string }) {
   const t = useT();
   const dates = useDates();
-  const { data, setData, failure } = useLoad(
+  const { data, setData, failure, reload } = useLoad(
     () => api.getStreaks(),
     NOTHING,
     [],
@@ -41,6 +41,10 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
   const [buyFailed, setBuyFailed] = useState<string | null>(null);
+  // The repair offer (Story 41.5) works the same way: one press asks, the second spends.
+  const [repairConfirming, setRepairConfirming] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [repairFailed, setRepairFailed] = useState<string | null>(null);
   const shopId = useId();
 
   // A tab streak is a row only while it is shown (preference on, module on), decided at
@@ -97,6 +101,31 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
     }
   }
 
+  async function buyRepair(id: string) {
+    if (repairing) return;
+    setRepairing(true);
+    setRepairFailed(null);
+    try {
+      const bought = await api.buyStreakRepair(id);
+      setData((was) =>
+        was
+          ? {
+              ...was,
+              points: bought.points,
+              streaks: was.streaks.map((s) => (s.id === bought.streak.id ? bought.streak : s)),
+            }
+          : was,
+      );
+    } catch (caught) {
+      setRepairFailed(errorMessage(t, caught, "streaks.couldNotRepair"));
+      // The offer was stale (another tab bought it, or the day moved on): read it afresh.
+      if (caught instanceof ApiError && caught.code === "repair_unavailable") void reload();
+    } finally {
+      setRepairConfirming(null);
+      setRepairing(false);
+    }
+  }
+
   const rows = shown.flatMap((id) => {
     const found = Array.isArray(data?.streaks) ? data.streaks.find((s) => s.id === id) : undefined;
     return found ? [{ ...found, id }] : [];
@@ -107,6 +136,10 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
   const price = data?.prices?.freeze;
   const maxHeld = data?.prices?.max_held ?? 2;
   const shopRows = overall ? [overall, ...rows] : [];
+  const streakName = (id: string) =>
+    id === "overall" ? t("streaks.shopOverall") : t(STREAK_NAME[id as StreakModuleId]);
+  // A repair is offered for the overall streak and every shown tab streak, as a banner.
+  const offers = shopRows.flatMap((row) => (row.repair ? [{ row, repair: row.repair }] : []));
 
   if (!overall) {
     return failure ? (
@@ -123,6 +156,60 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
         collapseKey={collapseKey}
         summary={t.n("streaks.days", overall.current)}
       >
+        {offers.map(({ row, repair }) => {
+          const name = streakName(row.id);
+          const asking = repairConfirming === row.id;
+          return (
+            <div key={row.id} className="streak-repair">
+              <p className="streak-repair-text">
+                {t.n("streaks.repairOffer", repair.days, {
+                  streak: name,
+                  cost: repair.cost,
+                  name: pointsName,
+                })}
+              </p>
+              {asking ? (
+                <span className="streak-shop-actions">
+                  <button
+                    type="button"
+                    aria-label={t("streaks.confirmRepairFor", {
+                      price: repair.cost,
+                      name: pointsName,
+                      streak: name,
+                    })}
+                    disabled={repairing}
+                    onClick={() => void buyRepair(row.id)}
+                  >
+                    {t("streaks.confirmBuy", { price: repair.cost, name: pointsName })}
+                  </button>
+                  <button
+                    type="button"
+                    className="quiet"
+                    disabled={repairing}
+                    onClick={() => setRepairConfirming(null)}
+                  >
+                    {t("action.cancel")}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="secondary"
+                  aria-label={t("streaks.repairFor", { streak: name })}
+                  disabled={repairing}
+                  onClick={() => {
+                    setRepairFailed(null);
+                    setRepairConfirming(row.id);
+                  }}
+                >
+                  {t("streaks.repair")}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <ErrorBanner message={repairFailed} />
+
         <div className="streak-card-head">
           <p className="streak-card-figure" data-stat="Streak">
             <strong className="streak-card-number">{overall.current}</strong>{" "}
@@ -184,10 +271,7 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
                 <ul className="list-rows streak-shop-rows">
                   {shopRows.map((row) => {
                     const held = row.held_freezes ?? 0;
-                    const name =
-                      row.id === "overall"
-                        ? t("streaks.shopOverall")
-                        : t(STREAK_NAME[row.id as StreakModuleId]);
+                    const name = streakName(row.id);
                     const asking = confirming === row.id;
                     return (
                       <ListRow
@@ -260,9 +344,9 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
 }
 
 /**
- * Twenty-eight days, oldest first, seven to a row. Five shapes — a filled disc, an empty
- * ring, a dashed ring, a small speck for a day before the streak began, and a diamond for a
- * day a freeze covered — so the state is never carried by colour alone, and each dot is a
+ * Twenty-eight days, oldest first, seven to a row. Six shapes — a filled disc, an empty
+ * ring, a dashed ring, a small speck for a day before the streak began, a diamond for a
+ * day a freeze covered, a ring with a core for a day a repair covered — so the state is never carried by colour alone, and each dot is a
  * list item read as "day: state".
  */
 function Dots({

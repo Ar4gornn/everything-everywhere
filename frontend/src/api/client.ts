@@ -1156,6 +1156,13 @@ export const api = {
       body: JSON.stringify({ streak }),
     }),
 
+  /** Spend points to repair the days missed just before today. 409 `repair_unavailable` when nothing is on offer, `points_insufficient` under the price. */
+  buyStreakRepair: (streak: string) =>
+    request<StreakPurchaseResult>("/api/streaks/repairs", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
+
   // --- notes (Epic 32). The id is the client's (AD-48): a note is written with PUT under
   // an id minted when the editor opened, so an offline draft retried after a lost response
   // lands on the same row rather than beside it.

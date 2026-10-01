@@ -162,19 +162,19 @@ def test_the_oldest_freeze_goes_first_and_a_later_one_stays_held():
 def test_a_freeze_held_while_the_run_is_zero_stays_held():
     active = set(map(d, [1, 2, 3]))
     # Bought on day 9: day 4 onwards the run is 0 by the time it could apply.
-    current, _, _, state, held = streaks._walk(active, d(10), (d(9),))
+    current, _, _, state, held, _ = streaks._walk(active, d(10), (d(9),))
     assert (current, held) == (0, 1)
     assert state[d(4)] == streaks.MISSED
 
 
 def test_a_freeze_bought_early_covers_the_first_missed_day_of_a_run():
-    current, _, _, state, held = streaks._walk(set(map(d, [1, 2, 3])), d(10), (d(1),))
+    current, _, _, state, held, _ = streaks._walk(set(map(d, [1, 2, 3])), d(10), (d(1),))
     assert state[d(4)] == streaks.FROZEN
     assert (current, held) == (0, 0)  # one day covered, then the next break stands
 
 
 def test_today_is_never_frozen_while_it_is_pending():
-    _, _, _, state, held = streaks._walk(set(map(d, [1, 2, 3])), d(4), (d(1),))
+    _, _, _, state, held, _ = streaks._walk(set(map(d, [1, 2, 3])), d(4), (d(1),))
     assert state[d(4)] == streaks.PENDING
     assert held == 1
 
@@ -552,7 +552,7 @@ def _step(rng, owner_engine, user, now, zone):
             today = activity.local_day(session, user["id"], now)
             for module in rng.sample(activity.ACTIVITY_MODULES, rng.randint(1, 4)):
                 activity.record(session, user["id"], module, today)
-    elif roll < 0.70:
+    elif roll < 0.60:
         with tenant_session(user["id"]) as session:
             try:
                 streaks.buy_freeze(
@@ -560,6 +560,18 @@ def _step(rng, owner_engine, user, now, zone):
                 )
             except Conflict as refusal:
                 assert refusal.code in ("freeze_limit", "points_insufficient")
+    elif roll < 0.72:
+        # Repairs (41.5): usually a streak that has an offer, otherwise any, so that refusals
+        # are part of the sequence without the repair path going unvisited.
+        with tenant_session(user["id"]) as session:
+            _, found, _ = streaks.read(session, user["id"], now)
+            offered = [s.id for s in found if s.repair]
+            everyone = (streaks.OVERALL, *activity.MODULES)
+            pool = offered if offered and rng.random() < 0.8 else everyone
+            try:
+                streaks.buy_repair(session, user["id"], rng.choice(pool), now)
+            except Conflict as refusal:
+                assert refusal.code in ("repair_unavailable", "points_insufficient")
     elif roll < 0.92:
         now += dt.timedelta(hours=rng.choice((3, 12, 24, 24, 24, 30, 48, 72)))
     else:
@@ -573,9 +585,11 @@ def _step(rng, owner_engine, user, now, zone):
 
 def test_the_balance_never_goes_below_zero_and_earned_never_decreases(user_a, owner_engine):
     """Random activity, purchases, clock moves and zone moves, 40 seeded sequences of 60
-    steps. After every step the balance is >= 0, earned has not dropped, spent is exactly
-    twenty per freeze and no streak holds more than two."""
-    purchases = frozen_days = 0
+    steps. After every step the balance is >= 0, earned has not dropped (repairs never enter
+    the earning walk), spent is exactly the sum of the purchases' costs, a freeze costs
+    twenty, a repair covers only days before the day it was bought and no streak holds more
+    than two freezes."""
+    purchases = frozen_days = repaired_days = 0
     for seed_value in range(40):
         rng = random.Random(seed_value)  # noqa: S311 - a seeded test sequence
         with owner_engine.begin() as conn:
@@ -594,12 +608,27 @@ def test_the_balance_never_goes_below_zero_and_earned_never_decreases(user_a, ow
             where = f"seed {seed_value} step {step} zone {zone}"
             assert points.balance >= 0, where
             assert points.earned >= earned_before, where
-            assert points.spent == streaks.FREEZE_COST * len(bought), where
+            assert points.spent == sum(p.cost for p in bought), where
+            assert all(
+                p.cost == streaks.FREEZE_COST
+                for p in bought
+                if p.kind == streaks.FREEZE
+            ), where
+            assert all(
+                p.covers is not None and p.covers < p.bought_on
+                for p in bought
+                if p.kind == streaks.REPAIR
+            ), where
             assert points.balance == points.earned - points.spent, where
             assert all(0 <= s.held_freezes <= streaks.MAX_HELD for s in found), where
             earned_before = points.earned
             frozen_days += sum(1 for s in found for _, state in s.recent if state == streaks.FROZEN)
+            repaired_days += sum(
+                1 for s in found for _, state in s.recent if state == streaks.REPAIRED
+            )
         purchases += len(bought)
-    # Not vacuous: money really was spent and freezes really were consumed in the walk.
+    # Not vacuous: money really was spent, freezes really were consumed in the walk and
+    # repairs really joined runs.
     assert purchases >= 60
     assert frozen_days >= 60
+    assert repaired_days >= 20
