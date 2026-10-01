@@ -126,6 +126,9 @@ the local midnight. **Best** is the highest `run` seen at any point.
   "within 48 hours": three missed days are past repair.
 - Costs `g × (REPAIR_PER_DAY + L // 2)`, which is 30 + L/2 per day. A bigger streak costs more
   to save.
+  Freezes are used first, including one bought inside the gap: it stays held while the run
+  is 0, but once the earlier day is repaired the walk spends it, so only the shortest leading
+  part of the gap that leaves no day missed is charged (final review, 2026-10-01).
 - Buying it stores one row per missed day (`covers = d`). The walk then treats those days as
   `repaired` and the run joins up: `L + g`, and today's activity adds to it.
 - Refused with `409 points_insufficient` or `409 repair_unavailable`. A double submit
@@ -240,7 +243,7 @@ Every new code has an English and a French sentence (AD-44).
 
 ## 5. Client
 
-- `api/streaks.ts`, plus one loader via `useLoad` (never a fresh `useCallback` + effect).
+- `api/client.ts`, plus one loader via `useLoad` (never a fresh `useCallback` + effect).
 - **`components/StreakCard.tsx`** (card `streaks`). The overall streak is the big number,
   with best beside it, and the dashboard's **Check in** (shows "Checked in ✓" when today is
   active). Below it, one compact row per shown tab streak (`ListRow`, AD-53: name, current,

@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy import text
 
 from app.core.clock import get_now
-from app.services import streaks
+from app.services import preferences, streaks
 
 UTC = dt.UTC
 START = dt.date(2030, 1, 1)  # day 1 of every seeded run
@@ -254,6 +254,14 @@ def test_a_name_that_is_not_plain_text_is_a_422_not_a_500(client, user_a, bad):
     answer = _patch(client, user_a, {"points_name": bad})
     assert answer.status_code == 422, answer.text
     assert _prefs(client, user_a)["points_name"] is None
+
+
+def test_a_lone_surrogate_is_refused_before_it_reaches_jsonb():
+    # Valid as a JSON escape and as a Python str, refused by jsonb. Checked on the cleaner
+    # itself: over HTTP the app's shared 422 handler cannot yet encode the echoed input
+    # (an app-wide gap, tracked separately), so the status code would not prove this.
+    with pytest.raises(ValueError):
+        preferences.clean_points_name("a\ud800")
 
 
 @pytest.mark.parametrize("good", ["\u2764\ufe0f\u200d\U0001f525", "Mes\u00a0points", "Étincelles"])

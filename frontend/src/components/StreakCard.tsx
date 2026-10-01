@@ -71,6 +71,9 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
             }
           : was,
       );
+      // A first check-in of the day earns, and /check-in answers with the streak only:
+      // without this the balance (and every Buy it gates) stays a point behind until a reload.
+      void reload();
     } catch (caught) {
       setCheckInFailed(errorMessage(t, caught, "streaks.couldNotCheckIn"));
     } finally {

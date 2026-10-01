@@ -269,6 +269,28 @@ def test_freezes_are_consumed_before_a_repair_is_priced(client, user_a, owner_en
     assert [r.covers for r in repair_rows(owner_engine)] == [day(12)]
 
 
+def test_a_freeze_bought_inside_the_gap_is_used_before_the_repair_is_priced(
+    client, user_a, owner_engine, clock
+):
+    """Days 1-10 active, 11 and 12 missed, a freeze bought on 12 and today 13. On 12 the run
+    is already 0, so the freeze stays held and both days read missed. Repair 11 alone and the
+    run is alive on 12, where the walk spends the freeze: so only day 11 is charged."""
+    fund(owner_engine, user_a)
+    seed(owner_engine, user_a, 1, 10)
+    give_freeze(owner_engine, user_a, "overall", bought_on=12)
+    clock(13)
+    mine = streak_of(client, user_a)
+    assert states(mine)[day(11).isoformat()] == "missed"
+    assert states(mine)[day(12).isoformat()] == "missed"
+    assert mine["repair"] == {"days": 1, "cost": streaks.REPAIR_PER_DAY + 10 // 2}
+    body = repair(client, user_a).json()
+    assert [r.covers for r in repair_rows(owner_engine)] == [day(11)]
+    assert body["streak"]["current"] == 12
+    assert body["streak"]["held_freezes"] == 0
+    after = states(streak_of(client, user_a))
+    assert (after[day(11).isoformat()], after[day(12).isoformat()]) == ("repaired", "frozen")
+
+
 def test_repairing_a_module_streak_leaves_overall_alone(client, user_a, owner_engine, clock):
     fund(owner_engine, user_a)
     seed(owner_engine, user_a, 1, 10, "gym")

@@ -65,7 +65,8 @@ STREAKS: tuple[str, ...] = STREAK_MODULES
 #: The person's name for points (Epic 41, AD-57): 1 to 24 characters once trimmed, shown
 #: verbatim beside the number. Null or empty means the client's default label.
 POINTS_NAME_MAX = 24
-_REFUSED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
+# Cs: a lone surrogate is valid in a Python str but not in JSON, and jsonb refuses it -> 500.
+_REFUSED_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
 
 #: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
 #: three that existed before stay on; the two new ones are opt-in, so the digest keeps

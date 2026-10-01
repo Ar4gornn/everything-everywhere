@@ -46,6 +46,7 @@ rather than counted early: a streak never runs ahead of the clock.
 import datetime as dt
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import insert, select, text
@@ -177,16 +178,27 @@ def walk(
     freezes: tuple[dt.date, ...] = (),
     repairs: frozenset[dt.date] = frozenset(),
 ) -> tuple[int, int, dict[dt.date, str]]:
-    """``(current, best, state by day)`` for the days from the first active one to ``today``."""
+    """``(current, best, state by day)`` for the days from the first active one to ``today``.
+    Kept public for the walk's unit tests; the service itself calls ``_walk``."""
     current, best, _, states, _, _ = _walk(active, today, freezes, repairs)
     return current, best, states
 
 
-def _offer(states: dict[dt.date, str], runs: dict[dt.date, int], today: dt.date) -> Repair | None:
+def _offer(
+    states: dict[dt.date, str],
+    runs: dict[dt.date, int],
+    today: dt.date,
+    rewalk: Callable[[frozenset[dt.date]], dict[dt.date, str]] | None = None,
+) -> Repair | None:
     """The repair on offer (§2.5): the days missed directly before today are one or two, and
     the day before them is covered, ending a run of ``L`` days. Each costs
     ``REPAIR_PER_DAY + L // 2``. ``None`` otherwise: a longer gap is past repair, and a gap
-    with nothing before it (or only the time before the first active day) was never a run."""
+    with nothing before it (or only the time before the first active day) was never a run.
+
+    Freezes are used before a repair is priced. A freeze bought inside the gap stays held
+    while the run is 0, but once the earlier day is repaired the run is alive and the walk
+    spends it on the later one. So only the shortest leading part of the gap that leaves no
+    day missed is charged: ``rewalk`` is the same walk with those extra days repaired."""
     gap: list[dt.date] = []
     day = today - dt.timedelta(days=1)
     while states.get(day) == MISSED and len(gap) <= MAX_REPAIR_DAYS:
@@ -195,7 +207,14 @@ def _offer(states: dict[dt.date, str], runs: dict[dt.date, int], today: dt.date)
     if not gap or len(gap) > MAX_REPAIR_DAYS or states.get(day) not in _COVERED:
         return None
     per_day = REPAIR_PER_DAY + runs[day] // 2
-    return Repair(days=tuple(reversed(gap)), per_day=per_day, cost=per_day * len(gap))
+    gap.reverse()  # oldest first
+    days = gap
+    for k in range(1, len(gap)) if rewalk is not None else ():
+        after = rewalk(frozenset(gap[:k]))
+        if all(after.get(d) != MISSED for d in gap):
+            days = gap[:k]
+            break
+    return Repair(days=tuple(days), per_day=per_day, cost=per_day * len(days))
 
 
 def _recent(states: dict[dt.date, str], today: dt.date) -> list[tuple[dt.date, str]]:
@@ -258,9 +277,8 @@ def _streak(
     streak_id: str, active: set[dt.date], today: dt.date, bought: list[Purchase]
 ) -> Streak:
     freezes = sorted(_freezes(bought, streak_id))
-    current, best, _, states, held, runs = _walk(
-        active, today, tuple(freezes), _repairs(bought, streak_id)
-    )
+    repairs = _repairs(bought, streak_id)
+    current, best, _, states, held, runs = _walk(active, today, tuple(freezes), repairs)
     next_up = freezes[len(freezes) - held] if held else None
     return Streak(
         id=streak_id,
@@ -269,7 +287,12 @@ def _streak(
         today_active=states.get(today) == ACTIVE,
         held_freezes=held,
         recent=_recent(states, today),
-        repair=_offer(states, runs, today),
+        repair=_offer(
+            states,
+            runs,
+            today,
+            lambda extra: _walk(active, today, tuple(freezes), repairs | extra)[3],
+        ),
         freeze_tonight=(
             current > 0
             and states.get(today) == PENDING

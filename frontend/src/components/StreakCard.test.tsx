@@ -79,6 +79,8 @@ function mockApi(
 ) {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   const calls: { url: string; method: string; body: string | null }[] = [];
+  // The server after a check-in: the card reloads, so the GET must answer as it would.
+  let checkedIn: Streak | null = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -116,9 +118,9 @@ function mockApi(
             );
       }
       if (url.endsWith("/api/streaks/check-in")) {
-        return options.checkIn
-          ? options.checkIn()
-          : json({ ...(streak as Streak), current: 25, best: 30, today_active: true });
+        if (options.checkIn) return options.checkIn();
+        checkedIn = { ...(streak as Streak), current: 25, best: 30, today_active: true };
+        return json(checkedIn);
       }
       if (url.endsWith("/api/streaks")) {
         return json(
@@ -126,9 +128,15 @@ function mockApi(
             ? { items: [] }
             : {
                 today: "2031-03-28",
-                streaks: [streak, ...(options.extra ?? [])],
+                streaks: [checkedIn ?? streak, ...(options.extra ?? [])],
                 ...(options.shop
-                  ? { ...SHOP, points: { ...SHOP.points, balance: options.balance ?? SHOP.points.balance } }
+                  ? {
+                      ...SHOP,
+                      points: {
+                        ...SHOP.points,
+                        balance: (options.balance ?? SHOP.points.balance) + (checkedIn ? 1 : 0),
+                      },
+                    }
                   : {}),
               },
         );
@@ -578,6 +586,19 @@ describe("QA polish (Story 41.7)", () => {
     await user.click(await screen.findByRole("button", { name: "Shop" }));
     expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeDisabled();
     expect(screen.queryByText(/too low/)).toBeNull();
+  });
+
+  it("refreshes the balance after a check-in, so a Buy it now affords is enabled", async () => {
+    const calls = mockApi(overall(), { shop: true, balance: 19 });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Check in" }));
+    await screen.findByText("20");
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeEnabled();
+    const reads = calls.filter((c) => c.method === "GET" && c.url.endsWith("/api/streaks"));
+    expect(reads.length).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps the balance label, number and dot in one nowrap unit, the name apart", async () => {
