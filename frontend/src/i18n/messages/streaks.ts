@@ -36,14 +36,10 @@ export const streaks = {
   "streaks.dot.active": { en: "{day}: active", fr: "{day} : jour actif" },
   "streaks.dot.missed": { en: "{day}: missed", fr: "{day} : manqué" },
   "streaks.dot.pending": { en: "{day}: today, not yet", fr: "{day} : aujourd’hui, pas encore" },
-  "streaks.dot.frozen": {
-    en: "{day}: frozen, covered by a freeze",
-    fr: "{day} : gelé, couvert par un gel",
-  },
-  "streaks.dot.repaired": {
-    en: "{day}: repaired, covered by a repair",
-    fr: "{day} : réparé, couvert par une réparation",
-  },
+  // One word of state, like the others: "frozen, covered by a freeze" said the same thing
+  // twice to a screen reader.
+  "streaks.dot.frozen": { en: "{day}: frozen", fr: "{day} : gelé" },
+  "streaks.dot.repaired": { en: "{day}: repaired", fr: "{day} : réparé" },
   "streaks.dot.before": { en: "{day}: before you started", fr: "{day} : avant le début" },
   // The name is the person's own and is shown verbatim, never inflected: one default word.
   "streaks.pointsDefault": { en: "Points", fr: "Points" },
@@ -96,6 +92,16 @@ export const streaks = {
   "streaks.repairOffer_other": {
     en: "You missed the last {count} days of your {streak} streak. Repair them for {cost} {name}?",
     fr: "Vous avez manqué les {count} derniers jours de votre série {streak}. Les réparer pour {cost} {name} ?",
+  },
+  // The balance cannot pay the offer: the banner stays (the streak can still be saved) and
+  // its button is off. No unit named, since the person may have renamed points (§2.6).
+  "streaks.repairTooLow": {
+    en: "Your balance is too low to repair it yet.",
+    fr: "Votre solde est trop bas pour la réparer pour l’instant.",
+  },
+  "streaks.freezeTooLow": {
+    en: "Your balance is too low to buy a freeze.",
+    fr: "Votre solde est trop bas pour acheter un gel.",
   },
   "streaks.repair": { en: "Repair", fr: "Réparer" },
   "streaks.repairFor": { en: "Repair the {streak} streak", fr: "Réparer la série {streak}" },

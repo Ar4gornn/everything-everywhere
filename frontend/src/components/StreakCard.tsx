@@ -134,6 +134,11 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
   // Who can buy a freeze: the overall streak and every shown tab streak. Absent prices (a
   // server older than the shop) leave the disclosure out altogether.
   const price = data?.prices?.freeze;
+  // A button for something the balance cannot pay is disabled and says why, rather than
+  // inviting a press that ends in `points_insufficient`. A server that sends no balance
+  // (older than 41.3) leaves it enabled: nothing is known, so nothing is refused here.
+  const balance = data?.points?.balance;
+  const affords = (cost: number) => balance === undefined || balance >= cost;
   const maxHeld = data?.prices?.max_held ?? 2;
   const shopRows = overall ? [overall, ...rows] : [];
   const streakName = (id: string) =>
@@ -159,6 +164,7 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
         {offers.map(({ row, repair }) => {
           const name = streakName(row.id);
           const asking = repairConfirming === row.id;
+          const short = !affords(repair.cost);
           return (
             <div key={row.id} className="streak-repair">
               <p className="streak-repair-text">
@@ -167,6 +173,12 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
                   cost: repair.cost,
                   name: pointsName,
                 })}
+                {short && (
+                  <>
+                    {" "}
+                    <span className="hint streak-repair-short">{t("streaks.repairTooLow")}</span>
+                  </>
+                )}
               </p>
               {asking ? (
                 <span className="streak-shop-actions">
@@ -196,7 +208,7 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
                   type="button"
                   className="secondary"
                   aria-label={t("streaks.repairFor", { streak: name })}
-                  disabled={repairing}
+                  disabled={repairing || short}
                   onClick={() => {
                     setRepairFailed(null);
                     setRepairConfirming(row.id);
@@ -268,6 +280,7 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
             {shopOpen && (
               <div id={shopId} className="streak-shop-panel">
                 <p className="hint">{t("streaks.shopHint")}</p>
+                {!affords(price) && <p className="hint">{t("streaks.freezeTooLow")}</p>}
                 <ul className="list-rows streak-shop-rows">
                   {shopRows.map((row) => {
                     const held = row.held_freezes ?? 0;
@@ -312,7 +325,7 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
                               type="button"
                               className="secondary"
                               aria-label={t("streaks.buyFor", { streak: name })}
-                              disabled={held >= maxHeld || buying}
+                              disabled={held >= maxHeld || buying || !affords(price)}
                               onClick={() => {
                                 setBuyFailed(null);
                                 setConfirming(row.id);
@@ -334,8 +347,13 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
 
         {data?.points && (
           <p className="streak-card-points">
-            <span className="visually-hidden">{t("streaks.pointsBalance")} </span>
-            <strong>{data.points.balance}</strong> · <span>{pointsName}</span>
+            {/* The label (read aloud), the number and the dot stay on one line: only the name,
+                which the person chooses and may make 24 characters long, may wrap. */}
+            <span className="streak-card-balance">
+              <span className="visually-hidden">{t("streaks.pointsBalance")} </span>
+              <strong>{data.points.balance}</strong> ·
+            </span>{" "}
+            <span>{pointsName}</span>
           </p>
         )}
       </Card>

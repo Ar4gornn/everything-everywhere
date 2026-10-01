@@ -1,6 +1,6 @@
 # Epic 41: Streaks and points — show up every day, earn for it, spend it to stay on track
 
-**Status:** Scoped 2026-09-29 on `feat/streaks` (worktree `ee-streaks`). Nothing built.
+**Status:** Scoped 2026-09-29. Built through Story 41.7 (QA), locally on `feat/streaks` (worktree `ee-streaks`); not pushed, not merged.
 **New decision record:** AD-57 (a day is active once, stored; a streak, a balance and a freeze's use are computed; only purchases are stored)
 **Migrations:** `0033` (activity days, Story 41.1), `0034` (purchases, Story 41.4).
 
@@ -245,12 +245,15 @@ Every new code has an English and a French sentence (AD-44).
   with best beside it, and the dashboard's **Check in** (shows "Checked in ✓" when today is
   active). Below it, one compact row per shown tab streak (`ListRow`, AD-53: name, current,
   best, a ✓ for today). Then 28 dots for the overall streak (active / frozen / repaired /
-  missed / pending / before, each with a text alternative, never colour alone), and the balance under
-  the chosen name.
+  missed / pending / before, each with a text alternative, never colour alone; a frozen or
+  repaired dot is read as "{day}: frozen" / "{day}: repaired", the shape and the word say the
+  rest), and the balance under the chosen name, its label, number and dot kept on one line.
 - **Shop**, a disclosure inside the card, not a modal (house rule since Epic 24). Each shown
   streak plus overall gets "Freeze · 20 · held 1/2" with Buy. A repair offer is a banner at
   the top of the card whenever one exists: "Your 12-day Gym streak broke yesterday. Repair
-  for 36 Sparks?" (built as "You missed yesterday on your Gym streak. Repair it for 36 Sparks?":
+  for 36 Sparks?" When the balance is under the price the banner stays (the streak can still
+  be saved) but its Repair button is disabled and a line says the balance is too low, naming
+  no unit; the shop's Buy is disabled the same way, and also at the held limit (41.7). (built as "You missed yesterday on your Gym streak. Repair it for 36 Sparks?":
   `repair` carries `days` and `cost` only, so the banner cannot name the run length) Both need a second press to confirm, because they spend.
 - **`components/CheckInButton.tsx`** sits in the header of each section view whose streak
   is shown and whose module is on. Mood has none. The button is idempotent, so a stale

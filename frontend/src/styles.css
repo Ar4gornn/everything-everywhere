@@ -3977,6 +3977,16 @@ button.streak-checkin {
   overflow-wrap: anywhere;
 }
 
+/* The label, the number and the dot never part; the name after them may wrap. */
+.streak-card .streak-card-balance {
+  white-space: nowrap;
+}
+
+.streak-card .streak-repair-short {
+  display: block;
+  margin-top: 4px;
+}
+
 /* The shop: a disclosure under the dots. Its rows wrap, so a French confirm sentence at 320px
    drops under the name instead of pushing the card wider. */
 .streak-card .streak-shop {

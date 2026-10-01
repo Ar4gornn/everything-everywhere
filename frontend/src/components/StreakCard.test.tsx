@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -67,6 +70,7 @@ function mockApi(
     language?: string;
     checkIn?: () => Response;
     shop?: boolean;
+    balance?: number;
     buy?: () => Response;
     repair?: () => Response;
     preferences?: unknown;
@@ -123,7 +127,9 @@ function mockApi(
             : {
                 today: "2031-03-28",
                 streaks: [streak, ...(options.extra ?? [])],
-                ...(options.shop ? SHOP : {}),
+                ...(options.shop
+                  ? { ...SHOP, points: { ...SHOP.points, balance: options.balance ?? SHOP.points.balance } }
+                  : {}),
               },
         );
       }
@@ -234,7 +240,7 @@ describe("StreakCard shop (Story 41.4)", () => {
     render();
     const list = await screen.findByRole("list", { name: "The last four weeks" });
     const item = within(list).getAllByRole("listitem")[10];
-    expect(item).toHaveTextContent(/: frozen, covered by a freeze$/);
+    expect(item).toHaveTextContent(/: frozen$/);
     expect(item).toHaveClass("streak-dot-frozen");
     // Not the class of any other state, so the shape (CSS) is the only thing it can share.
     for (const other of ["active", "missed", "pending", "before"]) {
@@ -362,7 +368,7 @@ describe("StreakCard repair (Story 41.5)", () => {
     render();
     const list = await screen.findByRole("list", { name: "The last four weeks" });
     const item = within(list).getAllByRole("listitem")[10];
-    expect(item).toHaveTextContent(/: repaired, covered by a repair$/);
+    expect(item).toHaveTextContent(/: repaired$/);
     expect(item).toHaveClass("streak-dot-repaired");
     for (const other of ["active", "missed", "pending", "before", "frozen"]) {
       expect(item).not.toHaveClass(`streak-dot-${other}`);
@@ -508,5 +514,101 @@ describe("StreakCard repair (Story 41.5)", () => {
         name: "Confirmer : dépenser 36 Étincelles pour réparer Général",
       }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("QA polish (Story 41.7)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const offered = (cost: number) => overall({ current: 0, repair: { days: 1, cost } });
+  const repairButton = () => screen.getByRole("button", { name: "Repair the Overall streak" });
+
+  it("keeps the repair banner but disables Repair when the balance cannot pay", async () => {
+    mockApi(offered(35), { shop: true, balance: 7 });
+    render();
+    expect(await screen.findByText(/Repair it for 35 Points\?/)).toBeInTheDocument();
+    expect(repairButton()).toBeDisabled();
+    const line = screen.getByText("Your balance is too low to repair it yet.");
+    expect(line).toBeInTheDocument();
+    // The unit may be renamed, so the sentence names none.
+    expect(line.textContent).not.toMatch(/points/i);
+  });
+
+  it("offers Repair when the balance is exactly the price, with no warning", async () => {
+    mockApi(offered(35), { shop: true, balance: 35 });
+    render();
+    await screen.findByText(/Repair it for 35 Points\?/);
+    expect(repairButton()).toBeEnabled();
+    expect(screen.queryByText(/too low/)).toBeNull();
+  });
+
+  it("says it in French as well, in a sentence of its own", async () => {
+    mockApi(offered(35), { shop: true, balance: 7, language: "fr" });
+    render();
+    await screen.findByText(/La réparer pour 35 Points/);
+    expect(screen.getByRole("button", { name: "Réparer la série Général" })).toBeDisabled();
+    expect(
+      screen.getByText("Votre solde est trop bas pour la réparer pour l’instant."),
+    ).toBeInTheDocument();
+  });
+
+  it("disables Buy for a freeze the balance cannot pay, and says so once", async () => {
+    mockApi(overall({ held_freezes: 0 }), { shop: true, balance: 7 });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeDisabled();
+    expect(screen.getByText("Your balance is too low to buy a freeze.")).toBeInTheDocument();
+  });
+
+  it("enables Buy at exactly the price, and disables it at the limit without the warning", async () => {
+    mockApi(overall({ held_freezes: 0 }), { shop: true, balance: 20 });
+    const user = userEvent.setup();
+    const first = render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeEnabled();
+    expect(screen.queryByText(/too low/)).toBeNull();
+    first.unmount();
+
+    mockApi(overall({ held_freezes: 2 }), { shop: true, balance: 44 });
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeDisabled();
+    expect(screen.queryByText(/too low/)).toBeNull();
+  });
+
+  it("keeps the balance label, number and dot in one nowrap unit, the name apart", async () => {
+    mockApi(overall(), { shop: true, preferences: { ...DEFAULT_PREFERENCES, points_name: "A".repeat(24) } });
+    render();
+    await screen.findByText("24");
+    const unit = document.querySelector(".streak-card-balance");
+    expect(unit).not.toBeNull();
+    expect(unit).toHaveTextContent("Balance: 44 ·");
+    expect(unit).not.toHaveTextContent("A");
+    const css = readFileSync(join(__dirname, "..", "styles.css"), "utf-8");
+    expect(css).toMatch(/\.streak-card \.streak-card-balance\s*\{[^}]*white-space:\s*nowrap/);
+  });
+
+  it("reads a covered day as its state alone, in both languages", async () => {
+    for (const [language, frozen, repaired] of [
+      ["en", /: frozen$/, /: repaired$/],
+      ["fr", / : gelé$/, / : réparé$/],
+    ] as const) {
+      const last = recent("pending");
+      last[10] = { day: last[10]?.day ?? "", state: "frozen" };
+      last[11] = { day: last[11]?.day ?? "", state: "repaired" };
+      mockApi(overall({ recent: last }), { language });
+      const { unmount } = render();
+      const list = await screen.findByRole("list", {
+        name: language === "en" ? "The last four weeks" : "Les quatre dernières semaines",
+      });
+      const items = within(list).getAllByRole("listitem");
+      expect(items[10]).toHaveTextContent(frozen);
+      expect(items[11]).toHaveTextContent(repaired);
+      unmount();
+    }
   });
 });
