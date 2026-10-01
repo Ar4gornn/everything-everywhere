@@ -3997,6 +3997,25 @@ button.streak-checkin {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The button names the points, and a 24-character name with no break in it (the limit)
+   made it 435px wide at 320. */
+.streak-card .streak-shop-actions button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* The trailing slot is `flex: 0 0 auto` app-wide, so "Confirm: spend 20 Points" plus
+   Cancel kept its one-line width and ran past the card (85px in French at 320). In the
+   shop it may shrink, so the pair wraps instead. */
+.streak-card .streak-shop-rows .list-row-trailing {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .streak-points-name {
