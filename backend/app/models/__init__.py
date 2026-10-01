@@ -41,6 +41,7 @@ from app.models.savings import (
     SavingsTarget,
     SavingsType,
 )
+from app.models.streak_purchase import StreakPurchase
 from app.models.user import User
 
 __all__ = [
@@ -86,6 +87,7 @@ __all__ = [
     "RecipeStep",
     "RecipeUnit",
     "Space",
+    "StreakPurchase",
     "Unit",
     "User",
     "Vendor",

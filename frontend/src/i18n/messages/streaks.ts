@@ -36,6 +36,10 @@ export const streaks = {
   "streaks.dot.active": { en: "{day}: active", fr: "{day} : jour actif" },
   "streaks.dot.missed": { en: "{day}: missed", fr: "{day} : manqué" },
   "streaks.dot.pending": { en: "{day}: today, not yet", fr: "{day} : aujourd’hui, pas encore" },
+  "streaks.dot.frozen": {
+    en: "{day}: frozen, covered by a freeze",
+    fr: "{day} : gelé, couvert par un gel",
+  },
   "streaks.dot.before": { en: "{day}: before you started", fr: "{day} : avant le début" },
   // The name is the person's own and is shown verbatim, never inflected: one default word.
   "streaks.pointsDefault": { en: "Points", fr: "Points" },
@@ -53,6 +57,39 @@ export const streaks = {
   "streaks.couldNotCheckIn": {
     en: "Could not check in.",
     fr: "Impossible de valider la journée.",
+  },
+  // The shop (Story 41.4): a disclosure inside the card, never a modal.
+  "streaks.shop": { en: "Shop", fr: "Boutique" },
+  "streaks.shopHint": {
+    en: "A freeze covers one missed day of its own streak, from the day you buy it on. It cannot rescue yesterday.",
+    fr: "Un gel couvre un jour manqué de sa propre série, à partir du jour de l’achat. Il ne sauve pas la veille.",
+  },
+  "streaks.shopOverall": { en: "Overall", fr: "Général" },
+  "streaks.freezeLine": {
+    en: "Freeze · {price} {name} · held {held}/{max}",
+    fr: "Gel · {price} {name} · en réserve {held}/{max}",
+  },
+  "streaks.buy": { en: "Buy", fr: "Acheter" },
+  "streaks.buyFor": { en: "Buy a freeze for {streak}", fr: "Acheter un gel pour {streak}" },
+  "streaks.confirmBuy": {
+    en: "Confirm: spend {price} {name}",
+    fr: "Confirmer : dépenser {price} {name}",
+  },
+  "streaks.confirmBuyFor": {
+    en: "Confirm: spend {price} {name} on a freeze for {streak}",
+    fr: "Confirmer : dépenser {price} {name} pour un gel de {streak}",
+  },
+  "streaks.couldNotBuy": {
+    en: "Could not buy that freeze.",
+    fr: "Impossible d’acheter ce gel.",
+  },
+  "error.freeze_limit": {
+    en: "That streak already holds as many freezes as it can.",
+    fr: "Cette série détient déjà le maximum de gels.",
+  },
+  "error.points_insufficient": {
+    en: "You do not have enough points for that.",
+    fr: "Vous n’avez pas assez de points pour cela.",
   },
   "error.streak_unknown": {
     en: "That streak does not exist.",

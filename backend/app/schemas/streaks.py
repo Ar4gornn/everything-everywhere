@@ -15,6 +15,7 @@ class StreakOut(BaseModel):
     current: int
     best: int
     today_active: bool
+    held_freezes: int
     recent: list[DayOut]
 
 
@@ -32,6 +33,8 @@ class MilestoneOut(BaseModel):
 
 
 class PricesOut(BaseModel):
+    freeze: int
+    max_held: int
     milestones: list[MilestoneOut]
 
 
@@ -44,3 +47,10 @@ class StreaksOut(BaseModel):
 
 class CheckInIn(BaseModel):
     streak: str = Field(min_length=1, max_length=32)
+
+
+class PurchaseOut(BaseModel):
+    """What a purchase answers with: the balance after it and the streak it was for."""
+
+    points: PointsOut
+    streak: StreakOut

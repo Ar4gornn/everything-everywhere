@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { api } from "../api/client";
-import type { Streak, StreaksOverview } from "../api/types";
+import type { Streak, StreakModuleId, StreaksOverview } from "../api/types";
 import { errorMessage } from "../i18n/errors";
 import { useT } from "../i18n";
 import { useDates } from "../useDates";
@@ -35,6 +35,13 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
   );
   const [checkInFailed, setCheckInFailed] = useState<string | null>(null);
   const [pressing, setPressing] = useState(false);
+  // The shop is a disclosure, not a modal (house rule since Epic 24). `confirming` is the
+  // streak whose Buy has been pressed once: spending asks for a second press.
+  const [shopOpen, setShopOpen] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [buying, setBuying] = useState(false);
+  const [buyFailed, setBuyFailed] = useState<string | null>(null);
+  const shopId = useId();
 
   // A tab streak is a row only while it is shown (preference on, module on), decided at
   // render from the account as it is now: a module switched off hides its row at once, and
@@ -67,10 +74,39 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
     }
   }
 
+  async function buyFreeze(id: string) {
+    if (buying) return;
+    setBuying(true);
+    setBuyFailed(null);
+    try {
+      const bought = await api.buyStreakFreeze(id);
+      setData((was) =>
+        was
+          ? {
+              ...was,
+              points: bought.points,
+              streaks: was.streaks.map((s) => (s.id === bought.streak.id ? bought.streak : s)),
+            }
+          : was,
+      );
+    } catch (caught) {
+      setBuyFailed(errorMessage(t, caught, "streaks.couldNotBuy"));
+    } finally {
+      setConfirming(null);
+      setBuying(false);
+    }
+  }
+
   const rows = shown.flatMap((id) => {
     const found = Array.isArray(data?.streaks) ? data.streaks.find((s) => s.id === id) : undefined;
     return found ? [{ ...found, id }] : [];
   });
+
+  // Who can buy a freeze: the overall streak and every shown tab streak. Absent prices (a
+  // server older than the shop) leave the disclosure out altogether.
+  const price = data?.prices?.freeze;
+  const maxHeld = data?.prices?.max_held ?? 2;
+  const shopRows = overall ? [overall, ...rows] : [];
 
   if (!overall) {
     return failure ? (
@@ -131,6 +167,87 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
 
         <Dots streak={overall} label={t("streaks.recent")} day={dates.day} />
 
+        {price !== undefined && (
+          <div className="streak-shop">
+            <button
+              type="button"
+              className="secondary streak-shop-toggle"
+              aria-expanded={shopOpen}
+              aria-controls={shopId}
+              onClick={() => setShopOpen((was) => !was)}
+            >
+              {t("streaks.shop")}
+            </button>
+            {shopOpen && (
+              <div id={shopId} className="streak-shop-panel">
+                <p className="hint">{t("streaks.shopHint")}</p>
+                <ul className="list-rows streak-shop-rows">
+                  {shopRows.map((row) => {
+                    const held = row.held_freezes ?? 0;
+                    const name =
+                      row.id === "overall"
+                        ? t("streaks.shopOverall")
+                        : t(STREAK_NAME[row.id as StreakModuleId]);
+                    const asking = confirming === row.id;
+                    return (
+                      <ListRow
+                        key={row.id}
+                        title={name}
+                        meta={t("streaks.freezeLine", {
+                          price,
+                          name: pointsName,
+                          held,
+                          max: maxHeld,
+                        })}
+                        trailing={
+                          asking ? (
+                            <span className="streak-shop-actions">
+                              <button
+                                type="button"
+                                aria-label={t("streaks.confirmBuyFor", {
+                                  price,
+                                  name: pointsName,
+                                  streak: name,
+                                })}
+                                disabled={buying}
+                                onClick={() => void buyFreeze(row.id)}
+                              >
+                                {t("streaks.confirmBuy", { price, name: pointsName })}
+                              </button>
+                              <button
+                                type="button"
+                                className="quiet"
+                                disabled={buying}
+                                onClick={() => setConfirming(null)}
+                              >
+                                {t("action.cancel")}
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="secondary"
+                              aria-label={t("streaks.buyFor", { streak: name })}
+                              disabled={held >= maxHeld || buying}
+                              onClick={() => {
+                                setBuyFailed(null);
+                                setConfirming(row.id);
+                              }}
+                            >
+                              {t("streaks.buy")}
+                            </button>
+                          )
+                        }
+                      />
+                    );
+                  })}
+                </ul>
+                <ErrorBanner message={buyFailed} />
+              </div>
+            )}
+          </div>
+        )}
+
         {data?.points && (
           <p className="streak-card-points">
             <span className="visually-hidden">{t("streaks.pointsBalance")} </span>
@@ -143,9 +260,9 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
 }
 
 /**
- * Twenty-eight days, oldest first, seven to a row. Four shapes — a filled disc, an empty
- * ring, a dashed ring, a small speck for a day before the streak began — so the state is
- * never carried by colour alone, and each dot is a
+ * Twenty-eight days, oldest first, seven to a row. Five shapes — a filled disc, an empty
+ * ring, a dashed ring, a small speck for a day before the streak began, and a diamond for a
+ * day a freeze covered — so the state is never carried by colour alone, and each dot is a
  * list item read as "day: state".
  */
 function Dots({

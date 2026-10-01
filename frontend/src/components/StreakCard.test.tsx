@@ -7,6 +7,7 @@ import { StreakCard } from "./StreakCard";
 import type { Streak, StreakState } from "../api/types";
 import { AuthProvider } from "../auth/AuthContext";
 import { LanguageProvider } from "../i18n";
+import { DEFAULT_PREFERENCES } from "../layout/preferences";
 
 /**
  * The overall streak card (Epic 41.1).
@@ -55,9 +56,21 @@ function overall(overrides: Partial<Streak> = {}): Streak {
   };
 }
 
+const SHOP = {
+  points: { balance: 44, earned: 44, spent: 0 },
+  prices: { freeze: 20, max_held: 2, milestones: [{ days: 7, bonus: 10 }] },
+};
+
 function mockApi(
   streak: Streak | null,
-  options: { language?: string; checkIn?: () => Response } = {},
+  options: {
+    language?: string;
+    checkIn?: () => Response;
+    shop?: boolean;
+    buy?: () => Response;
+    preferences?: unknown;
+    extra?: Streak[];
+  } = {},
 ) {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   const calls: { url: string; method: string; body: string | null }[] = [];
@@ -72,7 +85,19 @@ function mockApi(
           currency: "USD",
           created_at: "",
           language: options.language ?? "en",
+          ...(options.preferences ? { preferences: options.preferences } : {}),
         });
+      }
+      if (url.endsWith("/api/streaks/freezes")) {
+        return options.buy
+          ? options.buy()
+          : json(
+              {
+                points: { balance: 24, earned: 44, spent: 20 },
+                streak: { ...(streak as Streak), held_freezes: 2 },
+              },
+              201,
+            );
       }
       if (url.endsWith("/api/streaks/check-in")) {
         return options.checkIn
@@ -80,7 +105,15 @@ function mockApi(
           : json({ ...(streak as Streak), current: 25, best: 30, today_active: true });
       }
       if (url.endsWith("/api/streaks")) {
-        return json(streak === null ? { items: [] } : { today: "2031-03-28", streaks: [streak] });
+        return json(
+          streak === null
+            ? { items: [] }
+            : {
+                today: "2031-03-28",
+                streaks: [streak, ...(options.extra ?? [])],
+                ...(options.shop ? SHOP : {}),
+              },
+        );
       }
       return json({ items: [] });
     }),
@@ -171,5 +204,133 @@ describe("StreakCard", () => {
     expect(await screen.findByText("jour de suite")).toBeInTheDocument();
     expect(screen.getByText("Record : 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Valider aujourd’hui" })).toBeInTheDocument();
+  });
+});
+
+describe("StreakCard shop (Story 41.4)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const held = (n: number) => overall({ held_freezes: n });
+
+  it("draws a day a freeze covered with a shape of its own and says so in words", async () => {
+    const last = recent("pending");
+    last[10] = { day: last[10]?.day ?? "", state: "frozen" };
+    mockApi(overall({ recent: last }));
+    render();
+    const list = await screen.findByRole("list", { name: "The last four weeks" });
+    const item = within(list).getAllByRole("listitem")[10];
+    expect(item).toHaveTextContent(/: frozen, covered by a freeze$/);
+    expect(item).toHaveClass("streak-dot-frozen");
+    // Not the class of any other state, so the shape (CSS) is the only thing it can share.
+    for (const other of ["active", "missed", "pending", "before"]) {
+      expect(item).not.toHaveClass(`streak-dot-${other}`);
+    }
+  });
+
+  it("has no shop on a server that predates it", async () => {
+    mockApi(overall());
+    render();
+    await screen.findByText("24");
+    expect(screen.queryByRole("button", { name: "Shop" })).toBeNull();
+  });
+
+  it("keeps the shop closed until it is opened, inside the card and not a dialog", async () => {
+    mockApi(held(1), { shop: true });
+    const user = userEvent.setup();
+    render();
+    const toggle = await screen.findByRole("button", { name: "Shop" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(/Freeze · 20 Points/)).toBeNull();
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Freeze · 20 Points · held 1/2")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("asks for a second press before it spends, then buys once and updates the card", async () => {
+    const calls = mockApi(held(1), { shop: true });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+
+    await user.click(screen.getByRole("button", { name: "Buy a freeze for Overall" }));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm: spend 20 Points on a freeze for Overall",
+      }),
+    );
+    await screen.findByText("Freeze · 20 Points · held 2/2");
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.url).toMatch(/\/api\/streaks\/freezes$/);
+    // The body names the streak and nothing else: no price, no day.
+    expect(JSON.parse(posts[0]?.body ?? "{}")).toEqual({ streak: "overall" });
+    // The new balance, read off the answer rather than guessed.
+    expect(document.querySelector(".streak-card-points")).toHaveTextContent("24 · Points");
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeDisabled();
+  });
+
+  it("backs out of a purchase without sending anything", async () => {
+    const calls = mockApi(held(0), { shop: true });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    await user.click(screen.getByRole("button", { name: "Buy a freeze for Overall" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeEnabled();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
+  it.each([
+    ["freeze_limit", "That streak already holds as many freezes as it can."],
+    ["points_insufficient", "You do not have enough points for that."],
+  ])("says what the %s refusal means", async (code, sentence) => {
+    mockApi(held(0), { shop: true, buy: () => json({ detail: "x", code }, 409) });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    await user.click(screen.getByRole("button", { name: "Buy a freeze for Overall" }));
+    await user.click(screen.getByRole("button", { name: /^Confirm: spend 20 Points/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(sentence);
+    // Back to the first state: the next press asks again rather than spending.
+    expect(screen.getByRole("button", { name: "Buy a freeze for Overall" })).toBeEnabled();
+  });
+
+  it("speaks French, in the person's own word for points", async () => {
+    mockApi(held(1), {
+      shop: true,
+      language: "fr",
+      buy: () => json({ detail: "x", code: "points_insufficient" }, 409),
+      preferences: { ...DEFAULT_PREFERENCES, points_name: "Étincelles" },
+    });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Boutique" }));
+    expect(screen.getByText("Gel · 20 Étincelles · en réserve 1/2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Acheter un gel pour Général" }));
+    await user.click(screen.getByRole("button", { name: /^Confirmer : dépenser 20 Étincelles/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Vous n’avez pas assez de points pour cela.",
+    );
+  });
+
+  it("offers a freeze for each shown tab streak as well", async () => {
+    mockApi(held(0), {
+      shop: true,
+      extra: [{ ...overall({ held_freezes: 0 }), id: "gym" }],
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        streaks: { ...DEFAULT_PREFERENCES.streaks, gym: true },
+      },
+    });
+    const user = userEvent.setup();
+    render();
+    await user.click(await screen.findByRole("button", { name: "Shop" }));
+    expect(await screen.findByRole("button", { name: "Buy a freeze for Gym" })).toBeInTheDocument();
   });
 });

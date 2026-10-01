@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 
 from app.core.clock import Now
 from app.core.deps import CurrentUserId, DbSession
@@ -8,6 +8,7 @@ from app.schemas.streaks import (
     MilestoneOut,
     PointsOut,
     PricesOut,
+    PurchaseOut,
     StreakOut,
     StreaksOut,
 )
@@ -24,8 +25,13 @@ def _out(streak: streaks.Streak) -> StreakOut:
         current=streak.current,
         best=streak.best,
         today_active=streak.today_active,
+        held_freezes=streak.held_freezes,
         recent=[DayOut(day=day, state=state) for day, state in streak.recent],
     )
+
+
+def _points(points: streaks.Points) -> PointsOut:
+    return PointsOut(balance=points.balance, earned=points.earned, spent=points.spent)
 
 
 @router.get("", response_model=StreaksOut)
@@ -33,9 +39,11 @@ def read_streaks(user_id: CurrentUserId, session: DbSession, now: Now) -> Streak
     today, found, earned = streaks.read(session, user_id, now)
     return StreaksOut(
         today=today,
-        points=PointsOut(balance=earned.balance, earned=earned.earned, spent=earned.spent),
+        points=_points(earned),
         prices=PricesOut(
-            milestones=[MilestoneOut(days=d, bonus=b) for d, b in streaks.MILESTONES]
+            freeze=streaks.FREEZE_COST,
+            max_held=streaks.MAX_HELD,
+            milestones=[MilestoneOut(days=d, bonus=b) for d, b in streaks.MILESTONES],
         ),
         streaks=[_out(s) for s in found],
     )
@@ -47,3 +55,13 @@ def check_in(payload: CheckInIn, user_id: CurrentUserId, session: DbSession, now
     same row. The one endpoint that names its module itself."""
     _, streak = streaks.check_in(session, user_id, payload.streak, now)
     return _out(streak)
+
+
+@router.post("/freezes", response_model=PurchaseOut, status_code=status.HTTP_201_CREATED)
+def buy_freeze(
+    payload: CheckInIn, user_id: CurrentUserId, session: DbSession, now: Now
+) -> PurchaseOut:
+    """Spend points on a freeze for one streak. ``409 freeze_limit`` at two held,
+    ``409 points_insufficient`` under the price. Never makes a day (AD-57)."""
+    points, streak = streaks.buy_freeze(session, user_id, payload.streak, now)
+    return PurchaseOut(points=_points(points), streak=_out(streak))

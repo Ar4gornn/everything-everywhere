@@ -1020,17 +1020,19 @@ export interface BookQuoteDraw {
 
 /** Epic 41 (AD-57): one day of a streak, as the four-week dots draw it. */
 /** `before`: a day before the first active one — no streak yet, so not missed either. */
-export type StreakState = "active" | "pending" | "missed" | "before";
+export type StreakState = "active" | "pending" | "missed" | "before" | "frozen";
 
 export interface Streak {
   id: string;
   current: number;
   best: number;
   today_active: boolean;
+  /** Freezes bought and not yet used (Story 41.4); absent on an older server. */
+  held_freezes?: number;
   recent: { day: string; state: StreakState }[];
 }
 
-/** Points are computed by the server from activity alone (AD-57); `spent` is 0 until the shop. */
+/** Points are computed by the server from activity alone (AD-57); `spent` is what purchases cost. */
 export interface StreakPoints {
   balance: number;
   earned: number;
@@ -1042,8 +1044,14 @@ export interface StreaksOverview {
   today: string;
   /** Absent on a server older than Story 41.3: the card then shows no balance. */
   points?: StreakPoints;
-  prices?: { milestones: { days: number; bonus: number }[] };
+  prices?: { freeze?: number; max_held?: number; milestones: { days: number; bonus: number }[] };
   streaks: Streak[];
+}
+
+/** What a purchase answers with: the balance after it, and the streak it was for. */
+export interface StreakPurchaseResult {
+  points: StreakPoints;
+  streak: Streak;
 }
 
 /** A series exists exactly as long as one book names it, so `books` is never zero. */

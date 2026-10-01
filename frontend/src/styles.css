@@ -3899,6 +3899,15 @@ button.bell[aria-pressed="false"] {
   border-style: dashed;
 }
 
+/* A day a freeze covered: a diamond, so it differs from the disc, the rings and the speck
+   by shape and not by colour. */
+.streak-card .streak-dot-frozen {
+  border-radius: 2px;
+  border-style: solid;
+  border-color: var(--accent);
+  transform: rotate(45deg) scale(0.72);
+}
+
 /* Before the first active day: no streak yet, so a speck rather than a missed ring. */
 .streak-card .streak-dot-before {
   border: none;
@@ -3938,6 +3947,28 @@ button.streak-checkin {
 .streak-card .streak-card-points {
   margin: 16px 0 0;
   overflow-wrap: anywhere;
+}
+
+/* The shop: a disclosure under the dots. Its rows wrap, so a French confirm sentence at 320px
+   drops under the name instead of pushing the card wider. */
+.streak-card .streak-shop {
+  margin-top: 16px;
+}
+
+.streak-card .streak-shop-panel {
+  margin-top: 12px;
+  min-width: 0;
+}
+
+.streak-card .streak-shop-rows .list-row-line {
+  flex-wrap: wrap;
+}
+
+.streak-card .streak-shop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .streak-points-name {

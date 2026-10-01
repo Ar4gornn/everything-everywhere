@@ -72,6 +72,7 @@ import type {
   ShoppingList,
   Space,
   Streak,
+  StreakPurchaseResult,
   StreaksOverview,
   Step,
   StockChange,
@@ -1144,6 +1145,13 @@ export const api = {
   /** Idempotent: pressing it twice is one day. */
   streakCheckIn: (streak: string) =>
     request<Streak>("/api/streaks/check-in", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
+
+  /** Spend points on a freeze. 409 `freeze_limit` at two held, `points_insufficient` under the price. */
+  buyStreakFreeze: (streak: string) =>
+    request<StreakPurchaseResult>("/api/streaks/freezes", {
       method: "POST",
       body: JSON.stringify({ streak }),
     }),
