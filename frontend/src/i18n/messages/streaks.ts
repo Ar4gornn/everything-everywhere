@@ -103,6 +103,26 @@ export const streaks = {
     en: "Your balance is too low to buy a freeze.",
     fr: "Votre solde est trop bas pour acheter un gel.",
   },
+  // Several offers at once (every shown streak can break on the same day): one heading, a
+  // row per streak with its days and price, the rest folded.
+  "streaks.repairsHeading_one": {
+    en: "{count} streak broke",
+    fr: "{count} série interrompue",
+  },
+  "streaks.repairsHeading_other": {
+    en: "{count} streaks broke",
+    fr: "{count} séries interrompues",
+  },
+  "streaks.repairRowPrice_one": {
+    en: "missed yesterday · {cost} {name}",
+    fr: "manqué hier · {cost} {name}",
+  },
+  "streaks.repairRowPrice_other": {
+    en: "missed {count} days · {cost} {name}",
+    fr: "{count} jours manqués · {cost} {name}",
+  },
+  "streaks.repairsMore": { en: "Show {count} more", fr: "Afficher {count} de plus" },
+  "streaks.repairsFewer": { en: "Show fewer", fr: "Afficher moins" },
   "streaks.repair": { en: "Repair", fr: "Réparer" },
   "streaks.repairFor": { en: "Repair the {streak} streak", fr: "Réparer la série {streak}" },
   "streaks.confirmRepairFor": {
