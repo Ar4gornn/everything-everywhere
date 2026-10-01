@@ -1156,11 +1156,11 @@ export const api = {
       body: JSON.stringify({ streak }),
     }),
 
-  /** Spend points to repair the days missed just before today. 409 `repair_unavailable` when nothing is on offer, `points_insufficient` under the price. */
-  buyStreakRepair: (streak: string) =>
+  /** Spend points to repair the days missed just before today. `cost` is the total the person confirmed; 409 `repair_unavailable` when nothing is on offer or it is no longer that price, `points_insufficient` under the price. */
+  buyStreakRepair: (streak: string, cost: number) =>
     request<StreakPurchaseResult>("/api/streaks/repairs", {
       method: "POST",
-      body: JSON.stringify({ streak }),
+      body: JSON.stringify({ streak, cost }),
     }),
 
   // --- notes (Epic 32). The id is the client's (AD-48): a note is written with PUT under

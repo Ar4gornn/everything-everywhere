@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 
 class DayOut(BaseModel):
@@ -56,6 +56,14 @@ class StreaksOut(BaseModel):
 
 class CheckInIn(BaseModel):
     streak: str = Field(min_length=1, max_length=32)
+
+
+class RepairIn(BaseModel):
+    """The streak and the total price the person confirmed. Strict: ``"35"`` and ``35.0``
+    are a 422, not a number guessed at."""
+
+    streak: str = Field(min_length=1, max_length=32)
+    cost: StrictInt
 
 
 class PurchaseOut(BaseModel):

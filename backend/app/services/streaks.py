@@ -366,9 +366,12 @@ def buy_freeze(
 
 
 def buy_repair(
-    session: Session, user_id: uuid.UUID, streak_id: str, now: dt.datetime
+    session: Session, user_id: uuid.UUID, streak_id: str, now: dt.datetime, cost: int
 ) -> tuple[Points, Streak]:
     """Repair the days missed directly before today (§2.5): one row per day, ``covers = d``.
+    ``cost`` is the total the person confirmed: the offer is priced again here, on this
+    request's clock and history, and anything but the same number is ``repair_unavailable``
+    (a page left open past midnight must not spend more than it showed).
     ``repair_unavailable`` when nothing is on offer, ``points_insufficient`` when the balance
     is under the price. The lock is taken first, as for a freeze. A second submit that still
     saw the offer would collide on ``(user_id, streak, covers)``; that one ``23505`` is
@@ -382,6 +385,8 @@ def buy_repair(
     offer = _streak(streak_id, _of(by_module, streak_id), today, bought).repair
     if offer is None:
         raise Conflict("There is nothing to repair", "repair_unavailable")
+    if cost != offer.cost:
+        raise Conflict("The price of this repair has changed", "repair_unavailable")
     if points(by_module, bought).balance < offer.cost:
         raise Conflict("Not enough points for this repair", "points_insufficient")
     try:

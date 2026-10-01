@@ -101,12 +101,12 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
     }
   }
 
-  async function buyRepair(id: string) {
+  async function buyRepair(id: string, cost: number) {
     if (repairing) return;
     setRepairing(true);
     setRepairFailed(null);
     try {
-      const bought = await api.buyStreakRepair(id);
+      const bought = await api.buyStreakRepair(id, cost);
       setData((was) =>
         was
           ? {
@@ -178,7 +178,7 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
                       streak: name,
                     })}
                     disabled={repairing}
-                    onClick={() => void buyRepair(row.id)}
+                    onClick={() => void buyRepair(row.id, repair.cost)}
                   >
                     {t("streaks.confirmBuy", { price: repair.cost, name: pointsName })}
                   </button>

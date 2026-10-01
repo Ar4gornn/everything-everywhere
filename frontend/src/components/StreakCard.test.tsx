@@ -413,8 +413,8 @@ describe("StreakCard repair (Story 41.5)", () => {
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(1);
     expect(posts[0]?.url).toMatch(/\/api\/streaks\/repairs$/);
-    // The body names the streak and nothing else: no price, no day.
-    expect(JSON.parse(posts[0]?.body ?? "{}")).toEqual({ streak: "overall" });
+    // The body names the streak and the price the person confirmed: no day.
+    expect(JSON.parse(posts[0]?.body ?? "{}")).toEqual({ streak: "overall", cost: 36 });
     // The offer is gone and the balance is the one the answer carried.
     expect(screen.queryByRole("button", { name: "Repair the Overall streak" })).toBeNull();
     expect(document.querySelector(".streak-card-points")).toHaveTextContent("8 · Points");
@@ -468,6 +468,24 @@ describe("StreakCard repair (Story 41.5)", () => {
         streaks: { ...DEFAULT_PREFERENCES.streaks, gym: true },
       },
     });
+    render();
+    expect(await screen.findByRole("button", { name: "Repair the Gym streak" })).toBeEnabled();
+  });
+
+  it("offers a hidden tab streak's repair nowhere, and a shown one's", async () => {
+    const gym = { ...overall(), id: "gym", repair: { days: 1, cost: 40 } };
+    const prefs = (on: boolean) => ({
+      ...DEFAULT_PREFERENCES,
+      streaks: { ...DEFAULT_PREFERENCES.streaks, gym: on },
+    });
+    mockApi(overall(), { extra: [gym], preferences: prefs(false) });
+    const first = render();
+    await screen.findByText("24");
+    expect(screen.queryByRole("button", { name: "Repair the Gym streak" })).toBeNull();
+    first.unmount();
+
+    window.localStorage.clear();
+    mockApi(overall(), { extra: [gym], preferences: prefs(true) });
     render();
     expect(await screen.findByRole("button", { name: "Repair the Gym streak" })).toBeEnabled();
   });

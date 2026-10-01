@@ -566,10 +566,12 @@ def _step(rng, owner_engine, user, now, zone):
         with tenant_session(user["id"]) as session:
             _, found, _ = streaks.read(session, user["id"], now)
             offered = [s.id for s in found if s.repair]
+            price = {s.id: s.repair.cost for s in found if s.repair}
             everyone = (streaks.OVERALL, *activity.MODULES)
             pool = offered if offered and rng.random() < 0.8 else everyone
             try:
-                streaks.buy_repair(session, user["id"], rng.choice(pool), now)
+                pick = rng.choice(pool)
+                streaks.buy_repair(session, user["id"], pick, now, price.get(pick, 1))
             except Conflict as refusal:
                 assert refusal.code in ("repair_unavailable", "points_insufficient")
     elif roll < 0.92:

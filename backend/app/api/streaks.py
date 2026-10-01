@@ -9,6 +9,7 @@ from app.schemas.streaks import (
     PointsOut,
     PricesOut,
     PurchaseOut,
+    RepairIn,
     RepairOut,
     StreakOut,
     StreaksOut,
@@ -76,10 +77,11 @@ def buy_freeze(
 
 @router.post("/repairs", response_model=PurchaseOut, status_code=status.HTTP_201_CREATED)
 def buy_repair(
-    payload: CheckInIn, user_id: CurrentUserId, session: DbSession, now: Now
+    payload: RepairIn, user_id: CurrentUserId, session: DbSession, now: Now
 ) -> PurchaseOut:
     """Spend points to repair the one or two days missed just before today. ``409
-    repair_unavailable`` when nothing is on offer (or a double submit lost the race),
+    repair_unavailable`` when nothing is on offer, ``cost`` is not what the offer costs now
+    (or a double submit lost the race),
     ``409 points_insufficient`` under the price. Never makes a day (AD-57)."""
-    points, streak = streaks.buy_repair(session, user_id, payload.streak, now)
+    points, streak = streaks.buy_repair(session, user_id, payload.streak, now, payload.cost)
     return PurchaseOut(points=_points(points), streak=_out(streak))

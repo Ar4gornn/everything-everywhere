@@ -91,8 +91,14 @@ def states(streak: dict) -> dict[str, str]:
     return {entry["day"]: entry["state"] for entry in streak["recent"]}
 
 
-def repair(client, user, streak: str = "overall"):
-    return client.post("/api/streaks/repairs", json={"streak": streak}, headers=user["headers"])
+def repair(client, user, streak: str = "overall", cost=None):
+    """Confirm the price the card shows now, unless a test names another."""
+    if cost is None:
+        offer = streak_of(client, user, streak)["repair"] if streak != "nope" else None
+        cost = offer["cost"] if offer else 1
+    return client.post(
+        "/api/streaks/repairs", json={"streak": streak, "cost": cost}, headers=user["headers"]
+    )
 
 
 def check_in(client, user, streak: str = "overall"):
@@ -282,7 +288,7 @@ def test_buying_a_repair_makes_no_day_and_the_client_names_no_price(
     rows = activity_rows(owner_engine)
     response = client.post(
         "/api/streaks/repairs",
-        json={"streak": "overall", "cost": 1, "covers": "2030-01-01", "days": 9},
+        json={"streak": "overall", "cost": 35, "covers": "2030-01-01", "days": 9},
         headers=user_a["headers"],
     )
     assert response.status_code == 201
@@ -298,7 +304,10 @@ def test_an_unknown_streak_is_streak_unknown(client, user_a, owner_engine, clock
 
 
 def test_a_repair_needs_a_session(client):
-    assert client.post("/api/streaks/repairs", json={"streak": "overall"}).status_code == 401
+    assert (
+        client.post("/api/streaks/repairs", json={"streak": "overall", "cost": 35}).status_code
+        == 401
+    )
 
 
 # ------------------------------------------------------------ earning ignores repairs
@@ -411,7 +420,7 @@ def _race(fn, user_id, now, streak, results, barrier):
     try:
         with tenant_session(user_id) as session:
             barrier.wait(timeout=10)
-            fn(session, user_id, streak, now)
+            fn(session, user_id, streak, now, 35)
         results.append("created")
     except Conflict as refusal:
         results.append(refusal.code)
@@ -485,11 +494,11 @@ def test_a_stale_read_that_reaches_the_unique_key_is_repair_unavailable(
     with tenant_session(user_a["id"]) as session:
         stale = streaks._purchases(session, user_a["id"])
     with tenant_session(user_a["id"]) as session:
-        streaks.buy_repair(session, user_a["id"], "overall", now)
+        streaks.buy_repair(session, user_a["id"], "overall", now, 35)
 
     monkeypatch.setattr(streaks, "_purchases", lambda session, uid: stale)
     with pytest.raises(Conflict) as refusal, tenant_session(user_a["id"]) as session:
-        streaks.buy_repair(session, user_a["id"], "overall", now)
+        streaks.buy_repair(session, user_a["id"], "overall", now, 35)
     assert refusal.value.code == "repair_unavailable"
     assert len(repair_rows(owner_engine)) == 1
 
@@ -504,6 +513,85 @@ def test_any_other_integrity_error_is_not_swallowed_as_unavailable(
     now = dt.datetime.combine(day(12), dt.time(12), tzinfo=UTC)
     monkeypatch.setattr(streaks, "REPAIR_PER_DAY", 0)
     with pytest.raises(IntegrityError) as error, tenant_session(user_a["id"]) as session:
-        streaks.buy_repair(session, user_a["id"], "overall", now)
+        streaks.buy_repair(session, user_a["id"], "overall", now, 0)
     assert error.value.orig.sqlstate == "23514"
     assert repair_rows(owner_engine) == []
+
+
+# ------------------------------------------------------------ the confirmed price
+
+
+def test_a_repair_after_midnight_is_refused_when_the_price_it_confirmed_has_changed(
+    client, user_a, owner_engine, clock
+):
+    """The card loaded on day 12 (one day, 35). Left open past midnight, on day 13 the same
+    run has two missed days and the server would charge 70: it must refuse, not spend it."""
+    fund(owner_engine, user_a)
+    seed(owner_engine, user_a, 1, 10)
+    clock(12)
+    assert streak_of(client, user_a)["repair"] == {"days": 1, "cost": 35}
+    before = overview(client, user_a)["points"]
+    clock(13)
+    assert streak_of(client, user_a)["repair"] == {"days": 2, "cost": 70}
+    response = repair(client, user_a, cost=35)
+    assert response.status_code == 409
+    assert response.json()["code"] == "repair_unavailable"
+    assert repair_rows(owner_engine) == []
+    assert overview(client, user_a)["points"] == before
+
+
+@pytest.mark.parametrize("cost", [34, 36, 0, -35, 70])
+def test_a_repair_with_the_wrong_cost_is_repair_unavailable(
+    client, user_a, owner_engine, clock, cost
+):
+    run_then_gap(owner_engine, user_a, clock, run=10, missed=1)
+    response = repair(client, user_a, cost=cost)
+    assert response.status_code == 409
+    assert response.json()["code"] == "repair_unavailable"
+    assert repair_rows(owner_engine) == []
+
+
+def test_a_repair_with_the_right_cost_is_created(client, user_a, owner_engine, clock):
+    run_then_gap(owner_engine, user_a, clock, run=10, missed=1)
+    assert repair(client, user_a, cost=35).status_code == 201
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"streak": "overall"},
+        {"streak": "overall", "cost": "35"},
+        {"streak": "overall", "cost": 35.5},
+        {"streak": "overall", "cost": None},
+        {"streak": "overall", "cost": True},
+    ],
+)
+def test_a_missing_or_non_integer_cost_is_a_422(client, user_a, owner_engine, clock, body):
+    run_then_gap(owner_engine, user_a, clock, run=10, missed=1)
+    response = client.post("/api/streaks/repairs", json=body, headers=user_a["headers"])
+    assert response.status_code == 422
+    assert repair_rows(owner_engine) == []
+
+
+# ------------------------------------------------------------ the two walks, pinned
+
+
+def test_the_earning_walk_and_the_displayed_walk_consume_a_freeze_on_different_days():
+    """Decided 2026-10-01 (§2.6). Days 1..6 active, 7..10 missed, 11..16 active, a
+    freeze bought on day 1, a repair on day 7. Displayed, the repair keeps the run alive and
+    the freeze goes to day 8; earning, which never sees a repair, spends it on day 7 and the
+    run it keeps is paid a bonus across a day the card shows as repaired. Sharing the
+    consumption would let a later repair move a freeze and take a paid bonus back."""
+    active = set(map(d, [*range(1, 7), *range(11, 17)]))
+    freezes = (d(1),)
+    repairs = frozenset({d(7)})
+    _, _, _, shown, _, _ = streaks._walk(active, d(16), freezes, repairs)
+    assert shown[d(7)] == streaks.REPAIRED
+    assert shown[d(8)] == streaks.FROZEN
+    assert shown[d(9)] == streaks.MISSED
+    _, _, _, earning, _, _ = streaks._walk(active, d(16), freezes)
+    assert earning[d(7)] == streaks.FROZEN
+    assert earning[d(8)] == streaks.MISSED
+    # Earning pays the 7-day milestone on the frozen day the card shows as repaired.
+    assert streaks._walk(active, d(16), freezes)[2] == 10
+    assert streaks._walk(active, d(16), freezes, repairs)[2] == 0

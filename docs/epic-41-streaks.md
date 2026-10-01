@@ -145,6 +145,11 @@ the local midnight. **Best** is the highest `run` seen at any point.
   (built in 41.4). Repairs keep the displayed run alive but never add or remove a bonus:
   joining two runs that each paid +10 would otherwise take one back (decided 2026-10-01,
   rejected: paying the larger of both walks; letting earned drop on a repair).
+  The earning walk and the displayed walk also consume freezes **independently**, so earning
+  can pay a bonus across a day the card shows as repaired or missed. Accepted (decided
+  2026-10-01): it only ever adds points, and sharing the consumption would let a later repair
+  move a freeze earlier and take a paid bonus back, breaking "earned never decreases". Pinned
+  by `test_the_earning_walk_and_the_displayed_walk_consume_a_freeze_on_different_days`.
 
 **Balance** = earned − the sum of purchase costs.
 
@@ -226,7 +231,7 @@ another user-scoped table, so the composite-FK rule has nothing to apply to.
 | GET | `/api/streaks` | — | `{ today, points: { balance, earned, spent }, prices: { freeze, max_held, repair_per_day, milestones }, streaks: [ { id, current, best, today_active, held_freezes, repair: null \| { days, cost }, recent: [ { day, state } × 28 ] } ] }`. All 11 streaks, always. The client decides what to show (§2.7) |
 | POST | `/api/streaks/check-in` | `{ streak }` | 200 with that streak. `overall` writes `app`; a module id writes itself. Idempotent. `422 streak_unknown` |
 | POST | `/api/streaks/freezes` | `{ streak }` | 201 with the balance and the streak. `409 points_insufficient` / `freeze_limit` |
-| POST | `/api/streaks/repairs` | `{ streak }` | 201, same shape. `409 points_insufficient` / `repair_unavailable` |
+| POST | `/api/streaks/repairs` | `{ streak, cost }` | 201, same shape. `cost` is the strict-int total the person confirmed; `409 repair_unavailable` when it is not the offer's price now (e.g. the page was left open past midnight), also when nothing is on offer. `409 points_insufficient` |
 | PATCH | `/api/auth/me/preferences` | `streaks`, `points_name` | Existing endpoint, two new keys (§2.6, §2.7) |
 
 Every new code has an English and a French sentence (AD-44).
