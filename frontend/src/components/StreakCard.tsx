@@ -209,12 +209,14 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
     );
   }
 
+  const hasSide = offers.length > 0 || rows.length > 0 || repairFailed !== null;
+
   const tooLow = (
     <span className="hint streak-repair-short">{t("streaks.repairTooLow")}</span>
   );
 
   return (
-    <div className="streak-card">
+    <div className={hasSide ? "streak-card streak-card-split" : "streak-card"}>
       <Card
         title={t("streaks.title")}
         collapseKey={collapseKey}
@@ -332,79 +334,84 @@ export function StreakCard({ collapseKey }: { collapseKey: string }) {
           </div>
         )}
 
-        {offers.length === 1 && offers[0] && (
-          <div className="streak-repair">
-            <p className="streak-repair-text">
-              {t.n("streaks.repairOffer", offers[0].repair.days, {
-                streak: streakName(offers[0].row.id),
-                cost: offers[0].repair.cost,
-                name: pointsName,
-              })}
-              {!affords(offers[0].repair.cost) && <> {tooLow}</>}
-            </p>
-            {repairActions(offers[0].row.id, offers[0].repair.cost)}
-          </div>
-        )}
-        {offers.length > 1 && (
-          <div className="streak-repair streak-repairs">
-            <p className="streak-repair-text streak-repairs-heading">
-              {t.n("streaks.repairsHeading", offers.length)}
-            </p>
-            <ul id={repairsId} className="streak-repair-rows">
-              {listedOffers.map(({ row, repair }) => (
-                <li key={row.id} className="streak-repair-row">
-                  <span className="streak-repair-row-text">
-                    <span>{streakName(row.id)}</span>{" "}
-                    <span className="hint streak-repair-row-price">
-                      {t.n("streaks.repairRowPrice", repair.days, {
-                        cost: repair.cost,
-                        name: pointsName,
-                      })}
-                    </span>
-                    {!affords(repair.cost) && tooLow}
-                  </span>
-                  {repairActions(row.id, repair.cost)}
-                </li>
-              ))}
-            </ul>
-            {foldedOffers > 0 && (
-              <button
-                type="button"
-                className="quiet streak-repairs-more"
-                aria-expanded={allRepairs}
-                aria-controls={repairsId}
-                onClick={() => setAllRepairs((was) => !was)}
-              >
-                {allRepairs
-                  ? t("streaks.repairsFewer")
-                  : t("streaks.repairsMore", { count: foldedOffers })}
-              </button>
+        {hasSide && (
+          // Repairs and tab chips: under the run on a phone, beside it on a desktop.
+          <div className="streak-card-side">
+            {offers.length === 1 && offers[0] && (
+              <div className="streak-repair">
+                <p className="streak-repair-text">
+                  {t.n("streaks.repairOffer", offers[0].repair.days, {
+                    streak: streakName(offers[0].row.id),
+                    cost: offers[0].repair.cost,
+                    name: pointsName,
+                  })}
+                  {!affords(offers[0].repair.cost) && <> {tooLow}</>}
+                </p>
+                {repairActions(offers[0].row.id, offers[0].repair.cost)}
+              </div>
+            )}
+            {offers.length > 1 && (
+              <div className="streak-repair streak-repairs">
+                <p className="streak-repair-text streak-repairs-heading">
+                  {t.n("streaks.repairsHeading", offers.length)}
+                </p>
+                <ul id={repairsId} className="streak-repair-rows">
+                  {listedOffers.map(({ row, repair }) => (
+                    <li key={row.id} className="streak-repair-row">
+                      <span className="streak-repair-row-text">
+                        <span>{streakName(row.id)}</span>{" "}
+                        <span className="hint streak-repair-row-price">
+                          {t.n("streaks.repairRowPrice", repair.days, {
+                            cost: repair.cost,
+                            name: pointsName,
+                          })}
+                        </span>
+                        {!affords(repair.cost) && tooLow}
+                      </span>
+                      {repairActions(row.id, repair.cost)}
+                    </li>
+                  ))}
+                </ul>
+                {foldedOffers > 0 && (
+                  <button
+                    type="button"
+                    className="quiet streak-repairs-more"
+                    aria-expanded={allRepairs}
+                    aria-controls={repairsId}
+                    onClick={() => setAllRepairs((was) => !was)}
+                  >
+                    {allRepairs
+                      ? t("streaks.repairsFewer")
+                      : t("streaks.repairsMore", { count: foldedOffers })}
+                  </button>
+                )}
+              </div>
+            )}
+            <ErrorBanner message={repairFailed} />
+
+            {rows.length > 0 && (
+              <ul className="streak-chips" aria-label={t("streaks.tabs")}>
+                {rows.map((row) => (
+                  <li
+                    key={row.id}
+                    className={row.current === 0 ? "streak-chip streak-chip-idle" : "streak-chip"}
+                  >
+                    <span>{t(STREAK_NAME[row.id])}</span>{" "}
+                    <strong aria-hidden="true">{row.current}</strong>
+                    <span className="visually-hidden">{t.n("streaks.days", row.current)}</span>
+                    {row.today_active && (
+                      <>
+                        {" "}
+                        <span aria-hidden="true">✓</span>
+                        <span className="visually-hidden"> {t("streaks.rowActiveToday")}</span>
+                      </>
+                    )}
+                    <span className="visually-hidden"> {t("streaks.best", { count: row.best })}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        )}
-        <ErrorBanner message={repairFailed} />
-
-        {rows.length > 0 && (
-          <ul className="streak-chips" aria-label={t("streaks.tabs")}>
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className={row.current === 0 ? "streak-chip streak-chip-idle" : "streak-chip"}
-              >
-                <span>{t(STREAK_NAME[row.id])}</span>{" "}
-                <strong aria-hidden="true">{row.current}</strong>
-                <span className="visually-hidden">{t.n("streaks.days", row.current)}</span>
-                {row.today_active && (
-                  <>
-                    {" "}
-                    <span aria-hidden="true">✓</span>
-                    <span className="visually-hidden"> {t("streaks.rowActiveToday")}</span>
-                  </>
-                )}
-                <span className="visually-hidden"> {t("streaks.best", { count: row.best })}</span>
-              </li>
-            ))}
-          </ul>
         )}
 
         <Dots

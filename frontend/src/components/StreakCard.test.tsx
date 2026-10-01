@@ -807,3 +807,41 @@ describe("Card layout (run first, folded repairs, chips, weekday head)", () => {
     expect(missed).toMatch(/linear-gradient\(-45deg/);
   });
 });
+
+describe("Desktop split", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("puts repairs and chips in a side column only when there is something for it", async () => {
+    mockApi(overall());
+    const first = render();
+    await screen.findByText("24");
+    expect(document.querySelector(".streak-card")).not.toHaveClass("streak-card-split");
+    expect(document.querySelector(".streak-card-side")).toBeNull();
+    first.unmount();
+
+    window.localStorage.clear();
+    mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      extra: [{ ...overall(), id: "gym" }],
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        streaks: { ...DEFAULT_PREFERENCES.streaks, gym: true },
+      },
+    });
+    render();
+    const list = await screen.findByRole("list", { name: "Streaks by tab" });
+    const side = document.querySelector(".streak-card-side");
+    expect(document.querySelector(".streak-card")).toHaveClass("streak-card-split");
+    expect(side).toContainElement(list);
+    expect(side).toContainElement(screen.getByRole("button", { name: "Repair the Overall streak" }));
+    // The run and the dots stay out of it, in the left column.
+    expect(side).not.toContainElement(screen.getByRole("button", { name: "Check in" }));
+    expect(side).not.toContainElement(screen.getByRole("list", { name: "The last four weeks" }));
+    const css = readFileSync(join(__dirname, "..", "styles.css"), "utf-8");
+    expect(css).toMatch(
+      /@media \(min-width: 721px\)[\s\S]*?\.streak-card-split > \.card > \.streak-card-side\s*\{[^}]*grid-column:\s*2/,
+    );
+  });
+});
