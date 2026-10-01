@@ -1,7 +1,9 @@
 import logging
 import re
+from collections.abc import Iterator
+from typing import Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.exceptions import RequestValidationError
@@ -55,10 +57,66 @@ class _MaskFeedToken(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(_MaskFeedToken())
 
+
+# JSON may spell a lone UTF-16 surrogate (`"\ud800"`); Python decodes it into a str that
+# cannot be encoded as UTF-8. Postgres refuses it (a 500) and so does Starlette when a 422
+# echoes it back (another 500). A properly paired escape has already been joined into one
+# character by the decoder, so any surrogate left in a decoded string is a lone one.
+_SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def _scrub(value: Any) -> Any:
+    """`value` with every lone surrogate replaced by U+FFFD, so it can always be rendered."""
+    if isinstance(value, str):
+        return _SURROGATE.sub("�", value)
+    if isinstance(value, dict):
+        return {_scrub(key): _scrub(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_scrub(item) for item in value]
+    return value
+
+
+def _lone_surrogates(value: Any, loc: tuple) -> Iterator[dict]:
+    if isinstance(value, str):
+        if _SURROGATE.search(value):
+            yield {
+                "type": "string_unicode",
+                "loc": loc,
+                "msg": "Input should be a valid string, unable to parse raw data as a unicode "
+                "string",
+                "input": value,
+            }
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from _lone_surrogates(key, loc)
+            yield from _lone_surrogates(item, (*loc, key))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _lone_surrogates(item, (*loc, index))
+
+
+async def _refuse_lone_surrogates(request: Request) -> None:
+    """Every route's request body is checked once, here, before any schema or the database.
+
+    FastAPI has already read and decoded the body by the time a dependency runs, and
+    Starlette caches the decoded value, so this costs one walk and no second parse.
+    """
+    if "json" not in request.headers.get("content-type", ""):
+        return
+    try:
+        body = await request.json()
+    except ValueError:
+        return  # malformed JSON: FastAPI's own 422 already covers it
+    errors = list(_lone_surrogates(body, ("body",)))
+    if errors:
+        raise RequestValidationError(errors)
+
+
 app = FastAPI(
     title="Everything Everywhere",
     version="0.1.0",
     description="Personal finance tracker. Per-user isolation is enforced by Postgres RLS.",
+    dependencies=[Depends(_refuse_lone_surrogates)],
 )
 
 # AD-14/AD-15: the client is a separate static build on another origin, and which origins
@@ -137,7 +195,7 @@ def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
     """
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={"detail": jsonable_encoder(exc.errors()), "code": "validation"},
+        content={"detail": _scrub(jsonable_encoder(exc.errors())), "code": "validation"},
     )
 
 
