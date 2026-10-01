@@ -66,6 +66,7 @@ export const NOTIFICATIONS: [NotificationKind, boolean][] = [
   ["habits", true],
   ["due_tomorrow", false],
   ["savings", false],
+  ["streak", false],
 ];
 
 function defaultLayout() {

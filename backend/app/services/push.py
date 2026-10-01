@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import local_now
 from app.core.errors import NotFound
 from app.models.push import PushSubscription
+from app.services.activity import MODULES as STREAK_MODULES
 
 
 def list_subscriptions(session: Session, user_id: uuid.UUID) -> list[PushSubscription]:
@@ -117,6 +118,21 @@ _WORDS: dict[str, dict[str, str]] = {
         "savings_many": "{count} savings goals are behind",
         "habits_one": "{count} habit still to do",
         "habits_many": "{count} habits still to do",
+        "streak_one": "Your {count}-day streak is at risk today",
+        "streak_many": "Your {count}-day streak is at risk today",
+        "streak_frozen_one": "Your {count}-day streak is safe tonight: a freeze will cover it",
+        "streak_frozen_many": "Your {count}-day streak is safe tonight: a freeze will cover it",
+        "streak_tabs": "tabs at risk",
+        "tab_entries": "Entries",
+        "tab_plan": "Plan",
+        "tab_grow": "Grow",
+        "tab_habits": "Habits",
+        "tab_mood": "Mood",
+        "tab_books": "Books",
+        "tab_stock": "Stock",
+        "tab_gym": "Gym",
+        "tab_recipes": "Recipes",
+        "tab_notes": "Notes",
         "test": "Notifications work on this device.",
         "more": ", …",
     },
@@ -131,6 +147,25 @@ _WORDS: dict[str, dict[str, str]] = {
         "savings_many": "{count} objectifs d'épargne en retard",
         "habits_one": "{count} habitude à faire",
         "habits_many": "{count} habitudes à faire",
+        "streak_one": "Votre série de {count} jour est en danger aujourd'hui",
+        "streak_many": "Votre série de {count} jours est en danger aujourd'hui",
+        "streak_frozen_one": (
+            "Votre série de {count} jour est protégée ce soir : un gel la couvrira"
+        ),
+        "streak_frozen_many": (
+            "Votre série de {count} jours est protégée ce soir : un gel la couvrira"
+        ),
+        "streak_tabs": "onglets en danger",
+        "tab_entries": "Opérations",
+        "tab_plan": "Budget",
+        "tab_grow": "Épargne",
+        "tab_habits": "Habitudes",
+        "tab_mood": "Humeur",
+        "tab_books": "Livres",
+        "tab_stock": "Stock",
+        "tab_gym": "Sport",
+        "tab_recipes": "Recettes",
+        "tab_notes": "Notes",
         "test": "Les notifications fonctionnent sur cet appareil.",
         "more": ", …",
     },
@@ -144,6 +179,7 @@ _PAGES: dict[str, str] = {
     "due": "/plan",
     "savings": "/plan",
     "habits": "/habits",
+    "streak": "/",
 }
 
 
@@ -170,6 +206,9 @@ class Digest:
         *,
         due_names: list[str] | None = None,
         behind_names: list[str] | None = None,
+        streak_days: int = 0,
+        streak_tabs: list[str] | None = None,
+        streak_frozen: bool = False,
     ) -> None:
         self.low_items = low_items
         self.pending = pending
@@ -182,6 +221,12 @@ class Digest:
         # tomorrow, and pots below the straight line to a goal less than a month away.
         self.due_names = due_names or []
         self.behind_names = behind_names or []
+        # Epic 41 (41.6), opt-in: the overall streak's length when today is still to do
+        # (0 says nothing), the shown tab streaks in the same state (module ids), and
+        # whether a held freeze will cover tonight. Decided by ``digest()``, worded here.
+        self.streak_days = streak_days
+        self.streak_tabs = streak_tabs or []
+        self.streak_frozen = streak_frozen
         self.language = language if language in _WORDS else "en"
 
     def _clauses(self) -> list[str]:
@@ -192,6 +237,7 @@ class Digest:
             "due": len(self.due_names),
             "savings": len(self.behind_names),
             "habits": len(self.habit_names),
+            "streak": self.streak_days,
         }
         return [key for key, count in present.items() if count]
 
@@ -220,6 +266,19 @@ class Digest:
         more = _WORDS[self.language]["more"] if count > 3 else ""
         return f" ({listed}{more})"
 
+    def _streak_clause(self) -> str:
+        """The streak sentence, defined once (41.6). A freeze held on the overall streak says
+        so instead of warning; the shown tab streaks also at risk follow, named like items."""
+        words = _WORDS[self.language]
+        key = "streak_frozen" if self.streak_frozen else "streak"
+        text_ = self._say(key, self.streak_days)
+        if self.streak_tabs:
+            names = [words[f"tab_{tab}"] for tab in self.streak_tabs]
+            listed = ", ".join(names[:3]) + (words["more"] if len(names) > 3 else "")
+            sep = " : " if self.language == "fr" else ": "
+            text_ += f" ({words['streak_tabs']}{sep}{listed})"
+        return text_
+
     @property
     def body(self) -> str:
         parts = []
@@ -231,6 +290,8 @@ class Digest:
                 )
             elif key == "pending":
                 parts.append(self._say("pending", self.pending))
+            elif key == "streak":
+                parts.append(self._streak_clause())
             else:
                 names = {
                     "due": self.due_names,
@@ -284,6 +345,7 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
     from app.services import habits as habits_service
     from app.services import recurring as recurring_service
     from app.services import savings as savings_service
+    from app.services import streaks as streaks_service
 
     today = today or dt.date.today()
 
@@ -364,6 +426,30 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
         else []
     )
 
+    # The streak clause reads the streaks service, never its own walk (AD-30, AD-57): the
+    # overall streak is still alive (current >= 1) and today is not yet active on the
+    # digest's local day. A tab streak is named when it is *shown* (its switch on, its
+    # module not off) and in the same state, and not already covered by a freeze of its own.
+    streak_days = 0
+    streak_frozen = False
+    streak_tabs: list[str] = []
+    if wanted("streak"):
+        found = streaks_service.on(session, user_id, today)
+        overall = found[streaks_service.OVERALL]
+        if overall.current >= 1 and not overall.today_active:
+            streak_days = overall.current
+            streak_frozen = overall.held_freezes > 0
+            shown = profile.preferences["streaks"] if profile else {}
+            streak_tabs = [
+                tab
+                for tab in STREAK_MODULES
+                if shown.get(tab)
+                and modules.get(tab, True)
+                and found[tab].current >= 1
+                and not found[tab].today_active
+                and found[tab].held_freezes == 0
+            ]
+
     return Digest(
         len(low),
         int(pending),
@@ -372,6 +458,9 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
         language=profile.language if profile else "en",
         due_names=due,
         behind_names=behind,
+        streak_days=streak_days,
+        streak_tabs=streak_tabs,
+        streak_frozen=streak_frozen,
     )
 
 

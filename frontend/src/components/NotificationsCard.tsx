@@ -17,6 +17,7 @@ const KIND_LABEL = {
   habits: "notify.kindHabits",
   due_tomorrow: "notify.kindDueTomorrow",
   savings: "notify.kindSavings",
+  streak: "notify.kindStreak",
 } as const satisfies Record<NotificationKind, MessageKey>;
 
 /** A kind that belongs to a module is silent while the module is off (AD-49, AD-52). */

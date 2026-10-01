@@ -122,7 +122,7 @@ export interface Layout {
 }
 
 /** Epic 36 (AD-52): what the daily digest may talk about. */
-export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings";
+export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings" | "streak";
 
 /** Epic 41 (AD-57): a module with a streak of its own. `overall` is the dashboard card and
  *  has no switch. */

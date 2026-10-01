@@ -307,6 +307,15 @@ def read(
     return today, found, points(by_module, bought)
 
 
+def on(session: Session, user_id: uuid.UUID, today: dt.date) -> dict[str, Streak]:
+    """Every streak (overall, then one per module) as of ``today``, by id, from one read of
+    the history. For callers that already hold the account's local day (the digest, 41.6):
+    the same walk as ``read``, so a reminder and the card cannot disagree."""
+    by_module = _active_days(session, user_id)
+    bought = _purchases(session, user_id)
+    return {sid: _streak(sid, _of(by_module, sid), today, bought) for sid in (OVERALL, *MODULES)}
+
+
 def check_in(
     session: Session, user_id: uuid.UUID, streak_id: str, now: dt.datetime
 ) -> tuple[dt.date, Streak]:

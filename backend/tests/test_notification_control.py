@@ -121,6 +121,7 @@ def test_kinds_are_stored_and_resolved(client, user_a):
         "habits": True,
         "due_tomorrow": False,
         "savings": True,
+        "streak": False,
     }
 
 

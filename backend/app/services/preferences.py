@@ -76,6 +76,7 @@ NOTIFICATIONS: tuple[tuple[str, bool], ...] = (
     ("habits", True),
     ("due_tomorrow", False),
     ("savings", False),
+    ("streak", False),
 )
 _NOTIFICATION_DEFAULT = dict(NOTIFICATIONS)
 

@@ -64,7 +64,7 @@ describe("the defaults", () => {
     ].map((id) => ({ id, on: true }));
     expect(DEFAULT_PREFERENCES).toEqual({
       modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true },
-      notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false },
+      notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false, streak: false },
       // Epic 41: every tab streak is opt-in, and the list is pinned against the server's.
       streaks: {
         entries: false, plan: false, grow: false, habits: false, mood: false,

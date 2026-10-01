@@ -39,6 +39,7 @@ DEFAULT = {
         "habits": True,
         "due_tomorrow": False,
         "savings": False,
+        "streak": False,
     },
     # Epic 41 (AD-57): every tab streak is opt-in.
     "streaks": {
