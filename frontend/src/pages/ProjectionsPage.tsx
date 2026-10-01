@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 
 import { GrowthChart } from "../charts/GrowthChart";
 import type { GrowthSeries } from "../charts/GrowthChart";
+import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { useLayout } from "../layout/useLayout";
@@ -108,6 +109,7 @@ export function ProjectionsPage() {
 
   return (
     <>
+      <CheckInButton streak="grow" bar />
       {invalid && (
         <ErrorBanner message={t("grow.badInput")} />
       )}

@@ -101,6 +101,7 @@ export type SectionId =
   | "recipes";
 export type CardId =
   | "stats"
+  | "streaks"
   | "pending"
   | "leftover"
   | "reading"
@@ -121,11 +122,29 @@ export interface Layout {
 }
 
 /** Epic 36 (AD-52): what the daily digest may talk about. */
-export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings";
+export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings" | "streak";
+
+/** Epic 41 (AD-57): a module with a streak of its own. `overall` is the dashboard card and
+ *  has no switch. */
+export type StreakModuleId =
+  | "entries"
+  | "plan"
+  | "grow"
+  | "habits"
+  | "mood"
+  | "books"
+  | "stock"
+  | "gym"
+  | "recipes"
+  | "notes";
 
 export interface Preferences {
   modules: Record<ModuleId, boolean>;
   notifications: Record<NotificationKind, boolean>;
+  /** Which tab streaks are shown; every one is off until switched on. */
+  streaks: Record<StreakModuleId, boolean>;
+  /** The person's word for points (Epic 41.3), or null for the default label. */
+  points_name: string | null;
   phone: Layout;
   desktop: Layout;
 }
@@ -997,6 +1016,49 @@ export interface BookQuoteDraw {
   page: number | null;
   title: string;
   author: string;
+}
+
+/** Epic 41 (AD-57): one day of a streak, as the four-week dots draw it. */
+/** `before`: a day before the first active one — no streak yet, so not missed either. */
+export type StreakState = "active" | "pending" | "missed" | "before" | "frozen" | "repaired";
+
+export interface Streak {
+  id: string;
+  current: number;
+  best: number;
+  today_active: boolean;
+  /** Freezes bought and not yet used (Story 41.4); absent on an older server. */
+  held_freezes?: number;
+  /** The repair on offer for the one or two days missed just before today (Story 41.5): how many days and the total price. Null when none; absent on an older server. */
+  repair?: { days: number; cost: number } | null;
+  recent: { day: string; state: StreakState }[];
+}
+
+/** Points are computed by the server from activity alone (AD-57); `spent` is what purchases cost. */
+export interface StreakPoints {
+  balance: number;
+  earned: number;
+  spent: number;
+}
+
+export interface StreaksOverview {
+  /** The account's local date, worked out by the server: the client never sends a day. */
+  today: string;
+  /** Absent on a server older than Story 41.3: the card then shows no balance. */
+  points?: StreakPoints;
+  prices?: {
+    freeze?: number;
+    max_held?: number;
+    repair_per_day?: number;
+    milestones: { days: number; bonus: number }[];
+  };
+  streaks: Streak[];
+}
+
+/** What a purchase answers with: the balance after it, and the streak it was for. */
+export interface StreakPurchaseResult {
+  points: StreakPoints;
+  streak: Streak;
 }
 
 /** A series exists exactly as long as one book names it, so `books` is never zero. */

@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { Budget, BudgetVsActual, Category, Pot } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { ProgressBar } from "../charts/ProgressBar";
+import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
 import { RecurringCard } from "../components/RecurringCard";
 import { SavingsCard } from "../components/SavingsCard";
@@ -112,6 +113,7 @@ export function PlanPage() {
 
   return (
     <>
+      <CheckInButton streak="plan" bar />
       <ErrorBanner message={failure} />
 
       <RecurringCard />

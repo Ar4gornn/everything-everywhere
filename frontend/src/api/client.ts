@@ -71,6 +71,9 @@ import type {
   SavingsType,
   ShoppingList,
   Space,
+  Streak,
+  StreakPurchaseResult,
+  StreaksOverview,
   Step,
   StockChange,
   Summary,
@@ -1134,6 +1137,31 @@ export const api = {
    */
   drawBookQuote: (exclude?: string) =>
     request<BookQuoteDraw | null>(`/api/books/quotes/draw${query({ exclude })}`),
+
+  // --- streaks (Epic 41). The server owns the day: nothing here sends one.
+
+  getStreaks: () => request<StreaksOverview>("/api/streaks"),
+
+  /** Idempotent: pressing it twice is one day. */
+  streakCheckIn: (streak: string) =>
+    request<Streak>("/api/streaks/check-in", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
+
+  /** Spend points on a freeze. 409 `freeze_limit` at two held, `points_insufficient` under the price. */
+  buyStreakFreeze: (streak: string) =>
+    request<StreakPurchaseResult>("/api/streaks/freezes", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
+
+  /** Spend points to repair the days missed just before today. `cost` is the total the person confirmed; 409 `repair_unavailable` when nothing is on offer or it is no longer that price, `points_insufficient` under the price. */
+  buyStreakRepair: (streak: string, cost: number) =>
+    request<StreakPurchaseResult>("/api/streaks/repairs", {
+      method: "POST",
+      body: JSON.stringify({ streak, cost }),
+    }),
 
   // --- notes (Epic 32). The id is the client's (AD-48): a note is written with PUT under
   // an id minted when the editor opened, so an offline draft retried after a lost response

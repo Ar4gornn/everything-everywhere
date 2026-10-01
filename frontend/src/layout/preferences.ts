@@ -7,6 +7,7 @@ import type {
   Preferences,
   PreferencesPatch,
   SectionId,
+  StreakModuleId,
   User,
 } from "../api/types";
 
@@ -31,6 +32,7 @@ const SECTIONS: [SectionId, "bar" | "top"][] = [
 export const MODULES: ModuleId[] = ["habits", "books", "mood", "stock", "gym", "recipes", "notes"];
 export const CARDS: CardId[] = [
   "stats",
+  "streaks",
   "pending",
   "leftover",
   "reading",
@@ -40,6 +42,19 @@ export const CARDS: CardId[] = [
   "savings",
   "trends",
   "categories",
+];
+/** Epic 41 (AD-57): the module streaks, in Settings order. All off by default. */
+export const STREAKS: StreakModuleId[] = [
+  "entries",
+  "plan",
+  "grow",
+  "habits",
+  "mood",
+  "books",
+  "stock",
+  "gym",
+  "recipes",
+  "notes",
 ];
 export const LAYOUTS: LayoutName[] = ["phone", "desktop"];
 
@@ -51,6 +66,7 @@ export const NOTIFICATIONS: [NotificationKind, boolean][] = [
   ["habits", true],
   ["due_tomorrow", false],
   ["savings", false],
+  ["streak", false],
 ];
 
 function defaultLayout() {
@@ -63,6 +79,8 @@ function defaultLayout() {
 export const DEFAULT_PREFERENCES: Preferences = {
   modules: Object.fromEntries(MODULES.map((id) => [id, true])) as Record<ModuleId, boolean>,
   notifications: Object.fromEntries(NOTIFICATIONS) as Record<NotificationKind, boolean>,
+  streaks: Object.fromEntries(STREAKS.map((id) => [id, false])) as Record<StreakModuleId, boolean>,
+  points_name: null,
   phone: defaultLayout(),
   desktop: defaultLayout(),
 };
@@ -70,11 +88,41 @@ export const DEFAULT_PREFERENCES: Preferences = {
 /** The account's preferences, or the app as it was when the server predates them. */
 export function preferencesOf(user: User | null | undefined): Preferences {
   if (!user?.preferences) return DEFAULT_PREFERENCES;
-  // A server between 0025 and 0028 resolves everything but the notification kinds.
-  return user.preferences.notifications
+  const { notifications, streaks, points_name } = user.preferences;
+  // A server between 0025 and 0028 resolves everything but the notification kinds, and one
+  // older than Epic 41 has no streak switches: each falls back to its default.
+  return notifications && streaks && points_name !== undefined
     ? user.preferences
-    : { ...user.preferences, notifications: DEFAULT_PREFERENCES.notifications };
+    : {
+        ...user.preferences,
+        notifications: notifications ?? DEFAULT_PREFERENCES.notifications,
+        streaks: streaks ?? DEFAULT_PREFERENCES.streaks,
+        points_name: points_name ?? null,
+      };
 }
+
+/**
+ * The tab streaks to show: the preference is on **and** its module is on (§2.7). A core
+ * section (entries, plan, grow) has no module and cannot be off. Off hides UI only, so the
+ * streak goes on earning while it is out of sight.
+ */
+export function shownStreaks(prefs: Preferences): StreakModuleId[] {
+  return STREAKS.filter((id) => {
+    const module = STREAK_MODULE[id];
+    return prefs.streaks[id] && (module === undefined || prefs.modules[module]);
+  });
+}
+
+/** The module that hides a streak when it is off; none for the three core sections. */
+export const STREAK_MODULE: Partial<Record<StreakModuleId, ModuleId>> = {
+  habits: "habits",
+  books: "books",
+  mood: "mood",
+  stock: "stock",
+  gym: "gym",
+  recipes: "recipes",
+  notes: "notes",
+};
 
 /** What the server does with a patch: each top-level key present replaces that subtree. */
 export function applyPatch(prefs: Preferences, patch: PreferencesPatch): Preferences {

@@ -2660,3 +2660,50 @@ Scoped 2026-09-28. AD-56. No migration. Brief and as-built notes: `docs/epic-40-
   days, Monday first, every item in full with its amount; stacked one day per row on a
   phone. Arrows, the nav buttons and a swipe turn it by seven days; a week across the
   account's month boundary loads both budget months.
+
+## Epic 41: Streaks and points
+
+Scoped 2026-09-29, options and rejections in `docs/epic-41-streaks.md` §1. AD-57.
+Migrations `0033` (activity days) and `0034` (purchases). A day is active on any successful
+write or a Check in; an overall streak always, a streak per module that Settings shows;
+points for every active day, spent on a freeze bought ahead or a repair within 48 hours.
+The rules, the route map and every acceptance criterion: `docs/epic-41-streaks.md`.
+
+**Explicitly out:** leaderboards; other shop items; backfill; a cadence per tab; a streak
+page; streaks in the export; a push other than the daily digest.
+
+### Story 41.1: Activity and the overall streak
+
+- `core/clock.py` (`local_today`, one overridable clock; the digest moves onto it). Migration
+  `0033`, `record_activity` on every mapped router, `test_activity_map.py` refusing an
+  unclassified write route. The walk without freezes; `GET /api/streaks`,
+  `POST /api/streaks/check-in`; `StreakCard` (card `streaks`, after `stats`).
+
+### Story 41.2: Tab streaks
+
+- Ten module streaks; `preferences.streaks` (all off by default, `StrictBool`); Settings
+  switches; a Check in button on each section view whose streak is shown and module on.
+
+### Story 41.3: Points
+
+- Earned (1 per active day, +1 per module active, 7/30/100/365 bonuses) minus spent,
+  computed on read; `preferences.points_name` (1-24 characters, default "Points").
+
+### Story 41.4: Freeze
+
+- Migration `0034`; buy ahead, 20, at most 2 held per streak, consumed by the walk on a
+  missed day on or after purchase while the run is alive; advisory lock per user.
+
+### Story 41.5: Repair
+
+- Offered for a gap of 1-2 missed days before today after a live run; `g × (30 + L // 2)`;
+  one row per covered day, unique per streak and day.
+
+### Story 41.6: Streak in the digest
+
+- Kind `streak`, off by default; one clause, English and French, when the streak is alive
+  and today is not active.
+
+### Story 41.7: QA
+
+- Second-user proof; every new guard mutated red; overflow sweep EN/FR at 375 and 320.

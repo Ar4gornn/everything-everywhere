@@ -13,6 +13,7 @@ import type {
 import { HabitHeatmap } from "../charts/HabitHeatmap";
 import { MoodStrip, MoodTally } from "../charts/MoodStrip";
 import { Card, Empty, ErrorBanner } from "../components/ui";
+import { CheckInButton } from "../components/CheckInButton";
 import { HABITS_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { useToast } from "../components/Toast";
 import { useT, type Translate } from "../i18n";
@@ -527,6 +528,7 @@ export function HabitsPage() {
           {/* Two views of one section: habits here, books next door. The shelf takes no
               bottom tab of its own — see App.tsx for the whole argument. */}
           <ViewSwitch label="view.habitsView" views={HABITS_VIEWS} current="/habits" />
+          <CheckInButton streak="habits" />
           <button
             type="button"
             className="quiet"

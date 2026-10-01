@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import text
 
+from app.core.clock import local_today
 from app.core.config import get_settings
 from app.services import push
 from app.services.push import Digest
@@ -120,6 +121,7 @@ def test_kinds_are_stored_and_resolved(client, user_a):
         "habits": True,
         "due_tomorrow": False,
         "savings": True,
+        "streak": False,
     }
 
 
@@ -466,11 +468,11 @@ def test_the_local_day_is_the_one_habits_are_judged_on(client, user_a):
         headers=user_a["headers"],
     )
     now = dt.datetime(2026, 9, 27, 15, 30, tzinfo=UTC)  # Sunday in UTC, Monday in Tokyo
-    assert push.local_now("Asia/Tokyo", now).date().weekday() == 0
-    assert _digest(user_a, today=push.local_now("Asia/Tokyo", now).date()).habit_names == [
+    assert local_today("Asia/Tokyo", now).weekday() == 0
+    assert _digest(user_a, today=local_today("Asia/Tokyo", now)).habit_names == [
         "Stretch"
     ]
-    assert _digest(user_a, today=push.local_now("UTC", now).date()).habit_names == []
+    assert _digest(user_a, today=local_today("UTC", now)).habit_names == []
 
 
 def test_a_run_sends_once_at_the_local_hour_and_marks_the_local_day(client, user_a, push_on, sent):

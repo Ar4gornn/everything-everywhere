@@ -20,6 +20,10 @@ export const notifications = {
     en: "Savings goals falling behind",
     fr: "Objectifs d’épargne en retard",
   },
+  "notify.kindStreak": {
+    en: "My streak, when today is still to do",
+    fr: "Ma série, quand la journée reste à faire",
+  },
   "notify.moduleOff": { en: "module turned off", fr: "module désactivé" },
 
   "notify.time": { en: "Arrives at", fr: "Arrive à" },

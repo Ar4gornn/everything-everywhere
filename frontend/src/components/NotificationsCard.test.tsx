@@ -180,6 +180,24 @@ describe("NotificationsCard", () => {
     await waitFor(() => expect(calls(fetchMock, "GET", "/api/push/preview").length).toBeGreaterThan(1));
   });
 
+  it("offers the streak kind off by default, saves it on, and previews the clause", async () => {
+    const clause = "Your 12-day streak is at risk today.";
+    const fetchMock = mockApi({ digest: preview({ body: clause, url: "/" }) });
+    const user = userEvent.setup();
+    render(<NotificationsCard />);
+
+    const streak = await screen.findByRole("checkbox", { name: "My streak, when today is still to do" });
+    expect(streak).not.toBeChecked();
+    expect(await screen.findByText(clause)).toBeInTheDocument();
+
+    await user.click(streak);
+    await waitFor(() => expect(calls(fetchMock, "PATCH", "/api/auth/me/preferences")).toHaveLength(1));
+    expect(bodyOf(calls(fetchMock, "PATCH", "/api/auth/me/preferences")[0])).toEqual({
+      notifications: { ...DEFAULT_PREFERENCES.notifications, streak: true },
+    });
+    await waitFor(() => expect(calls(fetchMock, "GET", "/api/push/preview").length).toBeGreaterThan(1));
+  });
+
   it("disables a kind whose module is off, and says why", async () => {
     mockApi({
       user: me({

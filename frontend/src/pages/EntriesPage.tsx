@@ -13,6 +13,7 @@ import {
   type Unit,
   type Vendor,
 } from "../api/types";
+import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -539,6 +540,7 @@ export function EntriesPage() {
 
   return (
     <>
+      <CheckInButton streak="entries" bar />
       <ErrorBanner message={error ?? failure} />
 
       <Card title={t("entries.record")} tour="record-form">

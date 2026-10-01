@@ -16,6 +16,7 @@ import { useMoney } from "../useMoney";
 import { useT } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
+import { CheckInButton } from "../components/CheckInButton";
 import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
 import { useLayout } from "../layout/useLayout";
@@ -507,7 +508,10 @@ export function InventoryPage() {
 
       {/* The page's name first, as on every other page: under the shopping list it read as
           the heading of the filters beside it. */}
-      <h1 style={{ fontSize: 18, margin: "0 0 16px" }}>{t("stock.title")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h1 style={{ fontSize: 18, margin: 0 }}>{t("stock.title")}</h1>
+        <CheckInButton streak="stock" />
+      </div>
 
       {/* Above the spaces: what to buy is the thing you act on, the shelves are reference. */}
       <ShoppingList onChanged={() => void load()} />

@@ -3843,3 +3843,192 @@ button.bell[aria-pressed="false"] {
   width: 100%;
   font: inherit;
 }
+
+/* Streaks (Epic 41). Every rule is qualified by `.streak-card` or a `.streak-` class: the
+   app's class names are global and some are reused (lab note 2026-09-27). Text is drawn only
+   in tokens the contrast test checks; the dots' state is their shape, not a colour. */
+.streak-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.streak-card .streak-card-figure {
+  margin: 0;
+}
+
+.streak-card .streak-card-number {
+  font-size: var(--fs-display);
+  line-height: 1;
+}
+
+.streak-card .streak-card-best {
+  margin: 0;
+}
+
+.streak-card .streak-card-checkin {
+  margin-top: 12px;
+  max-width: 100%;
+}
+
+.streak-card .streak-dots {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 260px;
+}
+
+.streak-card .streak-dot {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+}
+
+.streak-card .streak-dot-active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.streak-card .streak-dot-pending {
+  border-style: dashed;
+}
+
+/* A day a freeze covered: a diamond, so it differs from the disc, the rings and the speck
+   by shape and not by colour. */
+.streak-card .streak-dot-frozen {
+  border-radius: 2px;
+  border-style: solid;
+  border-color: var(--accent);
+  transform: rotate(45deg) scale(0.72);
+}
+
+/* A day a repair covered: a ring with a filled core, which no other state is. */
+.streak-card .streak-dot-repaired {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 34%, transparent 38%);
+}
+
+/* The repair offer: a banner at the top of the card. The text wraps and the actions drop
+   under it, so a French sentence at 320px pushes nothing wider. */
+.streak-card .streak-repair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.streak-card .streak-repair-text {
+  margin: 0;
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Before the first active day: no streak yet, so a speck rather than a missed ring. */
+.streak-card .streak-dot-before {
+  border: none;
+  background: var(--border-strong);
+  transform: scale(0.3);
+}
+
+/* A tab's Check in (Epic 41.2). Qualified by the button's own class; it sits in a page
+   header, so it must stay one short line in French on a phone. */
+.streak-checkin-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+button.streak-checkin {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* In a heading row the slot is the flex item; an error wraps below the button. */
+.streak-checkin-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.streak-card .streak-tab-rows {
+  margin: 16px 0 0;
+}
+
+/* The balance and the person's own word for points: up to 24 characters with no spaces
+   must wrap rather than push the card wider. */
+.streak-card .streak-card-points {
+  margin: 16px 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* The label, the number and the dot never part; the name after them may wrap. */
+.streak-card .streak-card-balance {
+  white-space: nowrap;
+}
+
+.streak-card .streak-repair-short {
+  display: block;
+  margin-top: 4px;
+}
+
+/* The shop: a disclosure under the dots. Its rows wrap, so a French confirm sentence at 320px
+   drops under the name instead of pushing the card wider. */
+.streak-card .streak-shop {
+  margin-top: 16px;
+}
+
+.streak-card .streak-shop-panel {
+  margin-top: 12px;
+  min-width: 0;
+}
+
+.streak-card .streak-shop-rows .list-row-line {
+  flex-wrap: wrap;
+}
+
+.streak-card .streak-shop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The button names the points, and a 24-character name with no break in it (the limit)
+   made it 435px wide at 320. */
+.streak-card .streak-shop-actions button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* The trailing slot is `flex: 0 0 auto` app-wide, so "Confirm: spend 20 Points" plus
+   Cancel kept its one-line width and ran past the card (85px in French at 320). In the
+   shop it may shrink, so the pair wraps instead. */
+.streak-card .streak-shop-rows .list-row-trailing {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.streak-points-name {
+  margin-top: 16px;
+  min-width: 0;
+}

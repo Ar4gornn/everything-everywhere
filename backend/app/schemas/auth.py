@@ -1,9 +1,10 @@
 from datetime import datetime, time
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     EmailStr,
     Field,
@@ -13,6 +14,7 @@ from pydantic import (
 )
 
 from app.core.months import MAX_START_DAY
+from app.services.preferences import clean_points_name
 
 Currency = Literal["USD", "EUR"]
 WeightUnit = Literal["kg", "lb"]
@@ -83,6 +85,13 @@ class LayoutIn(BaseModel):
     cards: list[Card] | None = Field(default=None, max_length=32)
 
 
+def _points_name(value: object) -> str:
+    """Runs before the type check and may raise only ``ValueError`` (a 422, not a 500)."""
+    if not isinstance(value, str):
+        raise ValueError("must be text")
+    return clean_points_name(value)
+
+
 class PreferencesUpdate(BaseModel):
     """Each top-level key present replaces that subtree; absent keys are untouched."""
 
@@ -92,6 +101,12 @@ class PreferencesUpdate(BaseModel):
     # Epic 36 (AD-52): which kinds the daily digest may mention. Strict for the same reason
     # as `Card.on`.
     notifications: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 41 (AD-57): which module streaks are shown. Strict, so {"gym": "off"} is a 422
+    # rather than a streak quietly switched on.
+    streaks: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 41 (AD-57): the person's word for points. Trimmed; over 24 characters is a 422;
+    # empty means "the default" and is stored as "".
+    points_name: Annotated[str, BeforeValidator(_points_name)] | None = None
     phone: LayoutIn | None = None
     desktop: LayoutIn | None = None
 
@@ -106,6 +121,8 @@ class PreferencesOut(BaseModel):
 
     modules: dict[str, bool]
     notifications: dict[str, bool]
+    streaks: dict[str, bool]
+    points_name: str | None
     phone: LayoutOut
     desktop: LayoutOut
 

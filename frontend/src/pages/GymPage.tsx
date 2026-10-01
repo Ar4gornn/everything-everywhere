@@ -10,6 +10,7 @@ import type {
   WorkoutDetail,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -276,7 +277,10 @@ export function GymPage() {
 
   return (
     <>
-      <h1 style={{ fontSize: 18, margin: "0 0 16px" }}>{t("gym.title")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h1 style={{ fontSize: 18, margin: 0 }}>{t("gym.title")}</h1>
+        <CheckInButton streak="gym" />
+      </div>
       <ErrorBanner message={error ?? failure} />
 
       {current ? (
