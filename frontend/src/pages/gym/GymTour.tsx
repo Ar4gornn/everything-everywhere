@@ -455,6 +455,22 @@ export function GymTour() {
     };
   }, [open, measure, spec]);
 
+  // A phone's sheet covers the bottom of the screen, and a card near the end of the page
+  // (History) cannot scroll above it: there is no page left below it to scroll. Room equal
+  // to the sheet is added under the page while the tour is open, and taken away after.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the sheet's height changes with the step
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!open || !phone) {
+      root.style.removeProperty("padding-bottom");
+      return;
+    }
+    root.style.paddingBottom = `${panel.current?.offsetHeight ?? 0}px`;
+    return () => {
+      root.style.removeProperty("padding-bottom");
+    };
+  }, [open, phone, index]);
+
   // Bring the target into the part of the screen the panel does not cover.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs per step, not per layout change
   useEffect(() => {
