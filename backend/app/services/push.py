@@ -15,7 +15,7 @@ import uuid
 from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
-from app.core.clock import local_now
+from app.core.clock import local_now, zone_of
 from app.core.errors import NotFound
 from app.models.push import PushSubscription
 from app.services.activity import MODULES as STREAK_MODULES
@@ -123,6 +123,8 @@ _WORDS: dict[str, dict[str, str]] = {
         "streak_frozen_one": "Your {count}-day streak is safe tonight: a freeze will cover it",
         "streak_frozen_many": "Your {count}-day streak is safe tonight: a freeze will cover it",
         "streak_tabs": "tabs at risk",
+        "moon_new": "New moon today",
+        "moon_full": "Full moon today",
         "tab_entries": "Entries",
         "tab_plan": "Plan",
         "tab_grow": "Grow",
@@ -156,6 +158,8 @@ _WORDS: dict[str, dict[str, str]] = {
             "Votre série de {count} jours est protégée ce soir : un gel la couvrira"
         ),
         "streak_tabs": "onglets en danger",
+        "moon_new": "Nouvelle lune aujourd'hui",
+        "moon_full": "Pleine lune aujourd'hui",
         "tab_entries": "Opérations",
         "tab_plan": "Budget",
         "tab_grow": "Épargne",
@@ -180,6 +184,7 @@ _PAGES: dict[str, str] = {
     "savings": "/plan",
     "habits": "/habits",
     "streak": "/",
+    "moon": "/moon",
 }
 
 
@@ -209,6 +214,7 @@ class Digest:
         streak_days: int = 0,
         streak_tabs: list[str] | None = None,
         streak_frozen: bool = False,
+        moon_event: str | None = None,
     ) -> None:
         self.low_items = low_items
         self.pending = pending
@@ -227,6 +233,9 @@ class Digest:
         self.streak_days = streak_days
         self.streak_tabs = streak_tabs or []
         self.streak_frozen = streak_frozen
+        # Epic 47 (AD-63 §6), opt-in: "new" or "full" when today is that moon's day, else
+        # None (says nothing). Decided by ``digest()`` from ``services/moon``, worded here.
+        self.moon_event = moon_event if moon_event in ("new", "full") else None
         self.language = language if language in _WORDS else "en"
 
     def _clauses(self) -> list[str]:
@@ -238,6 +247,7 @@ class Digest:
             "savings": len(self.behind_names),
             "habits": len(self.habit_names),
             "streak": self.streak_days,
+            "moon": 1 if self.moon_event else 0,
         }
         return [key for key, count in present.items() if count]
 
@@ -292,6 +302,8 @@ class Digest:
                 parts.append(self._say("pending", self.pending))
             elif key == "streak":
                 parts.append(self._streak_clause())
+            elif key == "moon":
+                parts.append(_WORDS[self.language][f"moon_{self.moon_event}"])
             else:
                 names = {
                     "due": self.due_names,
@@ -450,6 +462,14 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
                 and not found[tab].freeze_tonight
             ]
 
+    # The moon clause asks services/moon for the account's local today (Epic 47, AD-63 §6):
+    # the kind is on, the Moon module is not switched off, and today holds a new or full moon.
+    moon_event = None
+    if wanted("moon", "moon"):
+        from app.services import moon as moon_service
+
+        moon_event = moon_service.event_on(today, zone_of(profile.timezone) if profile else None)
+
     return Digest(
         len(low),
         int(pending),
@@ -461,6 +481,7 @@ def digest(session: Session, user_id: uuid.UUID, *, today: dt.date | None = None
         streak_days=streak_days,
         streak_tabs=streak_tabs,
         streak_frozen=streak_frozen,
+        moon_event=moon_event,
     )
 
 

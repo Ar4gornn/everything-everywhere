@@ -23,6 +23,8 @@ import { preferencesOf, shownStreaks } from "./preferences";
  * | gym     | /gym, /gym/session, /gym/import, /gym/routines/:id | Gym tab, dashboard Gym card, calendar gym layer |
  * | recipes | /recipes, /recipes/:id | Recipes top link, calendar meals layer             |
  * | notes   | /notes, /notes/:id | dashboard Notes link, floating note button             |
+ * | moon    | /moon              | dashboard title line, calendar day glyphs + panel,     |
+ * |         |                    | Settings → Moon, push digest kind `moon`               |
  */
 export const MODULE_NAME: Record<ModuleId, MessageKey> = {
   habits: "module.habits",
@@ -32,6 +34,7 @@ export const MODULE_NAME: Record<ModuleId, MessageKey> = {
   gym: "module.gym",
   recipes: "module.recipes",
   notes: "module.notes",
+  moon: "moon.module",
 };
 
 /** A section's name in the nav and in the tab editor (Epic 33). */

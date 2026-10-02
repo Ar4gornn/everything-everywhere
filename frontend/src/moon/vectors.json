@@ -1,0 +1,180 @@
+{
+ "_sources": {
+  "quarters": "NASA GSFC, Five Millennium Catalog of Moon Phases / 'Moon Phases 2001 to 2100' table, https://eclipse.gsfc.nasa.gov/phase/phases2001.html (UT, minute resolution). Read 2026-10-03.",
+  "riseSet": "sunrise-and-sunset.com monthly moonrise/moonset tables, June 2025, Paris and Sydney, https://www.sunrise-and-sunset.com/en/moon/<country>/<city>/2025/june (local civil time: Paris CEST UTC+2, Sydney AEST UTC+10; converted to UTC here). Read 2026-10-03; the page does not state its coordinates, so city-centre coordinates are used."
+ },
+ "toleranceMinutes": {
+  "quarters": 2,
+  "riseSet": 3
+ },
+ "quarters": [
+  {
+   "kind": "new",
+   "utc": "2025-01-29T12:36:00Z"
+  },
+  {
+   "kind": "new",
+   "utc": "2025-02-28T00:45:00Z"
+  },
+  {
+   "kind": "new",
+   "utc": "2025-03-29T10:58:00Z"
+  },
+  {
+   "kind": "new",
+   "utc": "2025-04-27T19:31:00Z"
+  },
+  {
+   "kind": "full",
+   "utc": "2025-01-13T22:27:00Z"
+  },
+  {
+   "kind": "full",
+   "utc": "2025-02-12T13:53:00Z"
+  },
+  {
+   "kind": "full",
+   "utc": "2025-03-14T06:55:00Z"
+  },
+  {
+   "kind": "full",
+   "utc": "2025-04-13T00:22:00Z"
+  },
+  {
+   "kind": "full",
+   "utc": "2025-12-04T23:14:00Z"
+  },
+  {
+   "kind": "firstQuarter",
+   "utc": "2025-01-06T23:56:00Z"
+  },
+  {
+   "kind": "lastQuarter",
+   "utc": "2025-01-21T20:31:00Z"
+  }
+ ],
+ "riseSet": [
+  {
+   "place": "Paris",
+   "lat": 48.85,
+   "lon": 2.35,
+   "localDay": "2025-06-21",
+   "dayStartUtc": "2025-06-20T22:00:00Z",
+   "rise": "2025-06-21T00:31:00Z",
+   "set": "2025-06-21T15:34:00Z"
+  },
+  {
+   "place": "Paris",
+   "lat": 48.85,
+   "lon": 2.35,
+   "localDay": "2025-06-15",
+   "dayStartUtc": "2025-06-14T22:00:00Z",
+   "rise": "2025-06-14T22:48:00Z",
+   "set": "2025-06-15T07:30:00Z"
+  },
+  {
+   "place": "Sydney",
+   "lat": -33.87,
+   "lon": 151.21,
+   "localDay": "2025-06-21",
+   "dayStartUtc": "2025-06-20T14:00:00Z",
+   "rise": "2025-06-20T15:57:00Z",
+   "set": "2025-06-21T03:06:00Z"
+  },
+  {
+   "place": "Sydney",
+   "lat": -33.87,
+   "lon": 151.21,
+   "localDay": "2025-06-26",
+   "dayStartUtc": "2025-06-25T14:00:00Z",
+   "rise": "2025-06-25T21:51:00Z",
+   "set": "2025-06-26T07:31:00Z"
+  }
+ ],
+ "phaseNames": [
+  [
+   0,
+   "new"
+  ],
+  [
+   22.49,
+   "new"
+  ],
+  [
+   22.5,
+   "waxingCrescent"
+  ],
+  [
+   45,
+   "waxingCrescent"
+  ],
+  [
+   67.49,
+   "waxingCrescent"
+  ],
+  [
+   67.5,
+   "firstQuarter"
+  ],
+  [
+   90,
+   "firstQuarter"
+  ],
+  [
+   112.5,
+   "waxingGibbous"
+  ],
+  [
+   135,
+   "waxingGibbous"
+  ],
+  [
+   157.5,
+   "full"
+  ],
+  [
+   180,
+   "full"
+  ],
+  [
+   202.5,
+   "waningGibbous"
+  ],
+  [
+   225,
+   "waningGibbous"
+  ],
+  [
+   247.5,
+   "lastQuarter"
+  ],
+  [
+   270,
+   "lastQuarter"
+  ],
+  [
+   292.5,
+   "waningCrescent"
+  ],
+  [
+   315,
+   "waningCrescent"
+  ],
+  [
+   337.49,
+   "waningCrescent"
+  ],
+  [
+   337.5,
+   "new"
+  ],
+  [
+   359.9,
+   "new"
+  ],
+  [
+   360,
+   "new"
+  ]
+ ]
+}

@@ -18,6 +18,8 @@ import type {
   Workout,
 } from "../api/types";
 import { MoodFace, moodWord } from "../components/MoodFace";
+import { MoonGlyph } from "../components/MoonGlyph";
+import { MoonLine } from "../components/MoonLine";
 import { QuoteCard } from "../components/QuoteCard";
 import { Card, Empty, ErrorBanner } from "../components/ui";
 import { timeLabel } from "../schedule";
@@ -33,6 +35,8 @@ import { useDates } from "../useDates";
 import { dueEvent } from "../ics";
 import { AddToCalendar } from "../components/AddToCalendar";
 import { useLayout } from "../layout/useLayout";
+import type { PhaseName } from "../moon/engine";
+import { moonOnDay, useMoonView } from "../moon/useMoonView";
 import { budgetMonth, monthBounds, monthOf, shiftMonth, todayIso } from "../months";
 
 /**
@@ -436,6 +440,20 @@ export function CalendarPage() {
     return rows;
   }, [periodStart, periodEnd]);
 
+  // Epic 47: the moon on each day, only with its module on and its engine loaded. A day that
+  // holds an exact new, quarter or full moon says so in its accessible name.
+  const { view: moon, probe: moonProbe } = useMoonView();
+  const quarterDays = useMemo(() => {
+    const map = new Map<string, PhaseName>();
+    const first = weeks[0]?.[0];
+    const last = weeks[weeks.length - 1]?.[6];
+    if (!moon || !first || !last) return map;
+    for (const quarter of moon.engine.quartersBetween(first, addDays(last, 1))) {
+      map.set(isoOf(quarter.at), quarter.kind);
+    }
+    return map;
+  }, [moon, weeks]);
+
   const byDay = useMemo(() => {
     const map = new Map<string, DayBucket>();
     const at = (iso: string): DayBucket => {
@@ -696,6 +714,7 @@ export function CalendarPage() {
 
   return (
     <>
+      {moonProbe}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 18, margin: 0 }}>{periodName}</h1>
@@ -881,6 +900,7 @@ export function CalendarPage() {
                       date: iso,
                       month: dates.month(monthOf(day, startDay)),
                     });
+                const quarter = moon ? quarterDays.get(iso) : undefined;
                 return (
                   <button
                     key={iso}
@@ -898,7 +918,7 @@ export function CalendarPage() {
                       .join(" ")}
                     data-iso={iso}
                     tabIndex={iso === tabbable ? 0 : -1}
-                    aria-label={label}
+                    aria-label={quarter ? `${label}, ${t(`moon.phase.${quarter}`)}` : label}
                     aria-selected={selected === iso}
                     aria-current={iso === today ? "date" : undefined}
                     onKeyDown={(event) => onCellKey(event, day)}
@@ -917,6 +937,22 @@ export function CalendarPage() {
                     <span className="cal-num">
                       {weekly ? `${dates.weekdayShort(weekIndex(day))} ${day.getDate()}` : day.getDate()}
                     </span>
+                    {moon && (
+                      <span className="cal-moon" aria-hidden="true">
+                        {(() => {
+                          const state = moonOnDay(moon.engine, day);
+                          return (
+                            <MoonGlyph
+                              phase={state.phase}
+                              angle={state.angle}
+                              hemisphere={moon.hemisphere}
+                              size={14}
+                              decorative
+                            />
+                          );
+                        })()}
+                      </span>
+                    )}
                     {inPeriod && net !== 0 && (
                       // Rounded to whole units in a month's cell, exact in the day panel —
                       // a cell is about 47px wide on a phone and two decimals do not fit.
@@ -1012,6 +1048,15 @@ export function CalendarPage() {
               </>
             }
           >
+            {moon && (
+              <p className="cal-moon-panel">
+                <MoonLine
+                  state={moonOnDay(moon.engine, dateOf(selected))}
+                  hemisphere={moon.hemisphere}
+                />{" "}
+                <Link to="/moon">{t("moon.open")}</Link>
+              </p>
+            )}
             <DayDetail
               bucket={selectedBucket}
               active={shownActive}

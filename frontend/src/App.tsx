@@ -57,6 +57,7 @@ const RecipePage = page(() => import("./pages/RecipePage"), "RecipePage");
 const SettingsPage = page(() => import("./pages/SettingsPage"), "SettingsPage");
 const NotesPage = page(() => import("./pages/NotesPage"), "NotesPage");
 const NotePage = page(() => import("./pages/NotePage"), "NotePage");
+const MoonPage = page(() => import("./pages/MoonPage"), "MoonPage");
 const InvitesPage = page(() => import("./pages/InvitesPage"), "InvitesPage");
 // Epic 46: the one page with a default export (it is also rendered before sign-in).
 const InstallPage = lazy(() => import("./pages/InstallPage"));
@@ -442,6 +443,8 @@ export function App() {
           {/* One route for new and existing: `/notes/new` becomes `/notes/<id>` in place
               once there is something to keep, and the editor must not remount when it does. */}
           <Route path="/notes/:noteId" element={<ModuleGate module="notes"><NotePage /></ModuleGate>} />
+          {/* Epic 47: reached from the dashboard line and the calendar's day panel, not a tab. */}
+          <Route path="/moon" element={<ModuleGate module="moon"><MoonPage /></ModuleGate>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

@@ -18,12 +18,14 @@ const KIND_LABEL = {
   due_tomorrow: "notify.kindDueTomorrow",
   savings: "notify.kindSavings",
   streak: "notify.kindStreak",
+  moon: "moon.digest.kind",
 } as const satisfies Record<NotificationKind, MessageKey>;
 
 /** A kind that belongs to a module is silent while the module is off (AD-49, AD-52). */
-const KIND_MODULE: Partial<Record<NotificationKind, "stock" | "habits">> = {
+const KIND_MODULE: Partial<Record<NotificationKind, "stock" | "habits" | "moon">> = {
   stock: "stock",
   habits: "habits",
+  moon: "moon",
 };
 
 const MUTED_LABEL = {
@@ -232,11 +234,13 @@ export function NotificationsCard() {
             {NOTIFICATIONS.map(([kind]) => {
               const module = KIND_MODULE[kind];
               const moduleOff = module !== undefined && !preferences.modules[module];
+              // The moon is opt-in all round: with its module off the line is not offered.
+              if (kind === "moon" && moduleOff) return null;
               return (
                 <label key={kind} className="check">
                   <input
                     type="checkbox"
-                    checked={preferences.notifications[kind] && !moduleOff}
+                    checked={Boolean(preferences.notifications[kind]) && !moduleOff}
                     disabled={moduleOff}
                     onChange={(event) => setKind(kind, event.target.checked)}
                   />

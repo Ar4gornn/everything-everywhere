@@ -63,14 +63,16 @@ describe("the defaults", () => {
       "budgets", "savings", "trends", "categories",
     ].map((id) => ({ id, on: true }));
     expect(DEFAULT_PREFERENCES).toEqual({
-      modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true },
-      notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false, streak: false },
+      modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true, moon: true },
+      notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false, streak: false, moon: false },
       // Epic 41: every tab streak is opt-in, and the list is pinned against the server's.
       streaks: {
         entries: false, plan: false, grow: false, habits: false, mood: false,
         books: false, stock: false, gym: false, recipes: false, notes: false,
       },
       points_name: null,
+      // Epic 47: null is "from the account's time zone", as the server resolves it.
+      moon_hemisphere: null,
       phone: { tabs, cards },
       desktop: { tabs, cards },
     });

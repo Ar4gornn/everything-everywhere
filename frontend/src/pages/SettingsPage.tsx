@@ -11,6 +11,7 @@ import { errorMessage } from "../i18n/errors";
 import { CalendarFeedCard } from "../components/CalendarFeedCard";
 import { InvitesCard } from "../components/InvitesCard";
 import { LayoutCard } from "../components/LayoutCard";
+import { MoonSettingsCard } from "../components/MoonSettingsCard";
 import { NotificationsCard } from "../components/NotificationsCard";
 import { SecurityCard } from "../components/SecurityCard";
 import { StreaksSettingsCard } from "../components/StreaksSettingsCard";
@@ -233,6 +234,8 @@ export function SettingsPage() {
       <LayoutCard />
 
       <StreaksSettingsCard />
+
+      <MoonSettingsCard />
 
       <Card title={t("settings.budgetMonth")}>
         <div className="row">

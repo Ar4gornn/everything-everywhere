@@ -22,6 +22,7 @@ import type { Currency, Language, PreferencesPatch, User } from "../api/types";
 import { PreferenceSaver, preferencesOf } from "../layout/preferences";
 import { clearEntriesStore } from "../entries/outbox";
 import { clearGymStore } from "../gym/store";
+import { clearPlace } from "../moon/location";
 import { clearAllDrafts } from "../notes/drafts";
 import { deviceZone } from "../push";
 import { PREFIX } from "../storage";
@@ -155,6 +156,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (userId.current) clearGymStore(userId.current);
     // Epic 45: sheet entries not yet sent and the sheet's cached chips go the same way.
     if (userId.current) clearEntriesStore(userId.current);
+    // Epic 47 (AD-63): the place chosen for moonrise stays on this device only while its
+    // owner is signed in. Expiry keeps it, like the gym store.
+    if (userId.current) clearPlace(userId.current);
     userId.current = null;
     // Notes not yet synced are removed with the session (Epic 32): a note left in a browser
     // after its owner signed out is the leak signing out is for. See `notes/drafts.ts`.

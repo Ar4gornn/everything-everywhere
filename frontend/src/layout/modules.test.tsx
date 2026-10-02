@@ -234,7 +234,7 @@ describe("the module table is complete", () => {
     eager: true,
   });
   const client = sources["../api/client.ts"] ?? "";
-  const SEGMENT: Record<string, ModuleId> = {
+  const SEGMENT: Record<string, Exclude<ModuleId, "moon">> = {
     habits: "habits",
     books: "books",
     mood: "mood",
@@ -245,15 +245,25 @@ describe("the module table is complete", () => {
     meals: "recipes",
     notes: "notes",
   };
-  const CALLERS: Record<ModuleId, string[]> = {
-    habits: ["pages/CalendarPage.tsx", "pages/HabitsPage.tsx"],
+  // The moon (Epic 47) has no endpoints at all: it is computed on the device (AD-63), so it
+  // has no API callers to list and is left out of this table.
+  const API_MODULES = MODULES.filter((id): id is Exclude<ModuleId, "moon"> => id !== "moon");
+  const CALLERS: Record<Exclude<ModuleId, "moon">, string[]> = {
+    // pages/MoonPage.tsx (Epic 47) reads habits, mood and gym days for its overlay, each only
+    // for a module that is on.
+    habits: ["pages/CalendarPage.tsx", "pages/HabitsPage.tsx", "pages/MoonPage.tsx"],
     books: [
       "components/BookQuotes.tsx",
       "components/QuoteCard.tsx",
       "pages/BooksPage.tsx",
       "pages/DashboardPage.tsx",
     ],
-    mood: ["components/MoodCheckin.tsx", "pages/CalendarPage.tsx", "pages/HabitsPage.tsx"],
+    mood: [
+      "components/MoodCheckin.tsx",
+      "pages/CalendarPage.tsx",
+      "pages/HabitsPage.tsx",
+      "pages/MoonPage.tsx",
+    ],
     stock: [
       // Settings' muted list unmutes a stock item even with Stock off (Epic 36): a mute
       // that could not be undone while the module is off would be a notification lost.
@@ -267,6 +277,7 @@ describe("the module table is complete", () => {
     gym: [
       "gym/store.ts",
       "pages/CalendarPage.tsx",
+      "pages/MoonPage.tsx",
       "pages/gym/GymBuild.tsx",
       "pages/gym/GymHistory.tsx",
       "pages/gym/GymImport.tsx",
@@ -277,7 +288,7 @@ describe("the module table is complete", () => {
     notes: ["notes/drafts.ts", "pages/NotePage.tsx", "pages/NotesPage.tsx"],
   };
 
-  const functions: Record<ModuleId, string[]> = {
+  const functions: Record<Exclude<ModuleId, "moon">, string[]> = {
     habits: [], books: [], mood: [], stock: [], gym: [], recipes: [], notes: [],
   };
   for (const match of client.matchAll(/\n {2}(\w+): (?:async )?\([^)]*\)[^=]*=>[\s\S]*?["`]\/api\/([\w-]+)/g)) {
@@ -286,10 +297,10 @@ describe("the module table is complete", () => {
   }
 
   it("found each module's functions in the client", () => {
-    for (const id of MODULES) expect(functions[id].length).toBeGreaterThan(0);
+    for (const id of API_MODULES) expect(functions[id].length).toBeGreaterThan(0);
   });
 
-  for (const id of MODULES) {
+  for (const id of API_MODULES) {
     it(`lists every caller of ${id}`, () => {
       const pattern = new RegExp(`api\\.(${functions[id].join("|")})\\b`);
       const found = Object.entries(sources)

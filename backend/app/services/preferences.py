@@ -39,7 +39,13 @@ SECTIONS: tuple[tuple[str, str], ...] = (
 CORE_SECTIONS = frozenset({"dashboard", "entries", "plan", "grow"})
 
 #: What can be switched off. Off hides the UI only; data and endpoints are untouched.
-MODULES: tuple[str, ...] = ("habits", "books", "mood", "stock", "gym", "recipes", "notes")
+MODULES: tuple[str, ...] = (
+    "habits", "books", "mood", "stock", "gym", "recipes", "notes", "moon",
+)
+
+#: Which way the moon is drawn (Epic 47, AD-63 §4). Absent or null means "from the account's
+#: time zone", which only the client works out.
+MOON_HEMISPHERES: tuple[str, ...] = ("north", "south")
 
 #: Dashboard cards in today's render order, all shown by default.
 CARDS: tuple[str, ...] = (
@@ -79,6 +85,7 @@ NOTIFICATIONS: tuple[tuple[str, bool], ...] = (
     ("due_tomorrow", False),
     ("savings", False),
     ("streak", False),
+    ("moon", False),
 )
 _NOTIFICATION_DEFAULT = dict(NOTIFICATIONS)
 
@@ -190,6 +197,9 @@ def resolve(stored: object) -> dict:
             for streak in STREAKS
         },
         "points_name": _resolve_points_name(prefs.get("points_name")),
+        "moon_hemisphere": (
+            prefs["moon_hemisphere"] if prefs.get("moon_hemisphere") in MOON_HEMISPHERES else None
+        ),
         **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
     }
 

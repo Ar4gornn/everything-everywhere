@@ -29,7 +29,7 @@ const SECTIONS: [SectionId, "bar" | "top"][] = [
   ["grow", "top"],
   ["recipes", "top"],
 ];
-export const MODULES: ModuleId[] = ["habits", "books", "mood", "stock", "gym", "recipes", "notes"];
+export const MODULES: ModuleId[] = ["habits", "books", "mood", "stock", "gym", "recipes", "notes", "moon"];
 export const CARDS: CardId[] = [
   "stats",
   "streaks",
@@ -68,6 +68,7 @@ export const NOTIFICATIONS: [NotificationKind, boolean][] = [
   ["due_tomorrow", false],
   ["savings", false],
   ["streak", false],
+  ["moon", false],
 ];
 
 function defaultLayout() {
@@ -82,6 +83,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notifications: Object.fromEntries(NOTIFICATIONS) as Record<NotificationKind, boolean>,
   streaks: Object.fromEntries(STREAKS.map((id) => [id, false])) as Record<StreakModuleId, boolean>,
   points_name: null,
+  moon_hemisphere: null,
   phone: defaultLayout(),
   desktop: defaultLayout(),
 };

@@ -2282,6 +2282,45 @@ a.chip {
   font-size: var(--fs-small);
 }
 
+/* Epic 47: the day's moon sits in the cell's top-right corner, out of the flow, so a cell is
+   the same size with the module on or off. */
+.cal-day:has(> .cal-moon) {
+  position: relative;
+}
+
+.cal-moon {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  line-height: 0;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.cal-moon-panel {
+  margin: 0 0 10px;
+}
+
+.moon-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.moon-line > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moon-link {
+  display: inline-flex;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
 .cal-net {
   font-family: var(--mono);
   font-size: var(--fs-small);
@@ -5802,4 +5841,117 @@ dialog.sheet::backdrop {
 
 .install-page .install-why li {
   margin-bottom: var(--space-2);
+}
+
+/* --- Epic 47: moon (AD-63) --- */
+.moon-glyph {
+  display: inline-block;
+  flex: none;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.moon-page .moon-today {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.moon-page .moon-today div p {
+  margin: 0 0 var(--space-1);
+}
+
+.moon-page .moon-phase {
+  font-size: var(--fs-h2, 1.25rem);
+  font-weight: 700;
+}
+
+.moon-page .moon-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.moon-page .moon-facts dt {
+  color: var(--muted);
+}
+
+.moon-page .moon-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.moon-page .moon-hint {
+  color: var(--muted);
+}
+
+.moon-page .moon-quarters {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.moon-page .moon-quarters li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-height: 44px;
+}
+
+.moon-page .moon-quarters .moon-when {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.moon-page .moon-window {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.moon-page .moon-window select {
+  min-height: 44px;
+}
+
+.moon-page .moon-module {
+  margin-top: var(--space-4);
+}
+
+.moon-page .moon-module th {
+  white-space: normal;
+}
+
+.moon-page .moon-phase-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.moon-page .moon-lines {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.moon-page .moon-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.moon-page .moon-actions button,
+.moon-page .moon-form button {
+  min-height: 44px;
+}
+
+.moon-page .moon-form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.moon-page .moon-form input {
+  min-height: 44px;
 }

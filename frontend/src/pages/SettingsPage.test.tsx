@@ -135,7 +135,9 @@ describe("SettingsPage", () => {
     for (const name of ["Blue", "Indigo", "Violet", "Magenta", "Teal", "Graphite", "Slate", "Cobalt", "Plum"]) {
       expect(screen.getByRole("radio", { name })).toBeInTheDocument();
     }
-    expect(screen.getAllByRole("radio")).toHaveLength(ACCENTS.length);
+    // The accent swatches only: the Moon card (Epic 47) has radios of its own.
+    const accents = document.querySelector("fieldset.accents") as HTMLElement;
+    expect(within(accents).getAllByRole("radio")).toHaveLength(ACCENTS.length);
 
     await user.selectOptions(screen.getByLabelText("Theme"), "sepia");
     await user.click(screen.getByRole("radio", { name: "Plum" }));

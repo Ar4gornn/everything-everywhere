@@ -347,6 +347,9 @@ def set_preferences(
     """Epic 33 (AD-49). Only the top-level keys sent are replaced, so a phone saving its
     layout cannot undo a module switched off from a laptop a moment before."""
     patch = payload.model_dump(exclude_none=True)
+    # `exclude_none` would swallow the one key whose null means something: clear the hemisphere.
+    if "moon_hemisphere" in payload.model_fields_set:
+        patch["moon_hemisphere"] = payload.moon_hemisphere
     return auth_service.set_preferences(session, user_id, patch)
 
 

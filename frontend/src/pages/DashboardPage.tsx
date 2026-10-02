@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import { useOptionalAuth } from "../auth/AuthContext";
+import { MoonLine } from "../components/MoonLine";
 import type {
   Book,
   CardId,
@@ -28,6 +29,7 @@ import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { useEntryOutbox } from "../entries/outbox";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { CARD_MODULE, useModules } from "../layout/modules";
+import { moonOnDay, useMoonView } from "../moon/useMoonView";
 import { ListRow, useOpenRow } from "../components/ListRow";
 import { useCurrentLayout, useLayout } from "../layout/useLayout";
 import { progress, subtractMoney, toChartNumber, toCents } from "../money";
@@ -115,6 +117,7 @@ export function DashboardPage() {
   const startDay = useOptionalAuth()?.user?.budget_start_day ?? 1;
   // Epic 33: a module that is off draws nothing here and is not asked for anything.
   const modules = useModules();
+  const { view: moon, probe: moonProbe } = useMoonView();
   // The cards this layout shows, in its order (AD-49). A hidden card is not drawn, and a
   // card whose data is its own request does not make it.
   const layout = useCurrentLayout();
@@ -781,6 +784,14 @@ export function DashboardPage() {
             <h1 style={{ fontSize: 18, margin: 0 }}>
               {periodLabel()}
             </h1>
+            {/* Epic 47: today's moon, after the date and never before it, for the reason above.
+                Nothing is drawn until the module is on and the engine has loaded. */}
+            {moonProbe}
+            {moon && (
+              <Link to="/moon" className="moon-link">
+                <MoonLine state={moonOnDay(moon.engine, new Date())} hemisphere={moon.hemisphere} />
+              </Link>
+            )}
             {/* Notes (Epic 32), in words, where the page is read. The corner button alone
                 was missed twice on a desktop: it sits below the fold of a screenshot and,
                 in dark mode, close to the page colour. After the heading is safe here,

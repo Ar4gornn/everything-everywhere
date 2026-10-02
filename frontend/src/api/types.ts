@@ -88,7 +88,7 @@ export interface IssuedInvite {
 }
 
 /** Epic 33 (AD-49): what can be switched off. Off hides the UI; the data stays. */
-export type ModuleId = "habits" | "books" | "mood" | "stock" | "gym" | "recipes" | "notes";
+export type ModuleId = "habits" | "books" | "mood" | "stock" | "gym" | "recipes" | "notes" | "moon";
 /** The eight navigation sections. Dashboard, Entries, Plan and Grow are never hidden. */
 export type SectionId =
   | "dashboard"
@@ -123,7 +123,7 @@ export interface Layout {
 }
 
 /** Epic 36 (AD-52): what the daily digest may talk about. */
-export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings" | "streak";
+export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings" | "streak" | "moon";
 
 /** Epic 41 (AD-57): a module with a streak of its own. `overall` is the dashboard card and
  *  has no switch. */
@@ -146,6 +146,8 @@ export interface Preferences {
   streaks: Record<StreakModuleId, boolean>;
   /** The person's word for points (Epic 41.3), or null for the default label. */
   points_name: string | null;
+  /** Epic 47: which way the moon is drawn; null means from the account's time zone. */
+  moon_hemisphere?: "north" | "south" | null;
   phone: Layout;
   desktop: Layout;
 }

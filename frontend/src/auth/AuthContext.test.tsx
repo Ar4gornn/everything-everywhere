@@ -7,8 +7,11 @@ import type { User } from "../api/types";
 import { useSignOut } from "../gym/useSignOut";
 import { LanguageProvider } from "../i18n";
 import { startSession } from "../gym/session";
+import { clearPlace } from "../moon/location";
 import { readActive, writeActive } from "../gym/store";
 import { AuthProvider, useAuth } from "./AuthContext";
+
+vi.mock("../moon/location", () => ({ clearPlace: vi.fn() }));
 
 /**
  * Epic 42, AD-58: the installed app must open at the gym with no signal. Only the server
@@ -65,6 +68,7 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.mocked(clearPlace).mockClear();
 });
 
 describe("opening the app with no network", () => {
@@ -139,6 +143,15 @@ describe("opening the app with no network", () => {
     expect(readActive("u1")).not.toBeNull();
   });
 
+  it("keeps the moon place through an expired session (Epic 47)", async () => {
+    storeTokens({ access_token: "old", refresh_token: "r", token_type: "bearer", expires_in: 3600 });
+    window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(USER));
+    vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "please sign in" }, 401)));
+    mount();
+    expect(await screen.findByText("signed out")).toBeInTheDocument();
+    expect(clearPlace).not.toHaveBeenCalled();
+  });
+
   it("goes back online without a reload once the server answers", async () => {
     storeTokens({ access_token: "a", refresh_token: "r", token_type: "bearer", expires_in: 3600 });
     window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(USER));
@@ -184,6 +197,14 @@ describe("explicit sign-out", () => {
     expect(readActive("u1")).toBeNull();
     expect(window.localStorage.getItem(SNAPSHOT_KEY)).toBeNull();
     expect(readToken()).toBeNull();
+  });
+
+  it("clears the moon place of the user who signed out (Epic 47)", async () => {
+    await signedIn();
+    await userEvent.click(screen.getByRole("button", { name: "out" }));
+    await screen.findByText("signed out");
+    expect(clearPlace).toHaveBeenCalledTimes(1);
+    expect(clearPlace).toHaveBeenCalledWith("u1");
   });
 
   it("asks first when gym data would be lost, and stays signed in on no", async () => {

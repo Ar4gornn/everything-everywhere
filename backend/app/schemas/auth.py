@@ -107,6 +107,9 @@ class PreferencesUpdate(BaseModel):
     # Epic 41 (AD-57): the person's word for points. Trimmed; over 24 characters is a 422;
     # empty means "the default" and is stored as "".
     points_name: Annotated[str, BeforeValidator(_points_name)] | None = None
+    # Epic 47 (AD-63 §4): which way the moon is drawn. A typo ("nord") is a 422; an explicit
+    # null clears it back to "from the time zone" (the route keeps it when it was sent).
+    moon_hemisphere: Literal["north", "south"] | None = None
     phone: LayoutIn | None = None
     desktop: LayoutIn | None = None
 
@@ -123,6 +126,7 @@ class PreferencesOut(BaseModel):
     notifications: dict[str, bool]
     streaks: dict[str, bool]
     points_name: str | None
+    moon_hemisphere: Literal["north", "south"] | None
     phone: LayoutOut
     desktop: LayoutOut
 

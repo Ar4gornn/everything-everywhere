@@ -30,7 +30,7 @@ DEFAULT_CARDS = [
 DEFAULT = {
     "modules": {
         module: True
-        for module in ("habits", "books", "mood", "stock", "gym", "recipes", "notes")
+        for module in ("habits", "books", "mood", "stock", "gym", "recipes", "notes", "moon")
     },
     # Epic 36 (AD-52): what existed before stays on, the two new kinds are opt-in.
     "notifications": {
@@ -40,6 +40,7 @@ DEFAULT = {
         "due_tomorrow": False,
         "savings": False,
         "streak": False,
+        "moon": False,
     },
     # Epic 41 (AD-57): every tab streak is opt-in.
     "streaks": {
@@ -51,6 +52,8 @@ DEFAULT = {
     },
     # Epic 41 (AD-57): no name chosen means the client's default label.
     "points_name": None,
+    # Epic 47 (AD-63): null = drawn from the time zone, worked out on the device.
+    "moon_hemisphere": None,
     "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
     "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
 }
