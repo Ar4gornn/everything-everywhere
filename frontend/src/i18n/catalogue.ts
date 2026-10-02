@@ -43,6 +43,7 @@ import { streaks } from "./messages/streaks";
 import { quickAdd } from "./messages/quickAdd";
 import { offlineEntries } from "./messages/offlineEntries";
 import { install } from "./messages/install";
+import { moon } from "./messages/moon";
 import { installGuide } from "./messages/installGuide";
 
 export const LANGUAGES = ["en", "fr"] as const;
@@ -75,6 +76,7 @@ export const messages = {
   ...quickAdd,
   ...offlineEntries,
   ...install,
+  ...moon,
   ...installGuide,
   ...errors,
 };
