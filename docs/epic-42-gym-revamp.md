@@ -325,3 +325,27 @@ Frontend (F2): session page flow (prefill, Done, rest, edit/remove, finish → q
 timer with fake timers, import wizard (confirm/skip/back, edit a field, kind lock on existing),
 routine editor calls, offline-disabled controls. `npm run lint`, `npx tsc -b`, full `npx vitest run`
 exit 0 with `grep -c Unhandled` = 0.
+
+## 12. Gym tour (replaces the text-only help popup)
+
+`frontend/src/pages/gym/GymTour.tsx`: a spotlight coach-mark over the gym **home** only. A dimmed
+layer with a cut-out around the real card a step is about (`data-tour="gym-start|gym-routines|
+gym-import|gym-history"`), and a panel (bottom sheet on phones, 360px card on desktop, centred when
+a step has no target or the target is missing). The round `?` button at the end of the title row
+replays it; Escape, arrows and Enter work; focus moves to each step's heading and returns to `?`.
+
+Nine steps: welcome, start a session, log a set (demo), time a hold (demo), routines, import
+(demo: the four stages + a real Copy prompt), history, offline (live device status), done
+(offers "Start a session"). Collapsed cards a step needs are opened and put back on close.
+
+**Why the demos are sandboxed.** `SetDemo` and `TimerDemo` hold their numbers in local state; they
+never call `api.*`, never `setActive`, never write the store. A tour that left a set in the
+person's history, or a session the resume card then offers, would cost more trust than the tour
+earns. A test snapshots the mock call counts and localStorage around a full run of the demos.
+`TimerDemo` reuses the real `SetTimer` (exported from `SetFields.tsx`), so what is taught is what runs.
+
+**Opening.** Once per user per device: `everything-everywhere.gym.<userId>.tourSeen` = `"1"`,
+written on any close. Not while a session is running, not while the app's first-login tour is
+running (`useTutorial().step`), decided once per mount. Blocked storage falls back to a
+page-lifetime memory so it does not reopen on every visit. Strings: `gym.tour.*` in
+`i18n/messages/gym.ts`; the old `gym.help.*` keys and `GymHelp` are gone.

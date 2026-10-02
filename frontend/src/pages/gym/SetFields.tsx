@@ -46,7 +46,7 @@ export function entryIsComplete(kind: ExerciseKind, entry: SetEntry): boolean {
  * phone that slept mid-plank still shows the true time. Stopping writes the seconds into the
  * field; the person can still correct them before Done.
  */
-function SetTimer({
+export function SetTimer({
   target,
   onStop,
 }: {

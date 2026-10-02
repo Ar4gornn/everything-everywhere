@@ -26,7 +26,7 @@ function byExercise(sets: WorkoutSet[]): { name: string; sets: WorkoutSet[] }[] 
 }
 
 /** Recent sessions from the cache; the sets of one load when it is opened (online only). */
-export function HistoryCard() {
+export function HistoryCard({ tour }: { tour?: string }) {
   const t = useT();
   const dates = useDates();
   const { cache, unit, isOffline, refresh } = useGym();
@@ -61,6 +61,7 @@ export function HistoryCard() {
       title={t("gym.history")}
       collapseKey="gym.history"
       summary={`${cache.workouts.length}`}
+      tour={tour}
     >
       <ErrorBanner message={error} />
       {cache.workouts.length === 0 ? (

@@ -433,103 +433,110 @@ export const gym = {
     en: "The routine changed elsewhere. Reload and try again.",
     fr: "Le programme a changé ailleurs. Rechargez et réessayez.",
   },
-  // --- the help popup (Epic 42)
-  "gym.help.open": { en: "How it works", fr: "Mode d’emploi" },
-  "gym.help.title": { en: "How the gym tab works", fr: "Comment fonctionne l’onglet Sport" },
-  "gym.help.close": { en: "Close", fr: "Fermer" },
-
-  "gym.help.startTitle": { en: "Start a session", fr: "Commencer une séance" },
-  "gym.help.start1": {
-    en: "Tap a programme under “Start a session” to follow it, or “Start empty session” to log as you go.",
-    fr: "Touchez un programme sous « Commencer une séance » pour le suivre, ou « Commencer une séance vide » pour noter au fil de l’eau.",
+  // --- the guided tour of the gym home (Epic 42, §12)
+  "gym.tour.open": { en: "How the Gym tab works", fr: "Comment fonctionne l’onglet Sport" },
+  "gym.tour.stepOf": { en: "Step {n} of {total}", fr: "Étape {n} sur {total}" },
+  "gym.tour.start": { en: "Start", fr: "Commencer" },
+  "gym.tour.notNow": { en: "Not now", fr: "Plus tard" },
+  "gym.tour.next": { en: "Next", fr: "Suivant" },
+  "gym.tour.back": { en: "Back", fr: "Retour" },
+  "gym.tour.skip": { en: "Skip tour", fr: "Passer la visite" },
+  "gym.tour.close": { en: "Close", fr: "Fermer" },
+  "gym.tour.practice": {
+    en: "Practice only: nothing here is saved.",
+    fr: "Simple essai : rien n’est enregistré ici.",
   },
-  "gym.help.start2": {
-    en: "The Gym card on the dashboard does the same in one tap, and says “Resume” while a session is running.",
-    fr: "La carte Sport du tableau de bord fait la même chose en un geste, et affiche « Reprendre » pendant une séance.",
+  "gym.tour.welcome.title": { en: "A one-minute tour", fr: "Visite en une minute" },
+  "gym.tour.welcome.body": {
+    en: "See the Gym tab in a minute. Nothing in this tour changes your data.",
+    fr: "Découvrez l’onglet Sport en une minute. Rien dans cette visite ne modifie vos données.",
   },
-  "gym.help.start3": {
-    en: "Only one session runs at a time. Closing the app does not end it.",
-    fr: "Une seule séance à la fois. Fermer l’application ne la termine pas.",
+  "gym.tour.start.title": { en: "Start a session", fr: "Commencer une séance" },
+  "gym.tour.start.body": {
+    en: "Tap a routine to follow it, or start empty. The dashboard Gym card does the same.",
+    fr: "Touchez un programme pour le suivre, ou commencez à vide. La carte Sport du tableau de bord fait pareil.",
   },
-
-  "gym.help.sessionTitle": { en: "During the session", fr: "Pendant la séance" },
-  "gym.help.session1": {
-    en: "The exercise you are on is open. The next set is already filled in from your last set, or from the target.",
-    fr: "L’exercice en cours est ouvert. La série suivante est déjà remplie avec votre dernière série, ou avec l’objectif.",
+  "gym.tour.log.title": { en: "Log a set", fr: "Noter une série" },
+  "gym.tour.log.body": {
+    en: "Set reps and weight, tap Done, and the rest timer starts. Try it below.",
+    fr: "Réglez répétitions et poids, touchez Fait : le chrono de repos démarre. Essayez ci-dessous.",
   },
-  "gym.help.session2": {
-    en: "Adjust with − and +, then tap “Done”. The set is saved and the rest countdown starts; “Skip rest” ends it early.",
-    fr: "Ajustez avec − et +, puis touchez « Fait ». La série est enregistrée et le repos commence ; « Passer le repos » l’arrête plus tôt.",
+  "gym.tour.set.line": {
+    en: "Set {n} · {reps} × {weight} {unit}",
+    fr: "Série {n} · {reps} × {weight} {unit}",
   },
-  "gym.help.session3": {
-    en: "For a timed exercise, “Start timer” counts down from the target; “Stop” writes the seconds you actually held.",
-    fr: "Pour un exercice chronométré, « Lancer le chrono » décompte depuis l’objectif ; « Arrêter » inscrit les secondes réellement tenues.",
+  "gym.tour.set.done": {
+    en: "That’s it — every set is one tap.",
+    fr: "Voilà : chaque série tient en un seul geste.",
   },
-  "gym.help.session4": {
-    en: "Tap a logged set to correct or remove it. “Add exercise” adds one that was not planned.",
-    fr: "Touchez une série enregistrée pour la corriger ou la retirer. « Ajouter un exercice » en ajoute un qui n’était pas prévu.",
+  "gym.tour.set.list": { en: "Sets logged in this demo", fr: "Séries notées dans cet essai" },
+  "gym.tour.timer.title": { en: "Time a hold", fr: "Chronométrer un effort" },
+  "gym.tour.timer.body": {
+    en: "For a plank or any timed exercise, the timer counts down. Stop writes the seconds for you.",
+    fr: "Pour la planche ou tout exercice chronométré, le chrono décompte. Arrêter inscrit les secondes.",
   },
-  "gym.help.session5": {
-    en: "“Finish” shows a summary and saves the session to your history.",
-    fr: "« Terminer » affiche un bilan et range la séance dans votre historique.",
+  "gym.tour.timer.label": { en: "Plank · target {n} s", fr: "Planche · objectif {n} s" },
+  "gym.tour.timer.held": { en: "Held {n} s", fr: "Tenu {n} s" },
+  "gym.tour.routines.title": { en: "Your routines", fr: "Vos programmes" },
+  "gym.tour.routines.body": {
+    en: "Edit targets, reorder exercises with ↑ ↓, or create a new routine.",
+    fr: "Modifiez les objectifs, réordonnez avec ↑ ↓, ou créez un programme.",
   },
-
-  "gym.help.kindsTitle": { en: "What an exercise counts", fr: "Ce que compte un exercice" },
-  "gym.help.kinds1": {
-    en: "Reps: how many times, with an optional weight (bench press, squat).",
-    fr: "Répétitions : combien de fois, avec un poids facultatif (développé couché, squat).",
+  "gym.tour.import.title": { en: "Import from a file", fr: "Importer un fichier" },
+  "gym.tour.import.body": {
+    en: "Let an AI chat build your routines. Copy the prompt, then follow four steps.",
+    fr: "Laissez un chat IA bâtir vos programmes : copiez le prompt, puis suivez quatre étapes.",
   },
-  "gym.help.kinds2": {
-    en: "Time: how many seconds, with an optional weight (plank, wall sit).",
-    fr: "Durée : combien de secondes, avec un poids facultatif (gainage, chaise).",
+  "gym.tour.import.step1": {
+    en: "Copy the prompt and give it to Claude or ChatGPT.",
+    fr: "Copiez le prompt et donnez-le à Claude ou ChatGPT.",
   },
-  "gym.help.kinds3": {
-    en: "Distance: how many metres (rowing, running). Weights are in the unit chosen in Settings.",
-    fr: "Distance : combien de mètres (rameur, course). Les poids sont dans l’unité choisie dans les Réglages.",
+  "gym.tour.import.step2": {
+    en: "The chat confirms each exercise with you.",
+    fr: "Le chat valide chaque exercice avec vous.",
   },
-
-  "gym.help.routinesTitle": { en: "Routines", fr: "Programmes" },
-  "gym.help.routines1": {
-    en: "“Create routine” makes an empty programme; “Edit” sets each exercise’s sets, reps or seconds or metres, weight and rest.",
-    fr: "« Créer le programme » en crée un vide ; « Modifier » règle pour chaque exercice les séries, répétitions ou secondes ou mètres, le poids et le repos.",
+  "gym.tour.import.step3": {
+    en: "Paste the file, pick it, or share it to the app on Android.",
+    fr: "Collez le fichier, choisissez-le, ou partagez-le vers l’appli sur Android.",
   },
-  "gym.help.routines2": {
-    en: "Use ↑ and ↓ to put the exercises in the order you do them.",
-    fr: "Utilisez ↑ et ↓ pour mettre les exercices dans l’ordre où vous les faites.",
+  "gym.tour.import.step4": {
+    en: "Check each exercise here, then Create.",
+    fr: "Vérifiez chaque exercice ici, puis créez.",
   },
-
-  "gym.help.importTitle": {
-    en: "A programme from Claude or ChatGPT",
-    fr: "Un programme écrit par Claude ou ChatGPT",
+  "gym.tour.import.steps": { en: "How an import goes", fr: "Déroulement d’un import" },
+  "gym.tour.import.copied": { en: "Copied", fr: "Copié" },
+  "gym.tour.import.copyFailed": {
+    en: "Copy was blocked. Select the text below and copy it.",
+    fr: "Copie bloquée. Sélectionnez le texte ci-dessous et copiez-le.",
   },
-  "gym.help.import1": {
-    en: "Open “Import from file”, then “Prompt for Claude / ChatGPT”, and tap “Copy prompt”.",
-    fr: "Ouvrez « Importer depuis un fichier », puis « Prompt pour Claude / ChatGPT », et touchez « Copier le prompt ».",
+  "gym.tour.import.promptField": { en: "The prompt", fr: "Le prompt" },
+  "gym.tour.history.title": { en: "Your history", fr: "Votre historique" },
+  "gym.tour.history.body": {
+    en: "Past sessions are listed here; open one for its sets. Exercises charts your progress.",
+    fr: "Les séances passées sont listées ici ; ouvrez-en une pour ses séries. Exercices trace votre progression.",
   },
-  "gym.help.import2": {
-    en: "Paste it into the chat. It asks about you, then goes through each exercise and waits for your OK or your corrections.",
-    fr: "Collez-le dans la discussion. Il vous interroge, puis passe chaque exercice en revue et attend votre accord ou vos corrections.",
+  "gym.tour.offline.title": { en: "Without a connection", fr: "Sans réseau" },
+  "gym.tour.offline.body": {
+    en: "Once installed and opened online once, sessions work with no network. A session finished offline stays on the phone and sends itself later.",
+    fr: "Une fois l’appli installée et ouverte en ligne, les séances marchent sans réseau. Une séance terminée hors ligne reste sur le téléphone et part plus tard.",
   },
-  "gym.help.import3": {
-    en: "It ends with a block of text. Paste it into the import box, pick the saved file, or on Android share the file to this app.",
-    fr: "Il termine par un bloc de texte. Collez-le dans la zone d’import, choisissez le fichier enregistré, ou sur Android partagez le fichier vers l’application.",
+  "gym.tour.offline.installed": {
+    en: "App installed on this phone",
+    fr: "Appli installée sur ce téléphone",
   },
-  "gym.help.import4": {
-    en: "You then check each exercise again here — every field can be changed — before anything is created.",
-    fr: "Vous vérifiez ensuite chaque exercice ici, chaque champ pouvant être modifié, avant que quoi que ce soit ne soit créé.",
+  "gym.tour.offline.connection": { en: "Connection", fr: "Connexion" },
+  "gym.tour.offline.waiting": { en: "Sessions waiting to send", fr: "Séances en attente d’envoi" },
+  "gym.tour.offline.yes": { en: "Yes", fr: "Oui" },
+  "gym.tour.offline.no": { en: "No", fr: "Non" },
+  "gym.tour.offline.online": { en: "Online", fr: "En ligne" },
+  "gym.tour.offline.offline": { en: "Offline", fr: "Hors ligne" },
+  "gym.tour.offline.installHow": {
+    en: "To install: browser menu, then Add to Home screen or Install app.",
+    fr: "Pour l’installer : menu du navigateur, puis Ajouter à l’écran d’accueil ou Installer l’application.",
   },
-
-  "gym.help.offlineTitle": { en: "Without a connection", fr: "Sans connexion" },
-  "gym.help.offline1": {
-    en: "Install the app on your phone and open Gym once while online: after that, sessions work with no network.",
-    fr: "Installez l’application sur votre téléphone et ouvrez Sport une fois en ligne : ensuite, les séances fonctionnent sans réseau.",
-  },
-  "gym.help.offline2": {
-    en: "A session finished offline is kept on the phone and sent by itself when the connection returns.",
-    fr: "Une séance terminée hors ligne reste sur le téléphone et part toute seule au retour de la connexion.",
-  },
-  "gym.help.offline3": {
-    en: "Creating, editing or importing programmes needs a connection. Signing out deletes anything not yet sent.",
-    fr: "Créer, modifier ou importer des programmes demande une connexion. Se déconnecter efface ce qui n’a pas encore été envoyé.",
+  "gym.tour.done.title": { en: "You’re set", fr: "Tout est prêt" },
+  "gym.tour.done.body": {
+    en: "Replay this tour any time from the ? button.",
+    fr: "Rejouez cette visite à tout moment avec le bouton ?.",
   },
 } satisfies Record<string, Entry>;

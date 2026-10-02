@@ -10,7 +10,7 @@ import { useT } from "../../i18n";
 import { errorMessage } from "../../i18n/errors";
 import { useDates } from "../../useDates";
 import { ExercisesCard, HistoryCard } from "./GymHistory";
-import { GymHelp } from "./GymHelp";
+import { GymTour } from "./GymTour";
 import { useGym } from "./GymContext";
 import { Elapsed } from "./GymSession";
 import { byLastDone, estimateMinutes } from "./measure";
@@ -20,17 +20,20 @@ function OnlineLink({
   to,
   disabled,
   children,
+  tour,
 }: {
   to: string;
   disabled: boolean;
   children: ReactNode;
+  /** Names this control as a stop on the gym tour (`data-tour`). */
+  tour?: string;
 }) {
   return disabled ? (
-    <button type="button" className="quiet" disabled>
+    <button type="button" className="quiet" data-tour={tour} disabled>
       {children}
     </button>
   ) : (
-    <Link to={to} className="gym-link-button quiet">
+    <Link to={to} className="gym-link-button quiet" data-tour={tour}>
       {children}
     </Link>
   );
@@ -73,7 +76,7 @@ export function GymHome() {
       <div className="gym-title-row">
         <h1>{t("gym.title")}</h1>
         <CheckInButton streak="gym" />
-        <GymHelp />
+        <GymTour />
       </div>
 
       {isOffline && (
@@ -159,7 +162,7 @@ export function GymHome() {
         </Card>
       )}
 
-      <Card title={t("gym.startSession")}>
+      <Card title={t("gym.startSession")} tour="gym-start">
         <button type="button" className="gym-start-empty" onClick={() => start(null)}>
           {t("gym.startEmpty")}
         </button>
@@ -193,7 +196,12 @@ export function GymHome() {
         {routines.length === 0 && <p className="hint">{t("gym.noRoutinesHint")}</p>}
       </Card>
 
-      <Card title={t("gym.routines")} collapseKey="gym.routines" summary={`${routines.length}`}>
+      <Card
+        title={t("gym.routines")}
+        collapseKey="gym.routines"
+        summary={`${routines.length}`}
+        tour="gym-routines"
+      >
         {routines.length > 0 && (
           <ul className="gym-routine-list" aria-label={t("gym.routines")}>
             {routines.map((routine) => (
@@ -223,14 +231,14 @@ export function GymHome() {
           </button>
         </form>
         <div className="row gym-import-row">
-          <OnlineLink to="/gym/import" disabled={isOffline}>
+          <OnlineLink to="/gym/import" disabled={isOffline} tour="gym-import">
             {t("gym.importFromFile")}
           </OnlineLink>
         </div>
         {isOffline && <p className="hint">{t("gym.needsConnection")}</p>}
       </Card>
 
-      <HistoryCard />
+      <HistoryCard tour="gym-history" />
       <ExercisesCard />
     </>
   );
