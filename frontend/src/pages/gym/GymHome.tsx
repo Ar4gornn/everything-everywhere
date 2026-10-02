@@ -10,6 +10,7 @@ import { useT } from "../../i18n";
 import { errorMessage } from "../../i18n/errors";
 import { useDates } from "../../useDates";
 import { ExercisesCard, HistoryCard } from "./GymHistory";
+import { GymHelp } from "./GymHelp";
 import { useGym } from "./GymContext";
 import { Elapsed } from "./GymSession";
 import { byLastDone, estimateMinutes } from "./measure";
@@ -72,6 +73,7 @@ export function GymHome() {
       <div className="gym-title-row">
         <h1>{t("gym.title")}</h1>
         <CheckInButton streak="gym" />
+        <GymHelp />
       </div>
 
       {isOffline && (
