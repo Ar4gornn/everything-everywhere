@@ -19,7 +19,7 @@ export const gymCore = {
   "gymCore.card.startRoutine": { en: "Start {name}", fr: "Démarrer {name}" },
   "gymCore.card.empty": {
     en: "No routines yet. Start an empty session, or import a program from Gym.",
-    fr: "Aucune routine pour l’instant. Démarrez une séance vide, ou importez un programme depuis Sport.",
+    fr: "Aucun programme pour l’instant. Démarrez une séance vide, ou importez-en un depuis Sport.",
   },
   "gymCore.card.waiting_one": {
     en: "{count} session waiting to sync",
@@ -49,7 +49,7 @@ export const gymCore = {
   },
   "gymCore.import.tooMany": {
     en: "A routine can hold 60 exercises at most. Split the file in two.",
-    fr: "Une routine peut contenir 60 exercices au plus. Scindez le fichier en deux.",
+    fr: "Un programme peut contenir 60 exercices au plus. Scindez le fichier en deux.",
   },
 
   // Field problems, shown beside the field in the review.
@@ -99,7 +99,7 @@ export const gymCore = {
   },
   "gymCore.warn.emptyRoutine": {
     en: "A routine with no exercises was left out.",
-    fr: "Une routine sans exercice a été ignorée.",
+    fr: "Un programme sans exercice a été ignoré.",
   },
   "gymCore.warn.skipped": {
     en: "Some entries that were not exercises were skipped.",
