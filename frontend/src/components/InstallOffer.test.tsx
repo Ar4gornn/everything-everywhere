@@ -12,7 +12,10 @@ const prompt = vi.hoisted(() => ({
   prompt: vi.fn(),
 }));
 
+const tour = vi.hoisted(() => ({ step: null as string | null }));
+
 vi.mock("../pwa", () => ({ isInstalled: () => pwa.installed }));
+vi.mock("./Tutorial/useTutorial", () => ({ useTutorial: () => ({ step: tour.step }) }));
 vi.mock("../install/prompt", () => ({
   useInstallPrompt: () => ({ ...prompt.state, prompt: prompt.prompt }),
 }));
@@ -33,6 +36,7 @@ beforeEach(() => {
   pwa.installed = false;
   prompt.state = { canPrompt: false, justInstalled: false };
   prompt.prompt.mockReset();
+  tour.step = null;
 });
 
 describe("the install offer on a phone", () => {
@@ -41,6 +45,24 @@ describe("the install offer on a phone", () => {
   it("asks once the app has been used and nothing was answered", () => {
     show();
     expect(screen.getByText("Want help installing the app on this phone?")).toBeInTheDocument();
+  });
+
+  it("stays out of the way while the guided tour runs (the tour asks it itself)", () => {
+    tour.step = "install";
+    show();
+    expect(screen.queryByTestId("install-question")).toBeNull();
+  });
+
+  it("a No given elsewhere (the tour) is honoured without remounting", () => {
+    const view = show();
+    expect(screen.getByTestId("install-question")).toBeInTheDocument();
+    window.localStorage.setItem(CONSENT, "no");
+    view.rerender(
+      <MemoryRouter>
+        <InstallOffer hasUsedApp />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId("install-question")).toBeNull();
   });
 
   it("does not ask before the app has been used", () => {

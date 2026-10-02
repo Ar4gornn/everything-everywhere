@@ -6,6 +6,7 @@ import { cardDismissed, dismissCard, installOffer, readConsent, readWelcomed, wr
 import { useInstallPrompt } from "../install/prompt";
 import { useLayout } from "../layout/useLayout";
 import { isInstalled } from "../pwa";
+import { useTutorial } from "./Tutorial/useTutorial";
 import { Card } from "./ui";
 
 /**
@@ -18,11 +19,17 @@ export function InstallOffer({ hasUsedApp }: { hasUsedApp: boolean }) {
   const t = useT();
   const phone = useLayout() === "phone";
   const { canPrompt, justInstalled, prompt } = useInstallPrompt();
-  const [consent, setConsent] = useState(readConsent);
+  // Read on every render, not once: the tour's install step writes the same answer while this
+  // card is mounted, and a stale copy would ask again after a "No". `answered` only re-renders.
+  const [, answered] = useState(0);
+  const setConsent = (_answer: "yes" | "no") => answered((n) => n + 1);
+  const consent = readConsent();
+  const { step } = useTutorial();
   const [dismissed, setDismissed] = useState(() => cardDismissed());
   const [accepted, setAccepted] = useState(false);
 
-  const offer = installOffer({
+  // While the tour runs it asks this itself (its install step); never both at once.
+  const offer = step !== null ? null : installOffer({
     phone,
     installed: isInstalled() || justInstalled || accepted,
     welcomed: readWelcomed(),
