@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { loadMoonEngine, PHASES, phaseNameFor, useMoonEngine, type MoonEngine } from "./engine";
+import { dayLengthDays, loadMoonEngine, PHASES, phaseNameFor, useMoonEngine, type MoonEngine } from "./engine";
 import vectors from "./vectors.json";
 
 /**
@@ -145,6 +145,50 @@ describe("rise and set vs a published almanac (shared vectors)", () => {
     const oneSided = e.riseSet(at("2025-01-06T00:00:00Z"), 78, 15);
     expect(oneSided.rise).not.toBeNull();
     expect(oneSided.set).toBeNull();
+  });
+});
+
+describe("phaseAt", () => {
+  it("names the same phase as stateAt, without the age search", async () => {
+    const e = await ready();
+    for (const iso of ["2025-01-13T22:27:32Z", "2025-01-29T12:36:34Z", "2025-02-08T12:36:34Z", "2025-01-26T00:00:00Z"]) {
+      expect(e.phaseAt(at(iso))).toBe(e.stateAt(at(iso)).phase);
+    }
+  });
+});
+
+describe("a day is searched to the next local midnight, not for a fixed 24 h", () => {
+  const zone = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "Europe/Paris";
+  });
+  afterEach(() => {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  });
+
+  it("measures 25 h, 23 h and 24 h days in Paris", () => {
+    expect(dayLengthDays(new Date(2025, 9, 26))).toBeCloseTo(25 / 24, 9);
+    expect(dayLengthDays(new Date(2025, 2, 30))).toBeCloseTo(23 / 24, 9);
+    expect(dayLengthDays(new Date(2025, 9, 27))).toBe(1);
+  });
+
+  it("keeps a moonrise in the 25th hour of 2025-10-26 (23:44 CET)", async () => {
+    const e = await ready();
+    // Found by scanning longitudes: at 48.85 N, 155 W the moon rises 24 h 44 min after the
+    // local midnight, i.e. inside the 25 h day but past a fixed 24 h.
+    const result = e.riseSet(new Date(2025, 9, 26), 48.85, -155);
+    expect(result.rise).not.toBeNull();
+    expect(
+      Math.abs((result.rise as Date).getTime() - at("2025-10-26T22:44:16Z").getTime()),
+    ).toBeLessThanOrEqual(3 * MIN);
+  });
+
+  it("drops a moonset that falls after the 23 h day of 2025-03-30 ends", async () => {
+    const e = await ready();
+    // At 48.85 N, 27 W the moon sets 23 h 15 min after local midnight: the next day's, so a
+    // 23 h day has none, where a fixed 24 h would have reported it.
+    expect(e.riseSet(new Date(2025, 2, 30), 48.85, -27).set).toBeNull();
   });
 });
 

@@ -2315,10 +2315,21 @@ a.chip {
 }
 
 .moon-link {
-  display: inline-flex;
+  /* Its own line under the title row: full width, one line, ellipsis (the text span). The
+     44px target is an overhang, not padding, so the line is no taller than its text. */
+  position: relative;
+  display: flex;
   min-width: 0;
+  max-width: 100%;
+  margin-top: 6px;
   color: var(--muted);
   font-size: var(--fs-small);
+}
+
+.moon-link::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0 -20px;
 }
 
 .cal-net {

@@ -100,6 +100,21 @@ const SOUTH_ZONES: ReadonlySet<string> = new Set([
   "Pacific/Fakaofo",
   "Pacific/Wallis",
   "Pacific/Funafuti",
+  // Added after review: the remaining zones whose named city is south of the equator.
+  "Africa/Brazzaville",
+  "Indian/Mahe",
+  "Pacific/Kanton",
+  "Pacific/Nauru",
+  "Pacific/Bougainville",
+  "Pacific/Pitcairn",
+  "America/Santarem",
+  "America/Eirunepe",
+  // Legacy Argentine aliases that still come back from older browsers.
+  "America/Cordoba",
+  "America/Mendoza",
+  "America/Jujuy",
+  "America/Catamarca",
+  "America/Rosario",
 ]);
 
 /** Southern-hemisphere IANA zones by prefix or exact name; anything else is north. */

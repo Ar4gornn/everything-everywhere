@@ -3,11 +3,13 @@ import { type FormEvent, useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { MoodDay } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
+import { ListRow } from "../components/ListRow";
 import { MoonGlyph } from "../components/MoonGlyph";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { MoonLines } from "../charts/MoonLines";
 import { useT } from "../i18n";
 import { MODULE_NAME, useModules } from "../layout/modules";
+import { useLayout } from "../layout/useLayout";
 import { type PhaseName, useMoonEngine } from "../moon/engine";
 import { type Hemisphere, resolveHemisphere } from "../moon/hemisphere";
 import { clearPlace, locateOnce, type MoonPlace, usePlace, writePlace } from "../moon/location";
@@ -64,6 +66,12 @@ const NO_OVERLAY: Overlay = { mood: null, habits: null, spending: null, gym: nul
 
 const noonOf = (iso: string): Date => new Date(`${iso}T12:00:00`);
 
+/** A number in the account's language ("21,8" in French), never the machine's locale. */
+const fixed = (lang: string, value: number, digits: number): string =>
+  new Intl.NumberFormat(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
+    value,
+  );
+
 function counted(rows: string[], days: string[]): DayValue[] {
   const per = new Map<string, number>();
   for (const day of rows) per.set(day, (per.get(day) ?? 0) + 1);
@@ -72,6 +80,7 @@ function counted(rows: string[], days: string[]): DayValue[] {
 
 export function MoonPage() {
   const t = useT();
+  const phone = useLayout() === "phone";
   const dates = useDates();
   const money = useMoney();
   const modules = useModules();
@@ -126,6 +135,17 @@ export function MoonPage() {
 
   const [place, setPlace] = usePlace();
 
+  // Each window day's phase, once per window and engine: the four modules and the chart's
+  // band all read this list, none of them asks the engine again.
+  const phases = useMemo(
+    () => (engine ? days.map((day) => engine.phaseAt(noonOf(day))) : []),
+    [engine, days],
+  );
+  const phaseByDay = useMemo(
+    () => new Map(days.map((day, index) => [day, phases[index] as PhaseName])),
+    [days, phases],
+  );
+
   if (!engine) {
     return (
       <div className="moon-page">
@@ -137,6 +157,9 @@ export function MoonPage() {
 
   const now = new Date();
   const state = engine.stateAt(now);
+  const age = Math.round(state.ageDays * 10) / 10;
+  // French takes the singular below 2 ("1,5 jour"), English only at exactly 1.
+  const ageCount = t.lang === "fr" && age < 2 ? 1 : age;
   const upcoming = engine.quartersBetween(now, new Date(now.getTime() + 35 * 86_400_000));
   const nextNew = upcoming.find((q) => q.kind === "new");
   const nextFull = upcoming.find((q) => q.kind === "full");
@@ -150,8 +173,7 @@ export function MoonPage() {
     : null;
   const stamp = (d: Date | null): string => (d ? clock(d) : t("moon.page.noRise"));
 
-  const phaseOf = (day: string): PhaseName => engine.stateAt(noonOf(day)).phase;
-  const phases = days.map(phaseOf);
+  const phaseOf = (day: string): PhaseName => phaseByDay.get(day) ?? "new";
 
   const specs: {
     key: ModuleKey;
@@ -167,7 +189,7 @@ export function MoonPage() {
       title: t(MODULE_NAME.mood),
       figure: t("moon.page.figureMood"),
       per: "dataDays",
-      show: (n) => n.toFixed(1),
+      show: (n) => fixed(t.lang, n, 1),
       min: 1,
       max: 5,
     },
@@ -176,7 +198,7 @@ export function MoonPage() {
       title: t(MODULE_NAME.habits),
       figure: t("moon.page.figureHabits"),
       per: "allDays",
-      show: (n) => n.toFixed(2),
+      show: (n) => fixed(t.lang, n, 2),
       min: 0,
     },
     {
@@ -192,7 +214,7 @@ export function MoonPage() {
       title: t(MODULE_NAME.gym),
       figure: t("moon.page.figureGym"),
       per: "allDays",
-      show: (n) => n.toFixed(2),
+      show: (n) => fixed(t.lang, n, 2),
       min: 0,
     },
   ];
@@ -215,7 +237,11 @@ export function MoonPage() {
               {t(`moon.phase.${state.phase}`)}
             </p>
             <p>{t("moon.lit", { percent: Math.round(state.illumination * 100) })}</p>
-            <p>{t("moon.page.age", { days: state.ageDays.toFixed(1) })}</p>
+            <p>
+              {t.n("moon.page.age", ageCount, {
+                days: new Intl.NumberFormat(t.lang, { maximumFractionDigits: 1 }).format(age),
+              })}
+            </p>
           </div>
         </div>
         <dl className="moon-facts">
@@ -282,6 +308,33 @@ export function MoonPage() {
             return (
               <section className="moon-module" key={spec.key} data-module={spec.key}>
                 <h3>{spec.title}</h3>
+                {phone ? (
+                  <>
+                  <p className="moon-hint">{spec.figure}</p>
+                  <ul className="list-rows" aria-label={spec.title}>
+                    {rows.map((row, index) => (
+                      <li key={row.phase} data-phase={row.phase}>
+                        <ListRow
+                          title={
+                            <span className="moon-phase-cell">
+                              <MoonGlyph
+                                phase={row.phase}
+                                angle={index * 45}
+                                hemisphere={hemisphere}
+                                size={16}
+                                decorative
+                              />
+                              {t(`moon.phase.${row.phase}`)}
+                            </span>
+                          }
+                          meta={t.n("streaks.days", row.days)}
+                          amount={row.figure === null ? "–" : spec.show(row.figure)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                  </>
+                ) : (
                 <TableWrap>
                   <table>
                     <thead>
@@ -315,6 +368,7 @@ export function MoonPage() {
                     </tbody>
                   </table>
                 </TableWrap>
+                )}
                 <MoonLines
                   values={series.map((d) => d.value)}
                   phases={phases}
@@ -353,7 +407,9 @@ function PlaceControls({
   const [lon, setLon] = useState("");
   const [label, setLabel] = useState("");
 
+  // Nobody signed in: there is no account to keep a place for, so nothing is read or written.
   const locate = async () => {
+    if (!userId) return;
     setBusy(true);
     setError(null);
     try {
@@ -377,6 +433,7 @@ function PlaceControls({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (!userId) return;
     const parse = (text: string): number =>
       text.trim() === "" ? Number.NaN : Number(text.trim().replace(",", "."));
     const la = parse(lat);
@@ -396,6 +453,7 @@ function PlaceControls({
   };
 
   const remove = () => {
+    if (!userId) return;
     clearPlace(userId);
     setPlace(null);
     setError(null);
@@ -407,7 +465,7 @@ function PlaceControls({
       {place && (
         <p data-testid="moon-place">
           {t("moon.page.placeIs", {
-            place: `${place.label ? `${place.label}, ` : ""}${place.lat.toFixed(1)}, ${place.lon.toFixed(1)}`,
+            place: `${place.label ? `${place.label}, ` : ""}${fixed(t.lang, place.lat, 1)}, ${fixed(t.lang, place.lon, 1)}`,
           })}
         </p>
       )}

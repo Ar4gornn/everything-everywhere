@@ -40,7 +40,8 @@ export const moon = {
   // --- The Moon page (Builder B). Text only; no sentence ranks or judges a difference.
   "moon.page.loading": { en: "Loading the moon…", fr: "Chargement de la lune…" },
   "moon.page.today": { en: "Today", fr: "Aujourd’hui" },
-  "moon.page.age": { en: "Age: {days} days", fr: "Âge : {days} jours" },
+  "moon.page.age_one": { en: "Age: {days} day", fr: "Âge : {days} jour" },
+  "moon.page.age_other": { en: "Age: {days} days", fr: "Âge : {days} jours" },
   "moon.page.nextNew": { en: "Next new moon", fr: "Prochaine nouvelle lune" },
   "moon.page.nextFull": { en: "Next full moon", fr: "Prochaine pleine lune" },
   "moon.page.rise": { en: "Moonrise", fr: "Lever de la lune" },

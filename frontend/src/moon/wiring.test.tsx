@@ -33,6 +33,7 @@ const iso = (d: Date) =>
 
 const fakeEngine = {
   stateAt: vi.fn(() => FULL),
+  phaseAt: vi.fn(() => "full" as const),
   quartersBetween: vi.fn(() => [{ kind: "full" as const, at: todayNoon() }]),
   riseSet: vi.fn(() => ({ rise: null, set: null })),
 };
@@ -208,9 +209,20 @@ describe("calendar", () => {
     const glyphs = document.querySelectorAll('.cal-day [data-testid="glyph"]');
     expect(glyphs.length).toBeGreaterThanOrEqual(28);
     expect(glyphs[0]?.getAttribute("data-size")).toBe("14");
-    // a day with no quarter keeps its plain name
+    // every other day names its phase too (the fake engine says "full" for each)
     const other = document.querySelector(".cal-day:not([data-iso='" + iso(new Date()) + "'])");
-    expect(other?.getAttribute("aria-label")).not.toMatch(/moon/i);
+    expect(other?.getAttribute("aria-label")).toMatch(/, Full moon$/);
+    for (const day of document.querySelectorAll(".cal-day")) {
+      expect(day.getAttribute("aria-label")).toMatch(/, Full moon$/);
+    }
+  });
+
+  it("keeps the plain name of every day when the module is off", async () => {
+    renderAt("/calendar", { modules: withoutMoon });
+    await waitFor(() => expect(document.querySelector(".cal-day")).not.toBeNull());
+    for (const day of document.querySelectorAll(".cal-day")) {
+      expect(day.getAttribute("aria-label")).not.toMatch(/moon/i);
+    }
   });
 
   it("puts the phase, the lit share and a link to /moon in the day panel", async () => {
@@ -268,6 +280,15 @@ describe("dashboard title line", () => {
     const link = await screen.findByRole("link", { name: /Full moon · 100% lit/ });
     expect(link).toHaveAttribute("href", "/moon");
     expect(within(link).getByTestId("glyph")).toHaveAttribute("data-phase", "full");
+  });
+
+  it("sits on its own line below the title row, not inside it", async () => {
+    renderAt("/");
+    const link = await screen.findByRole("link", { name: /Full moon · 100% lit/ });
+    const title = document.querySelector(".dash-title") as HTMLElement;
+    expect(title).not.toBeNull();
+    expect(title.contains(link)).toBe(false);
+    expect(link.parentElement).toBe(title.parentElement);
   });
 
   it("is absent with the module off", async () => {

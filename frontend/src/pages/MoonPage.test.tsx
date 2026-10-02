@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PHASES } from "../moon/engine";
+import { onAPhone } from "../test/phone";
 import MoonPage from "./MoonPage";
 
 /**
@@ -22,6 +23,12 @@ const h = vi.hoisted(() => ({
   write: vi.fn(),
   clear: vi.fn(),
   riseSet: vi.fn(),
+  auth: { user: { id: "u1" } } as { user: { id: string } | null },
+}));
+
+vi.mock("../auth/AuthContext", async (original) => ({
+  ...(await original<typeof import("../auth/AuthContext")>()),
+  useOptionalAuth: () => h.auth,
 }));
 
 vi.mock("../moon/engine", async (original) => ({
@@ -46,7 +53,8 @@ vi.mock("../layout/modules", async (original) => ({
 const NOW = new Date(2026, 9, 3, 10, 0);
 
 const fakeEngine = () => ({
-  stateAt: (when: Date) => {
+  phaseAt: vi.fn((when: Date) => PHASES[when.getDate() % 8] ?? "new"),
+  stateAt: vi.fn((when: Date) => {
     const index = when.getDate() % 8;
     const angle = index * 45;
     return {
@@ -55,7 +63,7 @@ const fakeEngine = () => ({
       ageDays: 10.4,
       phase: PHASES[index] ?? "new",
     };
-  },
+  }),
   quartersBetween: (start: Date, end: Date) =>
     [
       { kind: "new" as const, at: new Date(2026, 9, 10, 6, 5) },
@@ -139,6 +147,7 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
   h.engine = fakeEngine();
+  h.auth = { user: { id: "u1" } };
   h.place = null;
   h.hemisphere = "north";
   h.modules = { mood: true, habits: true, gym: true };
@@ -367,6 +376,136 @@ describe("your days against the moon", () => {
     open();
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.queryByText("Mean mood")).toBeNull();
+  });
+});
+
+describe("one pass over the window", () => {
+  it("asks the engine for each day's phase once, not once per module", async () => {
+    open();
+    await screen.findByText("Mean mood");
+    const engine = h.engine as ReturnType<typeof fakeEngine>;
+    expect(engine.phaseAt).toHaveBeenCalledTimes(89);
+    const stamps = engine.phaseAt.mock.calls.map(([when]) => when.getTime());
+    expect(new Set(stamps).size).toBe(89);
+    // stateAt (with the age search) is only for today, never for a window day.
+    for (const [when] of engine.stateAt.mock.calls) expect(when.getTime()).toBe(NOW.getTime());
+  });
+});
+
+describe("a day is bucketed by its local noon", () => {
+  const hourly = () => ({
+    ...(fakeEngine() as object),
+    // Only noon is "the day's phase"; any other hour of the day lands in "new".
+    phaseAt: vi.fn((when: Date) => (when.getHours() === 12 ? (PHASES[when.getDate() % 8] ?? "new") : "new")),
+  });
+
+  it("asks at 12:00 local, so the full-moon days are the ones the noon phase names", async () => {
+    h.engine = hourly();
+    open();
+    await screen.findByText("Mean mood");
+    expect(row("mood", "full")[1]).toBe("11");
+  });
+
+  it("asks at 12:00 local on a 25-hour DST day too (Paris, 2025-10-26)", async () => {
+    const zone = process.env.TZ;
+    process.env.TZ = "Europe/Paris";
+    try {
+      vi.setSystemTime(new Date(2025, 9, 27, 10, 0));
+      const engine = hourly();
+      h.engine = engine;
+      open();
+      await screen.findByText("Mean mood");
+      const dst = engine.phaseAt.mock.calls
+        .map(([when]) => when)
+        .filter((when) => when.getMonth() === 9 && when.getDate() === 26);
+      expect(dst).toHaveLength(1);
+      expect(dst[0]?.getHours()).toBe(12);
+      expect(engine.phaseAt.mock.calls.every(([when]) => when.getHours() === 12)).toBe(true);
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
+});
+
+describe("the age and the numbers, in the account's language", () => {
+  const ageOf = (days: number) => {
+    h.engine = {
+      ...(fakeEngine() as object),
+      stateAt: () => ({ angle: 90, illumination: 0.5, ageDays: days, phase: "firstQuarter" }),
+    };
+  };
+
+  it("takes the singular at exactly one day in English", () => {
+    ageOf(1.02);
+    open();
+    expect(screen.getByText("Age: 1 day")).toBeInTheDocument();
+  });
+
+  it("uses a decimal comma and the singular below two days in French", async () => {
+    window.localStorage.setItem("everything-everywhere.language", "fr");
+    ageOf(21.84);
+    open();
+    expect(screen.getByText("Âge : 21,8 jours")).toBeInTheDocument();
+    cleanup();
+    ageOf(1.02);
+    open();
+    expect(screen.getByText("Âge : 1 jour")).toBeInTheDocument();
+  });
+
+  it("formats the overlay figures and the place with the language's separator", async () => {
+    window.localStorage.setItem("everything-everywhere.language", "fr");
+    h.place = { lat: 48.9, lon: 2.3, label: null };
+    open();
+    expect(screen.getByTestId("moon-place")).toHaveTextContent("Lieu : 48,9, 2,3");
+    await screen.findByText("Humeur moyenne");
+    expect(row("mood", "full")[2]).toBe("5,0");
+    expect(row("habits", "full")[2]).toBe((2 / 11).toFixed(2).replace(".", ","));
+  });
+});
+
+describe("on a phone", () => {
+  onAPhone();
+
+  it("draws each module's phases as rows, not a table", async () => {
+    open();
+    await screen.findByText("Mean mood");
+    expect(document.querySelector("[data-module] table")).toBeNull();
+    const rows = document.querySelectorAll('[data-module="mood"] li[data-phase]');
+    expect(rows).toHaveLength(8);
+    const full = document.querySelector('[data-module="habits"] li[data-phase="full"]');
+    expect(full).toHaveTextContent("Full moon");
+    expect(full).toHaveTextContent("11 days");
+    expect(full).toHaveTextContent((2 / 11).toFixed(2));
+    expect(document.querySelector('[data-module="mood"] li[data-phase="waningGibbous"]')).toHaveTextContent("–");
+  });
+});
+
+describe("with nobody signed in", () => {
+  it("never reads or writes a place, and never asks the device for one", async () => {
+    h.auth = { user: null };
+    h.place = { lat: 48.9, lon: 2.3, label: null };
+    open();
+    await userEvent.click(screen.getByRole("button", { name: "Use my location" }));
+    await userEvent.click(screen.getByRole("button", { name: "Enter coordinates" }));
+    await userEvent.type(screen.getByLabelText("Latitude"), "10");
+    await userEvent.type(screen.getByLabelText("Longitude"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Save the place" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove the place" }));
+    expect(h.locate).not.toHaveBeenCalled();
+    expect(h.write).not.toHaveBeenCalled();
+    expect(h.clear).not.toHaveBeenCalled();
+  });
+});
+
+describe("the device location", () => {
+  it("is asked for only when the button is pressed, never on mount", async () => {
+    h.locate.mockResolvedValue({ lat: 48.9, lon: 2.4 });
+    open();
+    await screen.findByText("Mean mood");
+    expect(h.locate).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Use my location" }));
+    expect(h.locate).toHaveBeenCalledTimes(1);
   });
 });
 

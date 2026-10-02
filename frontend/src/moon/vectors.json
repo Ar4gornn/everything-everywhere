@@ -1,7 +1,7 @@
 {
  "_sources": {
   "quarters": "NASA GSFC, Five Millennium Catalog of Moon Phases / 'Moon Phases 2001 to 2100' table, https://eclipse.gsfc.nasa.gov/phase/phases2001.html (UT, minute resolution). Read 2026-10-03.",
-  "riseSet": "sunrise-and-sunset.com monthly moonrise/moonset tables, June 2025, Paris and Sydney, https://www.sunrise-and-sunset.com/en/moon/<country>/<city>/2025/june (local civil time: Paris CEST UTC+2, Sydney AEST UTC+10; converted to UTC here). Read 2026-10-03; the page does not state its coordinates, so city-centre coordinates are used."
+  "riseSet": "sunrise-and-sunset.com monthly moonrise/moonset tables, June 2025, Paris and Sydney, https://www.sunrise-and-sunset.com/en/moon/<country>/<city>/2025/june (local civil time: Paris CEST UTC+2, Sydney AEST UTC+10; converted to UTC here). Read 2026-10-03; the page does not state its coordinates, so city-centre coordinates are used. Fix pass 2026-10-03: a replacement with a source that states its coordinates (USNO https://aa.usno.navy.mil/api/rstt/oneday, timeanddate.com) was tried and was unreachable (USNO: ECONNRESET on three attempts, timeanddate: HTTP 403), so these vectors stay as they are and no DST-day almanac figure was added; the DST day is covered by day-length tests only, not by almanac times."
  },
  "toleranceMinutes": {
   "quarters": 2,

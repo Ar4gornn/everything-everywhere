@@ -80,6 +80,9 @@ def test_the_kind_is_off_by_default_and_the_clause_follows_the_switch(client, us
         "notifications"
     ]
     assert kinds["moon"] is False
+    # UTC first: with no zone the day is the host's, and on a UTC+3 machine FULL is not a
+    # full-moon day for part of the day, which made this assertion pass for the wrong reason.
+    _zone(client, user_a, "UTC")
     assert _digest(user_a, FULL).empty is True
 
     _on(client, user_a)

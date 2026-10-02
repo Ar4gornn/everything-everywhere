@@ -440,8 +440,9 @@ export function CalendarPage() {
     return rows;
   }, [periodStart, periodEnd]);
 
-  // Epic 47: the moon on each day, only with its module on and its engine loaded. A day that
-  // holds an exact new, quarter or full moon says so in its accessible name.
+  // Epic 47: the moon on each day, only with its module on and its engine loaded. Every day
+  // names its phase in its accessible name; a day that holds an exact new, quarter or full moon
+  // names that instant's kind.
   const { view: moon, probe: moonProbe } = useMoonView();
   const quarterDays = useMemo(() => {
     const map = new Map<string, PhaseName>();
@@ -900,7 +901,9 @@ export function CalendarPage() {
                       date: iso,
                       month: dates.month(monthOf(day, startDay)),
                     });
-                const quarter = moon ? quarterDays.get(iso) : undefined;
+                const moonState = moon ? moonOnDay(moon.engine, day) : null;
+                // An exact quarter names its own kind; every other day names its phase.
+                const moonName = moon ? (quarterDays.get(iso) ?? moonState?.phase) : undefined;
                 return (
                   <button
                     key={iso}
@@ -918,7 +921,7 @@ export function CalendarPage() {
                       .join(" ")}
                     data-iso={iso}
                     tabIndex={iso === tabbable ? 0 : -1}
-                    aria-label={quarter ? `${label}, ${t(`moon.phase.${quarter}`)}` : label}
+                    aria-label={moonName ? `${label}, ${t(`moon.phase.${moonName}`)}` : label}
                     aria-selected={selected === iso}
                     aria-current={iso === today ? "date" : undefined}
                     onKeyDown={(event) => onCellKey(event, day)}
@@ -937,20 +940,15 @@ export function CalendarPage() {
                     <span className="cal-num">
                       {weekly ? `${dates.weekdayShort(weekIndex(day))} ${day.getDate()}` : day.getDate()}
                     </span>
-                    {moon && (
+                    {moon && moonState && (
                       <span className="cal-moon" aria-hidden="true">
-                        {(() => {
-                          const state = moonOnDay(moon.engine, day);
-                          return (
-                            <MoonGlyph
-                              phase={state.phase}
-                              angle={state.angle}
-                              hemisphere={moon.hemisphere}
-                              size={14}
-                              decorative
-                            />
-                          );
-                        })()}
+                        <MoonGlyph
+                          phase={moonState.phase}
+                          angle={moonState.angle}
+                          hemisphere={moon.hemisphere}
+                          size={14}
+                          decorative
+                        />
                       </span>
                     )}
                     {inPeriod && net !== 0 && (

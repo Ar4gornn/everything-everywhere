@@ -44,6 +44,8 @@ export interface RiseSet {
 
 export interface MoonEngine {
   stateAt: (when: Date) => MoonState;
+  /** Just the phase word at an instant: angle only, no illumination and no age search. */
+  phaseAt: (when: Date) => PhaseName;
   /** Quarters with `start <= at < end`, in order. */
   quartersBetween: (start: Date, end: Date) => Quarter[];
   /** Rise and set during the local day that starts at `dayStart` (a local midnight). */
@@ -59,6 +61,22 @@ export function phaseNameFor(angle: number): PhaseName {
   const a = ((angle % 360) + 360) % 360;
   const index = Math.floor((a + 22.5) / 45) % 8;
   return PHASES[index] as PhaseName;
+}
+
+/**
+ * Days from `dayStart` to the same wall-clock time on the next local day: 1 for an ordinary
+ * day, 25/24 or 23/24 when a DST change falls inside it.
+ */
+export function dayLengthDays(dayStart: Date): number {
+  const next = new Date(
+    dayStart.getFullYear(),
+    dayStart.getMonth(),
+    dayStart.getDate() + 1,
+    dayStart.getHours(),
+    dayStart.getMinutes(),
+    dayStart.getSeconds(),
+  );
+  return (next.getTime() - dayStart.getTime()) / 86_400_000;
 }
 
 function build(astro: Astronomy): MoonEngine {
@@ -84,15 +102,17 @@ function build(astro: Astronomy): MoonEngine {
 
   const riseSet = (dayStart: Date, lat: number, lon: number): RiseSet => {
     const observer = new astro.Observer(lat, lon, 0);
-    // Search the 24 hours from the local midnight. A DST day is 23 or 25 hours long; the
-    // one-hour slip is at most one event at the very edge of the day, accepted (spec: "a minute
-    // or two" is for the instant, not the day boundary).
-    const rise = astro.SearchRiseSet(astro.Body.Moon, observer, +1, dayStart, 1);
-    const set = astro.SearchRiseSet(astro.Body.Moon, observer, -1, dayStart, 1);
+    // From this local midnight to the next one: the real length of the day, 23 or 25 hours
+    // across a DST change, not a fixed 24.
+    const limit = dayLengthDays(dayStart);
+    const rise = astro.SearchRiseSet(astro.Body.Moon, observer, +1, dayStart, limit);
+    const set = astro.SearchRiseSet(astro.Body.Moon, observer, -1, dayStart, limit);
     return { rise: rise ? rise.date : null, set: set ? set.date : null };
   };
 
-  return { stateAt, quartersBetween, riseSet };
+  const phaseAt = (when: Date): PhaseName => phaseNameFor(astro.MoonPhase(when));
+
+  return { stateAt, phaseAt, quartersBetween, riseSet };
 }
 
 let pending: Promise<MoonEngine> | null = null;

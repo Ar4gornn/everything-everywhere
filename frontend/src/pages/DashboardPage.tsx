@@ -784,14 +784,7 @@ export function DashboardPage() {
             <h1 style={{ fontSize: 18, margin: 0 }}>
               {periodLabel()}
             </h1>
-            {/* Epic 47: today's moon, after the date and never before it, for the reason above.
-                Nothing is drawn until the module is on and the engine has loaded. */}
             {moonProbe}
-            {moon && (
-              <Link to="/moon" className="moon-link">
-                <MoonLine state={moonOnDay(moon.engine, new Date())} hemisphere={moon.hemisphere} />
-              </Link>
-            )}
             {/* Notes (Epic 32), in words, where the page is read. The corner button alone
                 was missed twice on a desktop: it sits below the fold of a screenshot and,
                 in dark mode, close to the page colour. After the heading is safe here,
@@ -802,6 +795,14 @@ export function DashboardPage() {
               </Link>
             )}
           </div>
+          {/* Epic 47: today's moon on a line of its own below the title row. Inside the nowrap
+              row it pushed the Notes chip off a 320px screen in French. Nothing is drawn until
+              the module is on and the engine has loaded. */}
+          {moon && (
+            <Link to="/moon" className="moon-link">
+              <MoonLine state={moonOnDay(moon.engine, new Date())} hemisphere={moon.hemisphere} />
+            </Link>
+          )}
           {/* Spelled out, because "September" meaning 26 Aug - 25 Sep is exactly the sort
               of thing a person should never have to infer from a total. The server sends
               the real bounds, so the client never has to reconstruct them. */}

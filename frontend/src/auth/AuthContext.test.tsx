@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { readRefreshToken, readToken, storeTokens } from "../api/client";
+import { api, readRefreshToken, readToken, storeTokens } from "../api/client";
 import type { User } from "../api/types";
 import { useSignOut } from "../gym/useSignOut";
 import { LanguageProvider } from "../i18n";
@@ -46,6 +46,9 @@ function Probe() {
       <p>{offline ? "offline" : "online"}</p>
       <button type="button" onClick={signOut}>
         out
+      </button>
+      <button type="button" onClick={() => void api.moodDays("2026-09").catch(() => undefined)}>
+        ping
       </button>
     </div>
   );
@@ -148,6 +151,22 @@ describe("opening the app with no network", () => {
     window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(USER));
     vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "please sign in" }, 401)));
     mount();
+    expect(await screen.findByText("signed out")).toBeInTheDocument();
+    expect(clearPlace).not.toHaveBeenCalled();
+  });
+
+  it("keeps the moon place when the session expires mid-session (Epic 47)", async () => {
+    // Signed in first, so the provider knows whose place it is; only then does a 401 end it.
+    storeTokens({ access_token: "a", refresh_token: "r", token_type: "bearer", expires_in: 3600 });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.includes("/api/auth/me") ? json(USER) : json({ detail: "please sign in" }, 401),
+      ),
+    );
+    mount();
+    await screen.findByText("in:alex@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "ping" }));
     expect(await screen.findByText("signed out")).toBeInTheDocument();
     expect(clearPlace).not.toHaveBeenCalled();
   });
