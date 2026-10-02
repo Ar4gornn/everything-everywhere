@@ -307,6 +307,19 @@ def create_entry(
     return entry
 
 
+def create_entry_once(
+    session: Session, user_id: uuid.UUID, *, client_ref: uuid.UUID, **fields
+) -> tuple[Entry, bool]:
+    """AD-61: ``create_entry`` keyed by the ref the phone coined. Returns ``(entry, created)``.
+
+    A ref this account already used returns that entry and writes nothing, whatever the rest of
+    the body says. A concurrent send of the same ref is caught as the unique violation on
+    ``entries_user_client_ref_key`` (SQLSTATE 23505, that constraint only) and answered with the
+    row. Any other IntegrityError is not this function's to hide.
+    """
+    raise NotImplementedError
+
+
 def update_entry(
     session: Session,
     user_id: uuid.UUID,

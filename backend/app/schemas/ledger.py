@@ -79,6 +79,9 @@ class EntryCreate(BaseModel):
     vendor_name: str | None = Field(default=None, min_length=1, max_length=80)
     # AD-51: optional. The pot this expense is paid from; a withdrawal is written with it.
     savings_type_id: uuid.UUID | None = None
+    #: AD-61: the ref the phone coined. A resend with a ref already used answers 200 with that
+    #: entry and writes nothing. Absent: a plain create, as before Epic 45.
+    client_ref: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _pot_expense_only(self) -> "EntryCreate":

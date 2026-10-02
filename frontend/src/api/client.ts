@@ -347,6 +347,8 @@ export interface EntryInput {
   unit?: Unit | null;
   /** AD-51: an expense paid from this pot. Explicit null on a PATCH stops it. */
   savings_type_id?: string | null;
+  /** AD-61: coined by the phone's queue; a resend with it answers 200 with the first entry. */
+  client_ref?: string;
 }
 
 export interface TemplateInput {
@@ -717,8 +719,13 @@ export const api = {
   ) =>
     items(request<Page<Entry>>(`/api/entries${query(filters)}`)),
 
-  createEntry: (input: EntryInput) =>
-    request<Entry>("/api/entries", { method: "POST", body: JSON.stringify(input) }),
+  /** `onStatus` tells a 201 from a 200 replay of the same `client_ref` (AD-61). */
+  createEntry: (input: EntryInput, onStatus?: (status: number) => void) =>
+    request<Entry>(
+      "/api/entries",
+      { method: "POST", body: JSON.stringify(input) },
+      onStatus,
+    ),
 
   updateEntry: (id: string, patch: Partial<EntryInput>) =>
     request<Entry>(`/api/entries/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),

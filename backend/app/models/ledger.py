@@ -147,6 +147,8 @@ class Entry(TimestampedMixin, Base):
     quantity: Mapped[decimal.Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(8), nullable=True)
     vendor_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    # Coined by the phone (AD-61); UNIQUE (user_id, client_ref) lives in migration 0037.
+    client_ref: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
     # AD-51: the pot this expense was paid from, read from its withdrawal — never stored
     # twice. A column_property is stale after a flush, so the writers refresh the entry.
     savings_type_id: Mapped[uuid.UUID | None] = column_property(

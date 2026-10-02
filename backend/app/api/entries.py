@@ -44,10 +44,10 @@ def read_quick_picks(user_id: CurrentUserId, session: DbSession, now: Now) -> Qu
 
 
 @router.post("", response_model=EntryOut, status_code=status.HTTP_201_CREATED)
-def create_entry(payload: EntryCreate, user_id: CurrentUserId, session: DbSession) -> EntryOut:
-    entry = ledger.create_entry(
-        session,
-        user_id,
+def create_entry(
+    payload: EntryCreate, user_id: CurrentUserId, session: DbSession, response: Response
+) -> EntryOut:
+    fields = dict(
         kind=payload.kind,
         amount=payload.amount,
         occurred_on=payload.occurred_on,
@@ -60,6 +60,15 @@ def create_entry(payload: EntryCreate, user_id: CurrentUserId, session: DbSessio
         vendor_name=payload.vendor_name,
         savings_type_id=payload.savings_type_id,
     )
+    if payload.client_ref is None:
+        entry = ledger.create_entry(session, user_id, **fields)
+    else:
+        # AD-61: a resend of an entry already written is a 200 with that entry, not a 201.
+        entry, created = ledger.create_entry_once(
+            session, user_id, client_ref=payload.client_ref, **fields
+        )
+        if not created:
+            response.status_code = status.HTTP_200_OK
     return EntryOut.model_validate(entry)
 
 

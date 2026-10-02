@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
+import type { QueuedEntry } from "../../entries/outbox";
+
 /**
  * Epic 44 (AD-60): one quick-add sheet for the whole app, opened from anywhere.
  *
@@ -12,6 +14,11 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 export interface QuickAddOptions {
   /** `YYYY-MM-DD`; the sheet's date starts here instead of today (the calendar's day). */
   date?: string;
+  /**
+   * Epic 45 (AD-61): a refused queued entry being fixed. The sheet opens prefilled from it and
+   * its Save replaces that queue item (same `client_ref`).
+   */
+  draft?: QueuedEntry;
 }
 
 interface QuickAddApi {
