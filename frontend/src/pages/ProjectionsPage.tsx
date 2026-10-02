@@ -2,7 +2,10 @@ import { Fragment, useMemo, useState } from "react";
 
 import { GrowthChart } from "../charts/GrowthChart";
 import type { GrowthSeries } from "../charts/GrowthChart";
+import { CheckInButton } from "../components/CheckInButton";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
+import { useLayout } from "../layout/useLayout";
 import { isNonNegativeMoney, normalizeMoney, subtractMoney, toCents } from "../money";
 import { useMoney } from "../useMoney";
 import { project, yearlyPoints } from "../interest";
@@ -70,11 +73,23 @@ export function ProjectionsPage() {
   const [first, setFirst] = useState<Scenario>(A);
   const [second, setSecond] = useState<Scenario>(B);
   const [comparing, setComparing] = useState(false);
+  const phone = useLayout() === "phone";
+  const [openYear, toggleYear] = useOpenRow();
 
   const projectionA = useMemo(() => run(first, years), [first, years]);
   const projectionB = useMemo(
     () => (comparing ? run(second, years) : null),
     [comparing, second, years],
+  );
+
+  // Year-end points for the phone rows, computed once rather than per row.
+  const yearsA = useMemo(
+    () => (projectionA ? yearlyPoints(projectionA).filter((p) => p.month > 0) : []),
+    [projectionA],
+  );
+  const yearsB = useMemo(
+    () => (projectionB ? yearlyPoints(projectionB).filter((p) => p.month > 0) : []),
+    [projectionB],
   );
 
   const series: GrowthSeries[] = [
@@ -94,6 +109,7 @@ export function ProjectionsPage() {
 
   return (
     <>
+      <CheckInButton streak="grow" bar />
       {invalid && (
         <ErrorBanner message={t("grow.badInput")} />
       )}
@@ -210,6 +226,32 @@ export function ProjectionsPage() {
           <Card title={t("grow.yearByYear")}>
             {projectionA.points.length < 2 ? (
               <Empty>{t("grow.nothingYet")}</Empty>
+            ) : phone ? (
+              <ul className="list-rows" aria-label={t("grow.yearByYear")}>
+                {yearsA.map((point, index) => {
+                    const otherBalance = yearsB[index]?.balance ?? "0.00";
+                    return (
+                      <ListRow
+                        key={point.month}
+                        title={t("rows.year", { n: point.month / 12 })}
+                        amount={money.plain(
+                          comparing ? subtractMoney(otherBalance, point.balance) : point.balance,
+                        )}
+                        open={openYear === String(point.month)}
+                        onToggle={() => toggleYear(String(point.month))}
+                        details={
+                          <p className="hint" style={{ margin: 0 }}>
+                            {comparing
+                              ? `A ${money.plain(point.balance)} · B ${money.plain(otherBalance)}`
+                              : `${t("grow.colPaidIn")} ${money.plain(point.contributed)} · ${t(
+                                  "grow.interest",
+                                )} ${money.plain(point.interest)}`}
+                          </p>
+                        }
+                      />
+                    );
+                  })}
+              </ul>
             ) : (
               <TableWrap>
                 <table className="stacked" aria-label={t("grow.yearByYear")}>

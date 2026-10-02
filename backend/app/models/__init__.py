@@ -5,8 +5,10 @@ Constraints that carry an architectural invariant (composite foreign keys per AD
 here. The migration is the authority; these declarations keep the ORM honest about them.
 """
 
+from app.models.activity import ActivityDay
 from app.models.base import Base
 from app.models.books import Book, BookSeries, BookStatus
+from app.models.calendar import CalendarFeed
 from app.models.gym import (
     Exercise,
     Routine,
@@ -32,14 +34,23 @@ from app.models.recipes import (
     RecipeUnit,
 )
 from app.models.recurring import Cadence, OccurrenceStatus, RecurringOccurrence, RecurringTemplate
-from app.models.savings import SavingsContribution, SavingsSkip, SavingsTarget, SavingsType
+from app.models.savings import (
+    LeftoverDismissal,
+    SavingsContribution,
+    SavingsSkip,
+    SavingsTarget,
+    SavingsType,
+)
+from app.models.streak_purchase import StreakPurchase
 from app.models.user import User
 
 __all__ = [
     "Base",
+    "ActivityDay",
     "Book",
     "BookSeries",
     "BookStatus",
+    "CalendarFeed",
     "Budget",
     "Cadence",
     "OccurrenceStatus",
@@ -61,6 +72,7 @@ __all__ = [
     "Workout",
     "WorkoutSet",
     "InventoryItemChange",
+    "LeftoverDismissal",
     "MoodDay",
     "Note",
     "SavingsContribution",
@@ -75,6 +87,7 @@ __all__ = [
     "RecipeStep",
     "RecipeUnit",
     "Space",
+    "StreakPurchase",
     "Unit",
     "User",
     "Vendor",

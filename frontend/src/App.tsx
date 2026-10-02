@@ -45,6 +45,7 @@ const RecipePage = page(() => import("./pages/RecipePage"), "RecipePage");
 const SettingsPage = page(() => import("./pages/SettingsPage"), "SettingsPage");
 const NotesPage = page(() => import("./pages/NotesPage"), "NotesPage");
 const NotePage = page(() => import("./pages/NotePage"), "NotePage");
+const InvitesPage = page(() => import("./pages/InvitesPage"), "InvitesPage");
 
 /**
  * The navigation answer, in full, because it is the constraint two new features collided
@@ -275,6 +276,11 @@ export function App() {
           <Route path="/recipes" element={<ModuleGate module="recipes"><RecipesPage /></ModuleGate>} />
           <Route path="/recipes/:recipeId" element={<ModuleGate module="recipes"><RecipePage /></ModuleGate>} />
           <Route path="/settings" element={<SettingsPage />} />
+          {/* AD-54: offered to an admin only; the server refuses anyone else regardless. */}
+          <Route
+            path="/invites"
+            element={user.is_admin ? <InvitesPage /> : <Navigate to="/settings" replace />}
+          />
           <Route path="/notes" element={<ModuleGate module="notes"><NotesPage /></ModuleGate>} />
           {/* One route for new and existing: `/notes/new` becomes `/notes/<id>` in place
               once there is something to keep, and the editor must not remount when it does. */}

@@ -7,16 +7,39 @@ import { LANGUAGES, useLanguage } from "../i18n";
 import { errorMessage } from "../i18n/errors";
 import type { Currency, Language } from "../api/types";
 
+/**
+ * AD-54: an invite link is `/?invite=CODE`. Read once, on the first render, and taken out
+ * of the address bar straight away so the code does not linger in the history of a shared
+ * device or get copied along with the URL.
+ */
+function takeInviteFromUrl(): string {
+  try {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("invite")?.trim() ?? "";
+    if (code) {
+      url.searchParams.delete("invite");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
+    return code;
+  } catch {
+    return "";
+  }
+}
+
 export function SignInPage() {
   const { signIn, register } = useAuth();
   // The full context rather than `useT`: this is the one screen where the reader has no
   // account yet, so the picker below is their only way out of a language they cannot read.
   const { t, lang, setLanguage } = useLanguage();
-  const [mode, setMode] = useState<"signin" | "register" | "recover">("signin");
+  // Lazy, so the URL is read (and cleaned) once rather than on every render.
+  const [linkedInvite] = useState(takeInviteFromUrl);
+  const [mode, setMode] = useState<"signin" | "register" | "recover">(
+    linkedInvite ? "register" : "signin",
+  );
   const [recoveryCode, setRecoveryCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(linkedInvite);
   const [currency, setCurrency] = useState<Currency>("USD");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

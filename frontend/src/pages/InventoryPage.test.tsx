@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InventoryPage } from "./InventoryPage";
 import type { InventoryItem, Space } from "../api/types";
+import { onAPhone } from "../test/phone";
 
 function render(ui: React.ReactElement, path = "/inventory") {
   return rtlRender(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
@@ -223,5 +224,98 @@ describe("InventoryPage", () => {
     );
     render(<InventoryPage />);
     expect(await screen.findByText(/A space is anywhere you keep things/)).toBeInTheDocument();
+  });
+});
+
+describe("InventoryPage restocks on a phone (Story 38.2)", () => {
+  onAPhone();
+
+  it("draws a static row per space: its bars and its total", async () => {
+    mockApi();
+    render(<InventoryPage />);
+
+    const rows = await screen.findByRole("list", { name: "Restocks per space" });
+    expect(screen.queryByRole("table", { name: "Restocks per space" })).toBeNull();
+    expect(within(rows).getByRole("img", { name: "Fridge restocks per month" })).toBeInTheDocument();
+    expect(within(rows).getByText("Fridge").closest("li")).toHaveTextContent("3");
+    expect(within(rows).queryByRole("button")).toBeNull();
+  });
+});
+
+describe("InventoryPage item rows on a phone (Story 38.3)", () => {
+  onAPhone();
+
+  it("counts from the row: the stepper sits beside the head and works closed", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi();
+    render(<InventoryPage />);
+
+    const fridge = await screen.findByRole("list", { name: "Fridge items" });
+    expect(screen.queryByRole("table", { name: "Fridge items" })).toBeNull();
+    const head = within(fridge).getByRole("button", { name: /^Eggs/ });
+    const more = within(fridge).getByRole("button", { name: "One more Eggs" });
+    expect(head.contains(more)).toBe(false);
+    expect(within(fridge).getByRole("status", { name: "Eggs quantity" })).toHaveTextContent("6");
+
+    await user.click(more);
+    await waitFor(() => expect(patches(fetchMock)).toHaveLength(1));
+    expect(patches(fetchMock)[0]).toMatchObject({ body: { quantity: 7 } });
+    expect(head).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the rest one tap away: threshold, cost, and the desktop's actions", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<InventoryPage />);
+
+    const fridge = await screen.findByRole("list", { name: "Fridge items" });
+    expect(within(fridge).getByRole("button", { name: /^Milk/ })).toHaveTextContent("restock");
+    expect(screen.queryByRole("button", { name: "Edit Eggs" })).toBeNull();
+
+    await user.click(within(fridge).getByRole("button", { name: /^Eggs/ }));
+    expect(fridge).toHaveTextContent("Remind at 2 · Cost $3.20");
+    for (const name of ["Eggs is running low", "History of Eggs", "Edit Eggs", "Delete Eggs"]) {
+      expect(within(fridge).getByRole("button", { name })).toBeInTheDocument();
+    }
+
+    await user.click(within(fridge).getByRole("button", { name: "History of Eggs" }));
+    expect(await within(fridge).findByRole("img", { name: /Eggs/ })).toBeInTheDocument();
+  });
+
+  it("folds a row's history when the row closes", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<InventoryPage />);
+
+    const fridge = await screen.findByRole("list", { name: "Fridge items" });
+    const head = within(fridge).getByRole("button", { name: /^Eggs/ });
+    await user.click(head);
+    await user.click(within(fridge).getByRole("button", { name: "History of Eggs" }));
+    await within(fridge).findByRole("img", { name: /Eggs/ });
+
+    await user.click(head);
+    await user.click(head);
+    expect(within(fridge).getByRole("button", { name: "History of Eggs" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(within(fridge).queryByRole("img", { name: /Eggs/ })).toBeNull();
+  });
+
+  it("edits inside the row with the one edit form", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi();
+    render(<InventoryPage />);
+
+    const garage = await screen.findByRole("list", { name: "Garage items" });
+    expect(within(garage).getByRole("button", { name: /^Engine oil/ })).toHaveTextContent("5W-30");
+    await user.click(within(garage).getByRole("button", { name: /^Engine oil/ }));
+    await user.click(within(garage).getByRole("button", { name: "Edit Engine oil" }));
+
+    const cost = within(garage).getByLabelText("Edit cost");
+    await user.type(cost, "12.50");
+    await user.click(within(garage).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patches(fetchMock)).toHaveLength(1));
+    expect(patches(fetchMock)[0]).toMatchObject({ body: { cost: "12.50" } });
   });
 });

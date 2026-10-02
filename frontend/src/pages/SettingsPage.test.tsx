@@ -67,6 +67,16 @@ function mockApi(overrides: { currencyStatus?: number; currencyDetail?: string }
       });
     }
     if (url.includes("/api/auth/me")) return json(me);
+    if (url.includes("/api/calendar/feed")) {
+      return json({
+        on: false,
+        layers: [],
+        detailed: false,
+        alarm: false,
+        created_at: null,
+        last_fetched_at: null,
+      });
+    }
     if (url.includes("/api/auth/logout")) return json(null, 204);
     return json({ detail: `unexpected ${url}` }, 500);
   });

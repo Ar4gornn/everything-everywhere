@@ -73,3 +73,44 @@ export async function disablePush(): Promise<void> {
   await api.pushUnsubscribe(subscription.endpoint);
   await subscription.unsubscribe();
 }
+
+/** This browser's subscription endpoint, or null when it is not subscribed (Epic 36). */
+export async function currentEndpoint(): Promise<string | null> {
+  if (!pushSupported()) return null;
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  return subscription?.endpoint ?? null;
+}
+
+let enabledOnce: Promise<boolean> | null = null;
+
+/**
+ * Whether this instance can send pushes at all, asked once per page load. The bells on
+ * pots, recurring rules and stock items (Epic 36) are hidden without it: muting a push
+ * that can never be sent is a control that does nothing. A failed ask is "no", and is
+ * asked again next time rather than remembered.
+ */
+export function pushEnabledOnce(): Promise<boolean> {
+  enabledOnce ??= api.pushStatus().then(
+    (status) => status?.enabled === true && pushSupported(),
+    () => {
+      enabledOnce = null;
+      return false;
+    },
+  );
+  return enabledOnce;
+}
+
+/** For tests: forget the cached answer. */
+export function resetPushEnabled(): void {
+  enabledOnce = null;
+}
+
+/** The browser's own IANA zone, or null where `Intl` cannot say (Epic 36). */
+export function deviceZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}

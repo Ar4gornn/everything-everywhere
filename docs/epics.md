@@ -2492,3 +2492,218 @@ what is due; editing a past skip beyond undoing it.
 
 - `PATCH /api/savings/types/{id}`: rename, set or clear `goal_amount` / `goal_date`.
 - `needed_per_month`, rounded up, from the current budget month through the goal's.
+
+## Epic 35: Plan, entries and savings, connected
+
+Asked for: "if I'm spending in entries, it should be part of the budget in the savings".
+Scoped in two rounds (options and rejections in `LOG.md`). All four links were chosen:
+the Plan page shows actuals; an expense can be paid from a pot; an expense category can
+name a default pot; and what a closed month left over is proposed as a deposit.
+
+Rules chosen: a pot-funded expense counts **both** as spending (totals, category budget)
+and as a withdrawal from the pot. A pot that cannot cover it refuses the whole write, reusing
+AD-50's `409 savings_balance_negative`. The withdrawal belongs to the entry: editing the
+entry moves it, deleting the entry removes it, and Savings shows it read-only. A category's
+pot pre-fills the entry form and the entry can override it. The leftover is proposed on the
+dashboard with a pot picker, never recorded on its own.
+
+**Explicitly out:** splitting one expense across several pots; recording anything
+automatically; re-linking past entries; income paid into a pot.
+
+### Story 35.1: The plan shows what each budget has spent
+
+- The Plan page's budget table gains a Spent column for the current **budget month**
+  (Epic 20): spent, what is left or by how much it is over, and the dashboard's progress bar.
+- The figures are `GET /api/dashboard/summary`'s own (AD-22). No new endpoint, no schema.
+- Pots already show the month's progress against their target (Story 34.2); unchanged.
+
+### Story 35.2: An expense paid from a pot
+
+- `savings_contributions.entry_id`, composite FK to `entries` with `ON DELETE CASCADE`,
+  unique; only a withdrawal may carry it. The entry and its withdrawal are one write.
+- Migration `0027` (after `0025`). AD-51 holds the rules.
+- `POST /api/entries` takes an optional `savings_type_id` (expense only, else 422);
+  `PATCH` moves it, an explicit `null` removes it, absent leaves it. `EntryOut` carries it,
+  `ContributionOut` carries `entry_id`. An overdrawn pot refuses the whole write (409).
+- Editing or deleting such a withdrawal through the savings endpoints is `409
+  savings_contribution_from_entry`; deleting the entry removes it.
+- Entries: a "Paid from" choice beside the note, each pot with its balance, cleared after
+  each write; the row carries "From <pot>"; the inline editor can move or clear it.
+  Savings card: the row says "Paid an expense" and links to Entries instead of Delete.
+
+### Story 35.3: A category's default pot
+
+- `categories.default_savings_type_id`, composite FK, `ON DELETE SET NULL (column)`.
+  Expense categories only. Pre-fills the entry form; never rewrites existing entries.
+- Migration `0029` (after `0027`; Epic 36 holds `0028` on its own branch). A CHECK keeps it
+  off income categories.
+- `PATCH /api/categories/{id}` with `{"default_savings_type_id": <pot> | null}`, the key
+  required; an income category is `422 savings_expense_only`, another account's pot or
+  category a 404. `CategoryOut` carries it. The server never reads it when writing an entry.
+- Plan page: each budget row has a pot choice under the category's name, saved on change.
+- Entries: typing a category that has a default pot fills in "Paid from"; a pot picked by
+  hand wins over the category until the entry is written. After a write the category's
+  default is shown again, since the category box keeps its name.
+
+### Story 35.4: What a month left over
+
+- `income − expenses − net savings` of a closed budget month; pot-funded spending cancels
+  out. A dashboard card proposes it as a deposit into a chosen pot, or is dismissed.
+- The closed month is the **previous budget month** (Epic 20), and only that one.
+  `GET /api/dashboard/leftover` answers its label, dates, the three figures, the leftover
+  (signed) and whether it was dismissed. The figures are the summary's own aggregates.
+- Taking it is an ordinary `POST /api/savings/contributions`, dated on the month's last day,
+  so it lowers the leftover it answers: all of it clears the card, part of it leaves the rest
+  proposed. No pot is pre-selected; "Put aside" waits for one.
+- "Not this time": `PUT /api/dashboard/leftover/{month}/dismissed` (idempotent), a row in
+  `leftover_dismissals` keyed by label, migration `0030` (after `0029`). No undo.
+- New dashboard card id `leftover`, after `pending` (AD-49 fills it into stored layouts).
+  Drawn only when the leftover is above zero and not dismissed; with no pot, it links to Plan.
+
+## Epic 36: Notification control — what reaches me, and when
+
+Scoped 2026-09-27, options and rejections in `LOG.md`. Epic 18's digest is one push a day
+with one switch per device; this gives the person control down to a single item, at an hour
+they pick in their own timezone, and still one push a day. AD-52 holds the rules. Numbered
+36: Epic 35 (plan ↔ entries) is on its own branch; deploying (VPS, cron, VAPID) is Epic 37.
+
+**Explicitly out:** preferences per device; a timed push per habit; a mood nudge; a weekly
+summary; email or SMS; badges or sound; the deploy itself.
+
+### Story 36.1: Kinds
+
+- `preferences.notifications` — `stock`, `recurring`, `habits` on, `due_tomorrow`,
+  `savings` off by default, resolved on read (AD-49). `StrictBool`; an unknown kind is
+  `pref_unknown_id`. A module off silences its kind.
+
+### Story 36.2: Items
+
+- Migration `0028` (after `0030`): `notify boolean NOT NULL DEFAULT true` on `savings_types`,
+  `recurring_templates`, `inventory_items`. Each one's PATCH takes it; the digest skips
+  muted rows. `GET /api/push/muted` lists them, named, for Settings.
+
+### Story 36.3: Timezone and send time
+
+- Same migration: `users.timezone text NULL`, `users.digest_time time NOT NULL DEFAULT
+  '19:00'`, granted by column. `PATCH /me/notification-schedule`; an unknown zone is
+  `422 invalid_timezone`. The client fills the zone from `Intl` when it is null.
+- `notify.py` runs every 15 minutes and sends when the local time has reached `digest_time`
+  and the device was not told on the local today.
+
+### Story 36.4: Due tomorrow and savings behind
+
+- Two clauses, English and French, defined once in `services/push.py` (AD-52).
+
+### Story 36.5: The push opens the page it is about
+
+- The payload's `url` is the first clause's page.
+
+### Story 36.6: Settings — notifications
+
+- Switches per kind, the time and zone, the muted list with Unmute, tonight's preview,
+  "Send test" (own device, not counted as the day's digest, one a minute: `429
+  push_test_too_soon`). A bell on each pot, recurring rule and stock item.
+
+### Story 36.7: QA
+
+- Second-user proof (A's mutes and kinds never shape B's digest); a zone across the date
+  line; a DST day; a module off; each new guard mutated red. Settings measured in both
+  languages at 375 and 320.
+
+## Epic 39: Calendar apps — a subscribe link, and "Add to calendar"
+
+Scoped 2026-09-28. AD-55. Migration `0032`.
+
+### Story 39.1: The feed row and its URL
+
+- `calendar_feeds` (one per account, RLS), `calendar_feed_lookup(hash)`. `GET/POST/PATCH/
+  DELETE /api/calendar/feed`, `POST /api/calendar/feed/rotate`. The path is in the create and
+  rotate answers only.
+
+### Story 39.2: The feed
+
+- `GET /api/calendar/feed/<token>.ics`, no sign-in: nine layers (`due`, `money`, `savings`,
+  `stock`, `gym`, `habits`, `schedule`, `mood`, `meals`), a module's layer silent while it is
+  off, vague or detailed titles in the account's language, optional alarm. 404 for every
+  wrong URL, 429 past 30 fetches in 10 minutes, token masked in the access log.
+
+### Story 39.3: Settings — calendar apps
+
+- Create link (shown once, Copy, open as `webcal:`), New link and Turn off behind a confirm,
+  last-read time, layer switches, names and amounts, reminder.
+
+### Story 39.4: Add to calendar
+
+- A one-event .ics built in the browser, on bills due and forecast in the calendar's day view
+  and on each recurring rule's next date in Plan.
+
+## Epic 40: The calendar, rebuilt for both screens
+
+Scoped 2026-09-28. AD-56. No migration. Brief and as-built notes: `docs/epic-40-calendar.md`.
+
+### Story 40.1: Today, the keyboard, and the day beside or over the grid
+
+- Today ringed and a Today button; arrows / Home / End with a roving tabindex, Enter opens.
+  Day detail pinned beside the grid at 1000px and up (today open on arrival), a non-modal
+  panel over the lower screen on phones (Close, Escape, tap outside).
+
+### Story 40.2: Readable cells and a layers menu
+
+### Story 40.3: Month summary and swipe
+
+- In / out / net and a count per layer that is on, for the period's own days, above the
+  grid; a sideways swipe over the grid turns the period (week view: 40.4).
+
+### Story 40.4: Week view
+
+- A Month / Week switch beside the layers menu, remembered per device. The week is seven
+  days, Monday first, every item in full with its amount; stacked one day per row on a
+  phone. Arrows, the nav buttons and a swipe turn it by seven days; a week across the
+  account's month boundary loads both budget months.
+
+## Epic 41: Streaks and points
+
+Scoped 2026-09-29, options and rejections in `docs/epic-41-streaks.md` §1. AD-57.
+Migrations `0033` (activity days) and `0034` (purchases). A day is active on any successful
+write or a Check in; an overall streak always, a streak per module that Settings shows;
+points for every active day, spent on a freeze bought ahead or a repair within 48 hours.
+The rules, the route map and every acceptance criterion: `docs/epic-41-streaks.md`.
+
+**Explicitly out:** leaderboards; other shop items; backfill; a cadence per tab; a streak
+page; streaks in the export; a push other than the daily digest.
+
+### Story 41.1: Activity and the overall streak
+
+- `core/clock.py` (`local_today`, one overridable clock; the digest moves onto it). Migration
+  `0033`, `record_activity` on every mapped router, `test_activity_map.py` refusing an
+  unclassified write route. The walk without freezes; `GET /api/streaks`,
+  `POST /api/streaks/check-in`; `StreakCard` (card `streaks`, after `stats`).
+
+### Story 41.2: Tab streaks
+
+- Ten module streaks; `preferences.streaks` (all off by default, `StrictBool`); Settings
+  switches; a Check in button on each section view whose streak is shown and module on.
+
+### Story 41.3: Points
+
+- Earned (1 per active day, +1 per module active, 7/30/100/365 bonuses) minus spent,
+  computed on read; `preferences.points_name` (1-24 characters, default "Points").
+
+### Story 41.4: Freeze
+
+- Migration `0034`; buy ahead, 20, at most 2 held per streak, consumed by the walk on a
+  missed day on or after purchase while the run is alive; advisory lock per user.
+
+### Story 41.5: Repair
+
+- Offered for a gap of 1-2 missed days before today after a live run; `g × (30 + L // 2)`;
+  one row per covered day, unique per streak and day.
+
+### Story 41.6: Streak in the digest
+
+- Kind `streak`, off by default; one clause, English and French, when the streak is alive
+  and today is not active.
+
+### Story 41.7: QA
+
+- Second-user proof; every new guard mutated red; overflow sweep EN/FR at 375 and 320.

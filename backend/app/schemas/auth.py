@@ -1,10 +1,20 @@
-from datetime import datetime
-from typing import Literal
+from datetime import datetime, time
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StrictBool,
+    field_serializer,
+    field_validator,
+)
 
 from app.core.months import MAX_START_DAY
+from app.services.preferences import clean_points_name
 
 Currency = Literal["USD", "EUR"]
 WeightUnit = Literal["kg", "lb"]
@@ -75,12 +85,28 @@ class LayoutIn(BaseModel):
     cards: list[Card] | None = Field(default=None, max_length=32)
 
 
+def _points_name(value: object) -> str:
+    """Runs before the type check and may raise only ``ValueError`` (a 422, not a 500)."""
+    if not isinstance(value, str):
+        raise ValueError("must be text")
+    return clean_points_name(value)
+
+
 class PreferencesUpdate(BaseModel):
     """Each top-level key present replaces that subtree; absent keys are untouched."""
 
     model_config = ConfigDict(extra="forbid")
 
     modules: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 36 (AD-52): which kinds the daily digest may mention. Strict for the same reason
+    # as `Card.on`.
+    notifications: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 41 (AD-57): which module streaks are shown. Strict, so {"gym": "off"} is a 422
+    # rather than a streak quietly switched on.
+    streaks: dict[str, StrictBool] | None = Field(default=None, max_length=32)
+    # Epic 41 (AD-57): the person's word for points. Trimmed; over 24 characters is a 422;
+    # empty means "the default" and is stored as "".
+    points_name: Annotated[str, BeforeValidator(_points_name)] | None = None
     phone: LayoutIn | None = None
     desktop: LayoutIn | None = None
 
@@ -94,6 +120,9 @@ class PreferencesOut(BaseModel):
     """Always resolved: every module, section and card, defaults filled in."""
 
     modules: dict[str, bool]
+    notifications: dict[str, bool]
+    streaks: dict[str, bool]
+    points_name: str | None
     phone: LayoutOut
     desktop: LayoutOut
 
@@ -115,6 +144,17 @@ class UserOut(BaseModel):
     tutorial_completed: bool
     tutorial_skipped_at: datetime | None
     preferences: PreferencesOut
+    # Epic 36 (AD-52). Null zone: the digest follows the host's clock, as it always did.
+    timezone: str | None
+    digest_time: time
+    # AD-54: whether this account may issue invites. Only decides what the client shows;
+    # every admin route checks again, and so does the database.
+    is_admin: bool = False
+
+    @field_serializer("digest_time")
+    def _hh_mm(self, value: time) -> str:
+        """"19:00", the shape an `<input type="time">` gives and takes."""
+        return value.strftime("%H:%M")
 
 
 class TokenOut(BaseModel):
@@ -144,6 +184,24 @@ class LanguageUpdate(BaseModel):
 
 class BudgetStartDayUpdate(BaseModel):
     budget_start_day: int = Field(ge=1, le=MAX_START_DAY)
+
+
+class NotificationScheduleUpdate(BaseModel):
+    """Epic 36. Both fields always sent: the pair is one setting, "19:00 in Paris"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Whether it names a real zone is the service's check (`invalid_timezone`); here, only
+    # its shape. Null hands the account back to the host's clock.
+    timezone: str | None = Field(min_length=1, max_length=64)
+    digest_time: time
+
+    @field_validator("digest_time")
+    @classmethod
+    def _whole_minutes(cls, value: time) -> time:
+        if value.second or value.microsecond or value.tzinfo is not None:
+            raise ValueError("digest_time is a local hour and minute, HH:MM")
+        return value
 
 
 class TutorialUpdate(BaseModel):

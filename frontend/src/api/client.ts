@@ -30,10 +30,16 @@ import type {
   InventoryItem,
   ItemChange,
   Language,
+  Leftover,
   Habit,
   ScheduleKind,
   HabitProgress,
   Heatmap,
+  CalendarFeed,
+  FeedLayer,
+  Invite,
+  MintedFeed,
+  IssuedInvite,
   Meal,
   Money,
   MoodDay,
@@ -47,7 +53,9 @@ import type {
   PendingEntry,
   Period,
   PreferencesPatch,
+  PushPreview,
   PushStatus,
+  MutedRow,
   Purchase,
   PurchaseResult,
   Quantity,
@@ -63,6 +71,9 @@ import type {
   SavingsType,
   ShoppingList,
   Space,
+  Streak,
+  StreakPurchaseResult,
+  StreaksOverview,
   Step,
   StockChange,
   Summary,
@@ -314,6 +325,8 @@ export interface EntryInput {
   /** AD-29: both or neither. Sent as an explicit null pair to clear. */
   quantity?: Quantity | null;
   unit?: Unit | null;
+  /** AD-51: an expense paid from this pot. Explicit null on a PATCH stops it. */
+  savings_type_id?: string | null;
 }
 
 export interface TemplateInput {
@@ -477,6 +490,13 @@ export const api = {
       body: JSON.stringify({ name, kind }),
     }),
 
+  /** Epic 35.3: the pot an expense category pre-fills; null clears it. */
+  setCategoryPot: (id: string, savingsTypeId: string | null) =>
+    request<Category>(`/api/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ default_savings_type_id: savingsTypeId }),
+    }),
+
   deleteCategory: (id: string) =>
     request<void>(`/api/categories/${id}`, { method: "DELETE" }),
 
@@ -603,6 +623,22 @@ export const api = {
       body: JSON.stringify({ endpoint }),
     }),
 
+  /** Epic 36: tonight's digest, read-only. Answers even when push is off. */
+  pushPreview: () => request<PushPreview>("/api/push/preview"),
+
+  pushMuted: () => items(request<Page<MutedRow>>("/api/push/muted")),
+
+  /** One push to this device now. 429 within a minute of the last; 410 if it is gone. */
+  pushTest: (endpoint: string) =>
+    request<void>("/api/push/test", { method: "POST", body: JSON.stringify({ endpoint }) }),
+
+  /** Epic 36: the zone the account's day is counted in, and the digest's local hour. */
+  setNotificationSchedule: (schedule: { timezone: string | null; digest_time: string }) =>
+    request<User>("/api/auth/me/notification-schedule", {
+      method: "PATCH",
+      body: JSON.stringify(schedule),
+    }),
+
   listVendors: () => items(request<Page<Vendor>>("/api/vendors")),
 
   createVendor: (name: string) =>
@@ -643,7 +679,12 @@ export const api = {
   /** Rename, or set/clear the goal. An omitted field is left alone; `null` clears it. */
   updateSavingsType: (
     id: string,
-    patch: { name?: string; goal_amount?: Money | null; goal_date?: string | null },
+    patch: {
+      name?: string;
+      goal_amount?: Money | null;
+      goal_date?: string | null;
+      notify?: boolean;
+    },
   ) =>
     request<SavingsType>(`/api/savings/types/${id}`, {
       method: "PATCH",
@@ -722,7 +763,10 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  updateTemplate: (id: string, patch: Partial<Omit<TemplateInput, "category_name">>) =>
+  updateTemplate: (
+    id: string,
+    patch: Partial<Omit<TemplateInput, "category_name">> & { notify?: boolean },
+  ) =>
     request<RecurringTemplate>(`/api/recurring/templates/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
@@ -745,6 +789,12 @@ export const api = {
 
   exportCsv: (kind: "entries" | "savings" | "inventory" | "books") =>
     download(`/api/export/${kind}.csv`, `everything-everywhere-${kind}.csv`),
+
+  /** Story 35.4: the last closed budget month's leftover. Reading it records nothing. */
+  leftover: () => request<Leftover>("/api/dashboard/leftover"),
+
+  dismissLeftover: (month: string) =>
+    request<void>(`/api/dashboard/leftover/${month}/dismissed`, { method: "PUT" }),
 
   summary: (month: string, period: Period = "month") =>
     request<Summary>(
@@ -792,7 +842,7 @@ export const api = {
     }),
 
   // space_name is a create-time convenience only; a move names the space by id.
-  updateItem: (id: string, patch: Partial<Omit<ItemInput, "space_name">>) =>
+  updateItem: (id: string, patch: Partial<Omit<ItemInput, "space_name">> & { notify?: boolean }) =>
     request<InventoryItem>(`/api/inventory/items/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
@@ -1088,6 +1138,31 @@ export const api = {
   drawBookQuote: (exclude?: string) =>
     request<BookQuoteDraw | null>(`/api/books/quotes/draw${query({ exclude })}`),
 
+  // --- streaks (Epic 41). The server owns the day: nothing here sends one.
+
+  getStreaks: () => request<StreaksOverview>("/api/streaks"),
+
+  /** Idempotent: pressing it twice is one day. */
+  streakCheckIn: (streak: string) =>
+    request<Streak>("/api/streaks/check-in", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
+
+  /** Spend points on a freeze. 409 `freeze_limit` at two held, `points_insufficient` under the price. */
+  buyStreakFreeze: (streak: string) =>
+    request<StreakPurchaseResult>("/api/streaks/freezes", {
+      method: "POST",
+      body: JSON.stringify({ streak }),
+    }),
+
+  /** Spend points to repair the days missed just before today. `cost` is the total the person confirmed; 409 `repair_unavailable` when nothing is on offer or it is no longer that price, `points_insufficient` under the price. */
+  buyStreakRepair: (streak: string, cost: number) =>
+    request<StreakPurchaseResult>("/api/streaks/repairs", {
+      method: "POST",
+      body: JSON.stringify({ streak, cost }),
+    }),
+
   // --- notes (Epic 32). The id is the client's (AD-48): a note is written with PUT under
   // an id minted when the editor opened, so an offline draft retried after a lost response
   // lands on the same row rather than beside it.
@@ -1103,4 +1178,37 @@ export const api = {
     request<Note>(`/api/notes/${id}`, { method: "PUT", body: JSON.stringify(body) }),
 
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: "DELETE" }),
+
+  // --- AD-54: invites, for an admin
+  listInvites: () => items(request<Page<Invite>>("/api/admin/invites")),
+
+  createInvite: (note: string, days: number) =>
+    request<IssuedInvite>("/api/admin/invites", {
+      method: "POST",
+      body: JSON.stringify({ note: note.trim() || null, days }),
+    }),
+
+  revokeInvite: (id: string) =>
+    request<void>(`/api/admin/invites/${id}/revoke`, { method: "POST" }),
+
+  // --- Epic 39 (AD-55): the calendar feed
+  calendarFeed: () => request<CalendarFeed>("/api/calendar/feed"),
+
+  turnOnCalendarFeed: () => request<MintedFeed>("/api/calendar/feed", { method: "POST" }),
+
+  rotateCalendarFeed: () =>
+    request<MintedFeed>("/api/calendar/feed/rotate", { method: "POST" }),
+
+  updateCalendarFeed: (patch: { layers?: FeedLayer[]; detailed?: boolean; alarm?: boolean }) =>
+    request<CalendarFeed>("/api/calendar/feed", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+
+  turnOffCalendarFeed: () => request<void>("/api/calendar/feed", { method: "DELETE" }),
 };
+
+/** A path the API answered with, as an absolute URL a calendar app can fetch. */
+export function apiUrl(path: string): string {
+  return new URL(path, BASE || window.location.origin).toString();
+}

@@ -6,7 +6,9 @@ import type { ItemInput } from "../api/client";
 import type { InventoryItem, ItemChange, Restocks, Space } from "../api/types";
 import { CountBars } from "../charts/CountBars";
 import { StepChart } from "../charts/StepChart";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { ShoppingList } from "../components/ShoppingList";
+import { NotifyBell, usePushEnabled } from "../components/NotifyBell";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { isNonNegativeMoney, normalizeMoney } from "../money";
@@ -14,8 +16,10 @@ import { useMoney } from "../useMoney";
 import { useT } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
+import { CheckInButton } from "../components/CheckInButton";
 import { useLoad } from "../useLoad";
 import { useDates } from "../useDates";
+import { useLayout } from "../layout/useLayout";
 
 const RESTOCK_MONTHS = 6;
 const NOTHING = { spaces: [] as Space[], items: [] as InventoryItem[], restocks: null as Restocks | null };
@@ -31,8 +35,12 @@ type Filter = "all" | "restock" | string; // a space id is also a filter
  */
 export function InventoryPage() {
   const money = useMoney();
+  const pushOn = usePushEnabled();
   const t = useT();
   const dates = useDates();
+  const phone = useLayout() === "phone";
+  // One stock row open on the page at a time, across every space's list.
+  const [openItem, toggleItem] = useOpenRow();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -200,6 +208,14 @@ export function InventoryPage() {
     }, "stock.couldNotMark");
   }
 
+  async function toggleNotify(item: InventoryItem, next: boolean) {
+    // Epic 36: out of the push only; the item stays on this page and in the restock card.
+    await run(async () => {
+      await api.updateItem(item.id, { notify: next });
+      await load();
+    }, "notify.couldNotSave");
+  }
+
   function beginEdit(item: InventoryItem) {
     setEditing(item.id);
     setDraft({
@@ -316,6 +332,173 @@ export function InventoryPage() {
     }, "stock.couldNotDeleteSpace");
   }
 
+  // One of each control, placed in table cells on a desktop and in the list row on a phone.
+  type ItemDraft = NonNullable<typeof draft>;
+  const editRow = (item: InventoryItem, draft: ItemDraft) => (
+    <tr key={item.id}>
+      <td data-label={t("stock.colItem")}>
+        <input
+          aria-label={t("stock.editName")}
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+        />
+        <div className="row" style={{ flexWrap: "nowrap", gap: 6, marginTop: 6 }}>
+          <select
+            aria-label={t("stock.editSpace")}
+            value={draft.space_id}
+            onChange={(event) =>
+              setDraft({ ...draft, space_id: event.target.value })
+            }
+          >
+            {spaces.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label={t("stock.editNote")}
+            placeholder={t("stock.notePlaceholder")}
+            value={draft.note}
+            onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+          />
+        </div>
+      </td>
+      <td className="num" data-label={t("field.quantity")}>
+        <input
+          className="num"
+          inputMode="numeric"
+          aria-label={t("stock.editQuantity")}
+          value={draft.quantity}
+          onChange={(event) =>
+            setDraft({ ...draft, quantity: event.target.value })
+          }
+        />
+      </td>
+      <td className="num" data-label={t("stock.remindAt")}>
+        <input
+          className="num"
+          inputMode="numeric"
+          aria-label={t("stock.editThreshold")}
+          placeholder="—"
+          value={draft.restock_below}
+          onChange={(event) =>
+            setDraft({ ...draft, restock_below: event.target.value })
+          }
+        />
+      </td>
+      <td className="num" data-label={t("stock.cost")}>
+        <input
+          className="num"
+          inputMode="decimal"
+          aria-label={t("stock.editCost")}
+          placeholder="—"
+          value={draft.cost}
+          onChange={(event) => setDraft({ ...draft, cost: event.target.value })}
+        />
+      </td>
+      <td>
+        <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+          <button type="button" onClick={() => void saveEdit(item)}>
+            {t("action.save")}
+          </button>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => setEditing(null)}
+          >
+            {t("action.cancel")}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+  const stepper = (item: InventoryItem) => (
+    <div className="stepper">
+      <button
+        type="button"
+        className="quiet"
+        aria-label={t("stock.oneLess", { name: item.name })}
+        disabled={item.quantity === 0 || pending.has(item.id)}
+        onClick={() => void setQty(item, item.quantity - 1)}
+      >
+        −
+      </button>
+      {/* An <output> rather than a span: a plain span cannot carry a
+          name, and this is the value the two buttons beside it change, so
+          a screen reader hears the new quantity after each press. */}
+      <output aria-label={t("stock.quantityOf", { name: item.name })}>
+        {item.quantity}
+      </output>
+      <button
+        type="button"
+        className="quiet"
+        aria-label={t("stock.oneMore", { name: item.name })}
+        disabled={pending.has(item.id)}
+        onClick={() => void setQty(item, item.quantity + 1)}
+      >
+        +
+      </button>
+    </div>
+  );
+  const actions = (item: InventoryItem) => (
+    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+      {pushOn && item.notify !== undefined && (
+        <NotifyBell
+          on={item.notify}
+          name={item.name}
+          onToggle={(next) => void toggleNotify(item, next)}
+        />
+      )}
+      {!item.needs_restock && (
+        <button
+          type="button"
+          className="quiet"
+          onClick={() => void runningLow(item)}
+          aria-label={t("stock.runningLowAria", { name: item.name })}
+        >
+          {t("stock.runningLow")}
+        </button>
+      )}
+      <button
+        type="button"
+        className="quiet"
+        onClick={() => void toggleHistory(item)}
+        aria-expanded={history?.id === item.id}
+        aria-label={t("stock.historyOf", { name: item.name })}
+      >
+        {t("stock.history")}
+      </button>
+      <button
+        type="button"
+        className="quiet"
+        onClick={() => beginEdit(item)}
+        aria-label={t("stock.editNamed", { name: item.name })}
+      >
+        {t("action.edit")}
+      </button>
+      <button
+        type="button"
+        className="quiet"
+        onClick={() => void removeItem(item)}
+        aria-label={t("stock.deleteNamed", { name: item.name })}
+      >
+        {t("action.delete")}
+      </button>
+    </div>
+  );
+  const historyView = (item: InventoryItem) =>
+    history?.id === item.id &&
+    (history.changes.length === 0 ? (
+      <span className="hint">{t("stock.noChanges")}</span>
+    ) : (
+      <StepChart
+        changes={history.changes}
+        threshold={item.restock_below}
+        label={item.name}
+      />
+    ));
+
   const restockPeak = Math.max(1, ...(restocks?.series ?? []).flatMap((s) => s.values));
   const anyRestocks = (restocks?.series ?? []).some((s) => s.values.some((v) => v > 0));
 
@@ -323,11 +506,17 @@ export function InventoryPage() {
     <>
       <ErrorBanner message={error ?? failure} />
 
+      {/* The page's name first, as on every other page: under the shopping list it read as
+          the heading of the filters beside it. */}
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h1 style={{ fontSize: 18, margin: 0 }}>{t("stock.title")}</h1>
+        <CheckInButton streak="stock" />
+      </div>
+
       {/* Above the spaces: what to buy is the thing you act on, the shelves are reference. */}
       <ShoppingList onChanged={() => void load()} />
 
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>{t("stock.title")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: 16, marginTop: 16 }}>
         <label style={{ flex: "1 1 160px", maxWidth: 240 }}>
           {t("entries.search")}
           <input
@@ -466,8 +655,10 @@ export function InventoryPage() {
               title={space.name}
               actions={
                 renaming === space.id ? (
-                  <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
+                  <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                     <input
+                      // Without a basis the buttons squeezed this to 25px on a phone.
+                      style={{ flex: "1 1 8rem", minWidth: 0 }}
                       aria-label={t("stock.renameSpaceAria")}
                       value={renameDraft}
                       onChange={(event) => setRenameDraft(event.target.value)}
@@ -508,213 +699,118 @@ export function InventoryPage() {
                 )
               }
             >
-              <TableWrap>
-                <table
-                  className="stacked"
-                  aria-label={t("stock.itemsIn", { name: space.name })}
-                >
-                  <thead>
-                    <tr>
-                      <th>{t("stock.colItem")}</th>
-                      <th className="num">{t("field.quantity")}</th>
-                      <th className="num">{t("stock.remindAt")}</th>
-                      <th className="num">{t("stock.colCost", { symbol: money.symbol })}</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(bySpace.get(space.id) ?? []).map((item) =>
-                      editing === item.id && draft ? (
-                        <tr key={item.id}>
-                          <td data-label={t("stock.colItem")}>
-                            <input
-                              aria-label={t("stock.editName")}
-                              value={draft.name}
-                              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                            />
-                            <div className="row" style={{ flexWrap: "nowrap", gap: 6, marginTop: 6 }}>
-                              <select
-                                aria-label={t("stock.editSpace")}
-                                value={draft.space_id}
-                                onChange={(event) =>
-                                  setDraft({ ...draft, space_id: event.target.value })
-                                }
-                              >
-                                {spaces.map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <input
-                                aria-label={t("stock.editNote")}
-                                placeholder={t("stock.notePlaceholder")}
-                                value={draft.note}
-                                onChange={(event) => setDraft({ ...draft, note: event.target.value })}
-                              />
-                            </div>
-                          </td>
-                          <td className="num" data-label={t("field.quantity")}>
-                            <input
-                              className="num"
-                              inputMode="numeric"
-                              aria-label={t("stock.editQuantity")}
-                              value={draft.quantity}
-                              onChange={(event) =>
-                                setDraft({ ...draft, quantity: event.target.value })
-                              }
-                            />
-                          </td>
-                          <td className="num" data-label={t("stock.remindAt")}>
-                            <input
-                              className="num"
-                              inputMode="numeric"
-                              aria-label={t("stock.editThreshold")}
-                              placeholder="—"
-                              value={draft.restock_below}
-                              onChange={(event) =>
-                                setDraft({ ...draft, restock_below: event.target.value })
-                              }
-                            />
-                          </td>
-                          <td className="num" data-label={t("stock.cost")}>
-                            <input
-                              className="num"
-                              inputMode="decimal"
-                              aria-label={t("stock.editCost")}
-                              placeholder="—"
-                              value={draft.cost}
-                              onChange={(event) => setDraft({ ...draft, cost: event.target.value })}
-                            />
-                          </td>
-                          <td>
-                            <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
-                              <button type="button" onClick={() => void saveEdit(item)}>
-                                {t("action.save")}
-                              </button>
-                              <button
-                                type="button"
-                                className="quiet"
-                                onClick={() => setEditing(null)}
-                              >
-                                {t("action.cancel")}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        <Fragment key={item.id}>
-                          <tr className={item.needs_restock ? "low" : undefined}>
-                            <td data-label={t("stock.colItem")}>
-                              {item.name}
-                              {item.needs_restock && (
-                                <span className="badge">{t("stock.restockBadge")}</span>
-                              )}
-                              {item.note && <div className="hint">{item.note}</div>}
-                            </td>
-                            <td className="num" data-label={t("field.quantity")}>
-                              <div className="stepper">
-                                <button
-                                  type="button"
-                                  className="quiet"
-                                  aria-label={t("stock.oneLess", { name: item.name })}
-                                  disabled={item.quantity === 0 || pending.has(item.id)}
-                                  onClick={() => void setQty(item, item.quantity - 1)}
-                                >
-                                  −
-                                </button>
-                                {/* An <output> rather than a span: a plain span cannot carry a
-                                    name, and this is the value the two buttons beside it change, so
-                                    a screen reader hears the new quantity after each press. */}
-                                <output aria-label={t("stock.quantityOf", { name: item.name })}>
-                                  {item.quantity}
-                                </output>
-                                <button
-                                  type="button"
-                                  className="quiet"
-                                  aria-label={t("stock.oneMore", { name: item.name })}
-                                  disabled={pending.has(item.id)}
-                                  onClick={() => void setQty(item, item.quantity + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </td>
-                            <td className="num" data-label={t("stock.remindAt")}>
-                              {item.restock_below === null ? (
-                                <span className="hint">—</span>
-                              ) : (
-                                item.restock_below
-                              )}
-                            </td>
-                            <td className="num" data-label={t("stock.cost")}>
-                              {item.cost === null ? (
-                                <span className="hint">—</span>
-                              ) : (
-                                money.plain(item.cost)
-                              )}
-                            </td>
-                            <td>
-                              <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
-                                {!item.needs_restock && (
-                                  <button
-                                    type="button"
-                                    className="quiet"
-                                    onClick={() => void runningLow(item)}
-                                    aria-label={t("stock.runningLowAria", { name: item.name })}
-                                  >
-                                    {t("stock.runningLow")}
-                                  </button>
+              {phone ? (
+                <ul className="list-rows" aria-label={t("stock.itemsIn", { name: space.name })}>
+                  {(bySpace.get(space.id) ?? []).map((item) =>
+                    editing === item.id && draft ? (
+                      // The desktop's edit row, stacked as a card: one edit form, not two.
+                      <li key={item.id} className="list-row open">
+                        <table className="stacked" aria-label={t("action.edit")}>
+                          <tbody>{editRow(item, draft)}</tbody>
+                        </table>
+                      </li>
+                    ) : (
+                      <ListRow
+                        key={item.id}
+                        title={
+                          <>
+                            {item.name}
+                            {item.needs_restock && (
+                              <span className="badge">{t("stock.restockBadge")}</span>
+                            )}
+                          </>
+                        }
+                        meta={item.note ?? undefined}
+                        // Counting up and down is what this page is for: on the row, one tap.
+                        trailing={stepper(item)}
+                        open={openItem === item.id}
+                        onToggle={() => {
+                          // A chart belongs to its open row: closing this row, or opening
+                          // another, folds it, and the stepper stops refetching it unseen.
+                          if (history && (openItem === item.id || history.id !== item.id)) {
+                            setHistory(null);
+                          }
+                          toggleItem(item.id);
+                        }}
+                        details={
+                          <>
+                            <p className="hint" style={{ margin: 0 }}>
+                              {t("stock.remindAt")}{" "}
+                              {item.restock_below === null ? "—" : item.restock_below} ·{" "}
+                              {t("stock.cost")} {item.cost === null ? "—" : money.amount(item.cost)}
+                            </p>
+                            {actions(item)}
+                            {historyView(item)}
+                          </>
+                        }
+                      />
+                    ),
+                  )}
+                </ul>
+              ) : (
+                <TableWrap>
+                  <table
+                    className="stacked"
+                    aria-label={t("stock.itemsIn", { name: space.name })}
+                  >
+                    <thead>
+                      <tr>
+                        <th>{t("stock.colItem")}</th>
+                        <th className="num">{t("field.quantity")}</th>
+                        <th className="num">{t("stock.remindAt")}</th>
+                        <th className="num">{t("stock.colCost", { symbol: money.symbol })}</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(bySpace.get(space.id) ?? []).map((item) =>
+                        editing === item.id && draft ? (
+                          editRow(item, draft)
+                        ) : (
+                          <Fragment key={item.id}>
+                            <tr className={item.needs_restock ? "low" : undefined}>
+                              <td data-label={t("stock.colItem")}>
+                                {item.name}
+                                {item.needs_restock && (
+                                  <span className="badge">{t("stock.restockBadge")}</span>
                                 )}
-                                <button
-                                  type="button"
-                                  className="quiet"
-                                  onClick={() => void toggleHistory(item)}
-                                  aria-expanded={history?.id === item.id}
-                                  aria-label={t("stock.historyOf", { name: item.name })}
-                                >
-                                  {t("stock.history")}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="quiet"
-                                  onClick={() => beginEdit(item)}
-                                  aria-label={t("stock.editNamed", { name: item.name })}
-                                >
-                                  {t("action.edit")}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="quiet"
-                                  onClick={() => void removeItem(item)}
-                                  aria-label={t("stock.deleteNamed", { name: item.name })}
-                                >
-                                  {t("action.delete")}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {history?.id === item.id && (
-                            <tr className="history">
-                              <td colSpan={5} data-label={t("stock.history")}>
-                                {history.changes.length === 0 ? (
-                                  <span className="hint">{t("stock.noChanges")}</span>
+                                {item.note && <div className="hint">{item.note}</div>}
+                              </td>
+                              <td className="num" data-label={t("field.quantity")}>
+                                {stepper(item)}
+                              </td>
+                              <td className="num" data-label={t("stock.remindAt")}>
+                                {item.restock_below === null ? (
+                                  <span className="hint">—</span>
                                 ) : (
-                                  <StepChart
-                                    changes={history.changes}
-                                    threshold={item.restock_below}
-                                    label={item.name}
-                                  />
+                                  item.restock_below
                                 )}
                               </td>
+                              <td className="num" data-label={t("stock.cost")}>
+                                {item.cost === null ? (
+                                  <span className="hint">—</span>
+                                ) : (
+                                  money.plain(item.cost)
+                                )}
+                              </td>
+                              <td>
+                                {actions(item)}
+                              </td>
                             </tr>
-                          )}
-                        </Fragment>
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </TableWrap>
+                            {history?.id === item.id && (
+                              <tr className="history">
+                                <td colSpan={5} data-label={t("stock.history")}>
+                                  {historyView(item)}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        ),
+                      )}
+                    </tbody>
+                  </table>
+                </TableWrap>
+              )}
             </Card>
           ))
       )}
@@ -743,35 +839,55 @@ export function InventoryPage() {
 
       {restocks && anyRestocks && (
         <Card title={t("stock.restocksTitle", { months: RESTOCK_MONTHS })}>
-          <TableWrap>
-            <table className="stacked" aria-label={t("stock.restocksAria")}>
-              <thead>
-                <tr>
-                  <th>{t("stock.space")}</th>
-                  <th>{t("stock.colPerMonth")}</th>
-                  <th className="num">{t("stock.colTotal")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {restocks.series.map((series) => (
-                  <tr key={series.space_id}>
-                    <td data-label={t("stock.space")}>{series.space_name}</td>
-                    <td data-label={t("stock.colPerMonth")}>
-                      <CountBars
-                        values={series.values}
-                        months={restocks.months}
-                        label={series.space_name}
-                        peak={restockPeak}
-                      />
-                    </td>
-                    <td className="num" data-label={t("stock.colTotal")}>
-                      {series.values.reduce((sum, v) => sum + v, 0)}
-                    </td>
+          {phone ? (
+            <ul className="list-rows" aria-label={t("stock.restocksAria")}>
+              {restocks.series.map((series) => (
+                <ListRow
+                  key={series.space_id}
+                  title={series.space_name}
+                  amount={series.values.reduce((sum, v) => sum + v, 0)}
+                  bar={
+                    <CountBars
+                      values={series.values}
+                      months={restocks.months}
+                      label={series.space_name}
+                      peak={restockPeak}
+                    />
+                  }
+                />
+              ))}
+            </ul>
+          ) : (
+            <TableWrap>
+              <table className="stacked" aria-label={t("stock.restocksAria")}>
+                <thead>
+                  <tr>
+                    <th>{t("stock.space")}</th>
+                    <th>{t("stock.colPerMonth")}</th>
+                    <th className="num">{t("stock.colTotal")}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
+                </thead>
+                <tbody>
+                  {restocks.series.map((series) => (
+                    <tr key={series.space_id}>
+                      <td data-label={t("stock.space")}>{series.space_name}</td>
+                      <td data-label={t("stock.colPerMonth")}>
+                        <CountBars
+                          values={series.values}
+                          months={restocks.months}
+                          label={series.space_name}
+                          peak={restockPeak}
+                        />
+                      </td>
+                      <td className="num" data-label={t("stock.colTotal")}>
+                        {series.values.reduce((sum, v) => sum + v, 0)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
           <div className="legend">
             {restocks.months.map((m) => (
               <span key={m}>{dates.monthTick(m)}</span>

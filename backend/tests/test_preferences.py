@@ -23,7 +23,7 @@ DEFAULT_TABS = [
 DEFAULT_CARDS = [
     {"id": card, "on": True}
     for card in (
-        "stats", "pending", "reading", "quote", "restock",
+        "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
         "budgets", "savings", "trends", "categories",
     )
 ]
@@ -32,6 +32,25 @@ DEFAULT = {
         module: True
         for module in ("habits", "books", "mood", "stock", "gym", "recipes", "notes")
     },
+    # Epic 36 (AD-52): what existed before stays on, the two new kinds are opt-in.
+    "notifications": {
+        "stock": True,
+        "recurring": True,
+        "habits": True,
+        "due_tomorrow": False,
+        "savings": False,
+        "streak": False,
+    },
+    # Epic 41 (AD-57): every tab streak is opt-in.
+    "streaks": {
+        streak: False
+        for streak in (
+            "entries", "plan", "grow", "habits", "mood", "books", "stock", "gym", "recipes",
+            "notes",
+        )
+    },
+    # Epic 41 (AD-57): no name chosen means the client's default label.
+    "points_name": None,
     "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
     "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
 }
@@ -92,12 +111,12 @@ def test_one_layout_leaves_the_other_and_the_modules(client, user_a):
     assert prefs["modules"]["mood"] is False
     assert prefs["phone"] == DEFAULT["phone"]
     assert prefs["desktop"]["tabs"] == DEFAULT_TABS
-    # The two sent keep their relative order and values; each of the other seven lands
+    # The two sent keep their relative order and values; each of the other eight lands
     # after its default predecessor — so savings follows budgets, pending follows stats.
     assert {"id": "stats", "on": False} in prefs["desktop"]["cards"]
     assert [c["id"] for c in prefs["desktop"]["cards"]] == [
         "budgets", "savings", "trends", "categories",
-        "stats", "pending", "reading", "quote", "restock",
+        "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
     ]
 
 
@@ -203,7 +222,7 @@ def test_an_id_that_no_longer_exists_is_dropped():
     assert "chess" not in prefs["modules"]
     assert prefs["modules"]["gym"] is False
     assert [c["id"] for c in prefs["phone"]["cards"]] == [
-        "stats", "pending", "reading", "quote", "restock",
+        "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
         "budgets", "savings", "trends", "categories",
     ]
     assert {"id": "budgets", "on": False} in prefs["phone"]["cards"]
@@ -212,11 +231,11 @@ def test_an_id_that_no_longer_exists_is_dropped():
 def test_a_missing_id_lands_after_its_default_predecessor():
     """What a card added by a later epic does to a layout stored before it existed: it
     appears after its default neighbour, wherever the person moved that neighbour."""
-    stored_order = ["categories", "reading", "stats", "pending", "restock",
-                    "budgets", "savings", "trends"]  # no "quote"
+    stored_order = ["categories", "reading", "stats", "streaks", "pending", "restock",
+                    "budgets", "savings", "trends"]  # no "quote", no "leftover"
     prefs = resolve({"desktop": {"cards": [{"id": c, "on": True} for c in stored_order]}})
     assert [c["id"] for c in prefs["desktop"]["cards"]] == [
-        "categories", "reading", "quote", "stats", "pending", "restock",
+        "categories", "reading", "quote", "stats", "streaks", "pending", "leftover", "restock",
         "budgets", "savings", "trends",
     ]
 

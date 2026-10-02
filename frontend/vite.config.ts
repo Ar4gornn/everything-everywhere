@@ -10,6 +10,11 @@ export default defineConfig({
   // backend. Vite otherwise looks in this directory and a production build would silently
   // fall back to a same-origin API base.
   envDir: "..",
+  build: {
+    // Fonts under 4 KB would otherwise be inlined as data: URIs, which the production
+    // CSP (ops/Caddyfile, no font-src) blocks. Other small assets keep the default.
+    assetsInlineLimit: (filePath) => (/\.(woff2?|ttf|otf)$/.test(filePath) ? false : undefined),
+  },
   server: {
     port: 5173,
     // The dev server proxies /api so the browser sees one origin locally, while the

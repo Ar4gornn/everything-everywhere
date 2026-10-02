@@ -66,6 +66,21 @@ export const entries = {
   "dash.notSet": { en: "not set", fr: "non défini" },
   "dash.budgetUsed": { en: "{name} budget used", fr: "budget {name} utilisé" },
 
+  // Epic 38: the phone rows (AD-53).
+  "rows.of": { en: "of {amount}", fr: "sur {amount}" },
+  "rows.noBudget": { en: "No budget", fr: "Pas de budget" },
+  "rows.noTarget": { en: "No target", fr: "Pas d’objectif" },
+  "rows.left": { en: "{amount} left this month", fr: "Reste {amount} ce mois-ci" },
+  "rows.over": { en: "{amount} over budget", fr: "Budget dépassé de {amount}" },
+  "rows.openCategory": { en: "Open category", fr: "Voir la catégorie" },
+  // Story 38.2.
+  "rows.entries_one": { en: "{count} entry", fr: "{count} opération" },
+  "rows.entries_other": { en: "{count} entries", fr: "{count} opérations" },
+  "rows.nextOn": { en: "next {date}", fr: "prochaine le {date}" },
+  "rows.year": { en: "Year {n}", fr: "Année {n}" },
+  "rows.setN": { en: "Set {n}", fr: "Série {n}" },
+  "rows.unsaved": { en: "Not saved: {amount}", fr: "Non enregistré : {amount}" },
+
   "dash.savingsProgress": { en: "Savings progress", fr: "Avancement de l’épargne" },
   "dash.savingsCount_one": { en: "{count} type", fr: "{count} enveloppe" },
   "dash.savingsCount_other": { en: "{count} types", fr: "{count} enveloppes" },
@@ -119,6 +134,10 @@ export const entries = {
   "entries.categoryPlaceholder": { en: "Rent, Salary…", fr: "Loyer, Salaire…" },
   "entries.vendor": { en: "Vendor", fr: "Commerçant" },
   "entries.vendorPlaceholder": { en: "Shell, Lidl…", fr: "Total, Lidl…" },
+  "entries.paidFrom": { en: "Paid from", fr: "Payé depuis" },
+  "entries.paidFromNone": { en: "Not from savings", fr: "Pas depuis l’épargne" },
+  "entries.editPaidFrom": { en: "Edit the pot it was paid from", fr: "Modifier l’enveloppe utilisée" },
+  "entries.fromPot": { en: "From {pot}", fr: "Depuis {pot}" },
   "entries.addQuantity": { en: "+ Quantity", fr: "+ Quantité" },
   "entries.quantityDetails": { en: "Quantity details", fr: "Détails de quantité" },
   "entries.quantityPlaceholder": { en: "40", fr: "40" },

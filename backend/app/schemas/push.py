@@ -1,3 +1,6 @@
+import uuid
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -31,3 +34,31 @@ class PushStatusOut(BaseModel):
 
     enabled: bool
     devices: int
+
+
+class TestIn(BaseModel):
+    """Epic 36: the device asking for a test names itself; only its own row is used."""
+
+    endpoint: str = Field(min_length=1, max_length=2000)
+
+
+class PreviewOut(BaseModel):
+    """Tonight's digest, exactly as `notify.py` would compose it now (AD-52)."""
+
+    empty: bool
+    title: str
+    body: str | None
+    url: str
+    #: The local date it is composed for, and the account's schedule, so the page can say
+    #: "at 19:00 (Europe/Paris)" without a second request.
+    local_date: str
+    digest_time: str
+    timezone: str | None
+
+
+class MutedOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    kind: Literal["stock", "recurring", "savings"]
+    id: uuid.UUID
+    name: str

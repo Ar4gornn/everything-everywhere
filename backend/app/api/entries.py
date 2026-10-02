@@ -49,6 +49,7 @@ def create_entry(payload: EntryCreate, user_id: CurrentUserId, session: DbSessio
         unit=payload.unit.value if payload.unit is not None else None,
         vendor_id=payload.vendor_id,
         vendor_name=payload.vendor_name,
+        savings_type_id=payload.savings_type_id,
     )
     return EntryOut.model_validate(entry)
 
@@ -79,6 +80,9 @@ def update_entry(
         vendor_name=payload.vendor_name,
         # Either key sent means "set the vendor to this", including an explicit null.
         vendor_given=bool({"vendor_id", "vendor_name"} & payload.model_fields_set),
+        savings_type_id=payload.savings_type_id,
+        # An explicit null removes the withdrawal; absent leaves it where it is.
+        savings_type_given="savings_type_id" in payload.model_fields_set,
     )
     return EntryOut.model_validate(entry)
 

@@ -62,6 +62,7 @@ function renderAt(
       if (url.includes("/api/auth/me")) return json(user);
       if (url.includes("/api/books/quotes/draw")) return json(null);
       if (url.includes("/api/dashboard") || url.includes("/api/summary")) return json(null);
+      if (url.includes("/api/savings/overview")) return json({ pots: [] });
       return json({ items: [] });
     }),
   );
@@ -172,12 +173,13 @@ describe("a module that is off", () => {
     expect(screen.getByRole("link", { name: /Notes/ })).toBeInTheDocument();
   });
 
-  it("loses its calendar layer: no chip, no request", async () => {
+  it("loses its calendar layer: no menu entry, no request", async () => {
     renderAt("/calendar", off("gym", "recipes", "mood", "stock", "habits"));
-    const layers = await screen.findByRole("group", { name: "Layers" });
+    // Money, savings and what is due are the budget's own and stay.
+    await userEvent.click(await screen.findByRole("button", { name: "Layers (3/3)" }));
     await waitFor(() => expect(asked("/api/entries")).toBe(true));
-    const chips = within(layers).getAllByRole("button").map((b) => b.textContent?.trim());
-    expect(chips.join(" ")).not.toMatch(/Gym|Stock|Habits|Mood|Meals/);
+    const names = screen.getAllByRole("checkbox").map((box) => box.closest("label")?.textContent);
+    expect(names).toEqual(["Money", "Savings", "Due"]);
     for (const path of ["/api/gym", "/api/inventory", "/api/habits", "/api/mood", "/api/meals"]) {
       expect(asked(path)).toBe(false);
     }
@@ -253,6 +255,9 @@ describe("the module table is complete", () => {
     ],
     mood: ["components/MoodCheckin.tsx", "pages/CalendarPage.tsx", "pages/HabitsPage.tsx"],
     stock: [
+      // Settings' muted list unmutes a stock item even with Stock off (Epic 36): a mute
+      // that could not be undone while the module is off would be a notification lost.
+      "components/NotificationsCard.tsx",
       "components/ShoppingList.tsx",
       "pages/CalendarPage.tsx",
       "pages/DashboardPage.tsx",

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CalendarPage } from "./CalendarPage";
 import { AuthProvider } from "../auth/AuthContext";
+import { monthOf } from "../months";
 
 /**
  * The calendar grid (Epic 22, stories 22.2 and 22.3).
@@ -119,6 +120,8 @@ interface Options {
   failStock?: boolean;
   /** One deposit and one withdrawal on 2026-09-03 (Epic 34). */
   savings?: boolean;
+  /** Entries answered per requested month, as the server does, not all of them every time. */
+  windowed?: boolean;
 }
 
 function mockApi(options: Options = {}) {
@@ -143,7 +146,16 @@ function mockApi(options: Options = {}) {
         ],
       });
     }
-    if (url.includes("/api/entries")) return json({ items: entries });
+    if (url.includes("/api/entries")) {
+      // The server's window, not every row: a week across the boundary asks for two months,
+      // and a fixture that answered both with everything would count each entry twice.
+      const month = new URL(url, "http://x").searchParams.get("month");
+      return json({
+        items: entries.filter(
+          (row) => !options.windowed || !month || monthOf(new Date(`${row.occurred_on}T00:00:00`), options.startDay ?? 26) === month,
+        ),
+      });
+    }
     if (url.includes("/api/categories")) {
       return json({
         items: [
@@ -337,7 +349,12 @@ describe("CalendarPage", () => {
     const forecast = within(forecastCard).getByText("Rent").closest("li") as HTMLElement;
     expect(within(forecast).getByText("expected")).toBeInTheDocument();
     expect(forecast.textContent).toContain("will be proposed");
-    expect(within(forecast).queryByRole("button")).toBeNull();
+    // Nothing to confirm or skip: the one button is Epic 39's "Add to calendar".
+    expect(
+      within(forecast)
+        .queryAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Add Rent to calendar"]);
   });
 
   it("says a withdrawal is money out, not money saved", async () => {
@@ -376,7 +393,8 @@ describe("CalendarPage", () => {
     const { unmount } = render(<CalendarPage />);
     await setMonth("2026-09");
 
-    await userEvent.click(await screen.findByRole("button", { name: /Habits/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Layers (8/8)" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Habits" }));
     await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
     let card = (await screen.findByText("Wed 2 September")).closest("section") as HTMLElement;
     expect(within(card).queryByText("Run")).toBeNull();
@@ -385,9 +403,84 @@ describe("CalendarPage", () => {
     unmount();
     render(<CalendarPage />);
     await setMonth("2026-09");
+    expect(screen.getByRole("button", { name: "Layers (7/8)" })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
     card = (await screen.findByText("Wed 2 September")).closest("section") as HTMLElement;
     expect(within(card).queryByText("Run")).toBeNull();
+  });
+
+  it("the layers menu counts what is on, keys it, and closes on Escape", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const button = screen.getByRole("button", { name: "Layers (8/8)" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Stock" }));
+    expect(button).toHaveTextContent("Layers (7/8)");
+
+    const key = screen.getByRole("list", { name: "Key" });
+    expect(within(key).queryByText("Stock")).toBeNull();
+    expect(within(key).getByText("Habits")).toBeInTheDocument();
+
+    screen.getByRole("checkbox", { name: "Habits" }).focus();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("checkbox")).toBeNull());
+    expect(document.activeElement).toBe(button);
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("the last layer on cannot be turned off", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    await userEvent.click(screen.getByRole("button", { name: "Layers (8/8)" }));
+    const boxes = screen.getAllByRole("checkbox");
+    for (const box of boxes.slice(1)) await userEvent.click(box);
+    expect(screen.getByRole("button", { name: "Layers (1/8)" })).toBeInTheDocument();
+    expect(boxes[0]).toBeChecked();
+    expect(boxes[0]).toBeDisabled();
+    expect(boxes[1]).toBeEnabled();
+  });
+
+  it("marks a day with one bar per layer, in the layers' own order", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+    await waitFor(() => expect(day.querySelectorAll(".cal-bar").length).toBe(4));
+    const bars = [...day.querySelectorAll(".cal-bar")].map((bar) => bar.getAttribute("data-layer"));
+    expect(bars).toEqual(["money", "stock", "habits", "meals"]);
+  });
+
+  it("writes four lines in a wide cell, or three and a count", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    // The 2nd holds five: Fuel, Milk, Run, and two meals.
+    const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+    await waitFor(() => expect(within(day).getByText("+2 more")).toBeInTheDocument());
+    const lines = [...day.querySelectorAll(".cal-line[data-layer]")].map((line) => [
+      line.getAttribute("data-layer"),
+      line.textContent,
+    ]);
+    expect(lines).toEqual([
+      ["money", "Fuel"],
+      ["stock", "Milk"],
+      ["habits", "Run"],
+    ]);
+
+    // Four fit as four: with meals off, no count.
+    await userEvent.click(screen.getByRole("button", { name: "Layers (8/8)" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Meals" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Stock" }));
+    expect(day.querySelectorAll(".cal-line[data-layer]")).toHaveLength(2);
+    expect(within(day).queryByText(/more$/)).toBeNull();
   });
 
   it("a day outside the period moves to the period it belongs to", async () => {
@@ -401,6 +494,377 @@ describe("CalendarPage", () => {
     // 25 August belongs to the period labelled August for this account.
     await waitFor(() => {
       expect(screen.getByLabelText("Month")).toHaveValue("2026-08");
+    });
+  });
+
+  // --------------------------------------------------------------- Epic 40.1
+
+  it("rings today and opens on it beside the grid", async () => {
+    mockApi({ startDay: 1 });
+    render(<CalendarPage />);
+
+    // "Now" is 10 August 2026 (see beforeEach). A desktop has room, so today's day is
+    // already open; nobody has to click to learn what happened today.
+    const today = await screen.findByRole("gridcell", { name: /^2026-08-10/ });
+    expect(today).toHaveAttribute("aria-current", "date");
+    expect(screen.getAllByRole("gridcell").filter((c) => c.hasAttribute("aria-current")))
+      .toHaveLength(1);
+    expect(await screen.findByRole("region", { name: "Mon 10 August" })).toBeInTheDocument();
+  });
+
+  it("keeps one day in the tab order and moves it with the arrows", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const start = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+    start.focus();
+    const focused = () => (document.activeElement as HTMLElement).dataset.iso;
+
+    await userEvent.keyboard("{ArrowRight}");
+    expect(focused()).toBe("2026-09-03");
+    await userEvent.keyboard("{ArrowDown}");
+    expect(focused()).toBe("2026-09-10");
+    await userEvent.keyboard("{End}");
+    expect(focused()).toBe("2026-09-13");
+    await userEvent.keyboard("{Home}");
+    expect(focused()).toBe("2026-09-07");
+    await userEvent.keyboard("{ArrowUp}");
+    expect(focused()).toBe("2026-08-31");
+
+    expect(screen.getAllByRole("gridcell").filter((c) => c.tabIndex === 0)).toHaveLength(1);
+
+    // Moving only moves; Enter chooses.
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("region", { name: "Mon 31 August" })).toBeInTheDocument();
+  });
+
+  it("an arrow past the drawn grid turns to the next period", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    // The September period ends on the 25th; its grid runs to Sunday 27 September.
+    (await screen.findByRole("gridcell", { name: /^2026-09-27/ })).focus();
+    await userEvent.keyboard("{ArrowDown}");
+
+    await waitFor(() => expect(screen.getByLabelText("Month")).toHaveValue("2026-10"));
+    await waitFor(() => {
+      expect((document.activeElement as HTMLElement).dataset.iso).toBe("2026-10-04");
+    });
+  });
+
+  it("Today goes back to this period and opens today", async () => {
+    mockApi({ startDay: 1 });
+    render(<CalendarPage />);
+    await setMonth("2026-11");
+    const button = screen.getByRole("button", { name: "Today" });
+    expect(button).toBeEnabled();
+
+    await userEvent.click(button);
+
+    await waitFor(() => expect(screen.getByLabelText("Month")).toHaveValue("2026-08"));
+    expect(await screen.findByRole("region", { name: "Mon 10 August" })).toBeInTheDocument();
+    expect(button).toBeDisabled();
+  });
+
+  /** The figure under a label in the period's summary, or null when the label is absent. */
+  function figure(group: HTMLElement, label: string): string | null {
+    const term = within(group).queryByText(label, { selector: "dt" });
+    return term ? (term.nextElementSibling?.textContent ?? "") : null;
+  }
+
+  it("sums the period above the grid and counts each layer that is on", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+
+    const group = await screen.findByRole("group", { name: /in figures$/ });
+    // 26 August is inside this account's September, so its salary counts; the net is
+    // worked in cents, never as a float.
+    await waitFor(() => expect(figure(group, "In")).toBe("$1,200.00"));
+    expect(figure(group, "Out")).toBe("$40.00");
+    expect(figure(group, "Net")).toBe("$1,160.00");
+    expect(figure(group, "Stock")).toBe("1");
+    expect(figure(group, "Habits")).toBe("1");
+    expect(figure(group, "Meals")).toBe("2");
+    expect(figure(group, "Due")).toBe("1");
+    // A layer with nothing in the period takes no room, and money is the figures above.
+    expect(figure(group, "Gym")).toBeNull();
+    expect(figure(group, "Money")).toBeNull();
+  });
+
+  it("the summary follows the layers menu", async () => {
+    mockApi({ startDay: 26 });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+    const group = await screen.findByRole("group", { name: /in figures$/ });
+    await waitFor(() => expect(figure(group, "Meals")).toBe("2"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Layers (8/8)" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Money" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Meals" }));
+    expect(figure(group, "In")).toBeNull();
+    expect(figure(group, "Net")).toBeNull();
+    expect(figure(group, "Meals")).toBeNull();
+    expect(figure(group, "Stock")).toBe("1");
+  });
+
+  it("counts only the period's own days, not the ragged edges", async () => {
+    mockApi({ startDay: 1 });
+    render(<CalendarPage />);
+    // For a plain calendar month, the salary on 26 August belongs to August.
+    await setMonth("2026-09");
+    const group = await screen.findByRole("group", { name: /in figures$/ });
+    await waitFor(() => expect(figure(group, "Out")).toBe("$40.00"));
+    expect(figure(group, "In")).toBe("$0.00");
+    expect(figure(group, "Net")).toBe("-$40.00");
+  });
+
+  describe("the week (Epic 40.4)", () => {
+    const heading = () => screen.getByRole("heading", { level: 1 });
+    const cells = () => screen.getAllByRole("gridcell").map((cell) => cell.dataset.iso);
+
+    it("switches to the week and remembers it on this device", async () => {
+      mockApi({ startDay: 1 });
+      const first = render(<CalendarPage />);
+      await screen.findByRole("gridcell", { name: /^2026-08-10/ });
+
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+
+      // "Now" is Monday 10 August: the week that holds it, Monday first.
+      await waitFor(() => expect(cells()).toHaveLength(7));
+      expect(cells()[0]).toBe("2026-08-10");
+      expect(cells()[6]).toBe("2026-08-16");
+      expect(heading()).toHaveTextContent("10 Aug – 16 Aug 2026");
+      expect(screen.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "true");
+      expect(window.localStorage.getItem("everything-everywhere.calendarView")).toBe("week");
+
+      first.unmount();
+      render(<CalendarPage />);
+      await waitFor(() => expect(cells()).toHaveLength(7));
+      expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    });
+
+    it("draws every item of a day in full, with its amount, and keeps the chosen day", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const monthCell = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+      // Five lines: the month shows three and a count.
+      await waitFor(() => expect(within(monthCell).getByText("+2 more")).toBeInTheDocument());
+      await userEvent.click(monthCell);
+
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+
+      await waitFor(() => expect(cells()).toHaveLength(7));
+      expect(heading()).toHaveTextContent("31 Aug – 6 Sep 2026");
+      const cell = screen.getByRole("gridcell", { name: /^2026-09-02/ });
+      for (const text of ["Fuel", "Milk", "Run", "Rice and eggs", "Rice"]) {
+        expect(within(cell).getByText(text)).toBeInTheDocument();
+      }
+      expect(within(cell).queryByText(/more$/)).toBeNull();
+      // Exact rather than rounded: the net, and the entry's own line.
+      expect(within(cell).getAllByText("-$40.00")).toHaveLength(2);
+      expect(screen.getByRole("region", { name: "Wed 2 September" })).toBeInTheDocument();
+    });
+
+    it("asks for both months when a week crosses the account's boundary", async () => {
+      const { seen } = mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-21/ }));
+
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+
+      // 21 to 25 September close this account's September; 26 and 27 open its October.
+      await waitFor(() => expect(heading()).toHaveTextContent("21 Sep – 27 Sep 2026"));
+      await waitFor(() => {
+        expect(seen.some((url) => url.includes("/api/entries?month=2026-10"))).toBe(true);
+      });
+      for (const path of [
+        "/api/savings/contributions?month=2026-10",
+        "/api/inventory/changes?month=2026-10",
+        "/api/habits/checkins?month=2026-10",
+        "/api/recurring/expected?month=2026-10",
+        "/api/meals?month=2026-10",
+      ]) {
+        expect(seen.some((url) => url.includes(path))).toBe(true);
+      }
+    });
+
+    it("turns by seven days, sums only its own, and an arrow past Sunday opens the next", async () => {
+      mockApi({ startDay: 26, windowed: true });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+
+      // Nothing chosen and today elsewhere: the week holding the period's first day.
+      await userEvent.click(screen.getByRole("button", { name: "Week" }));
+      await waitFor(() => expect(heading()).toHaveTextContent("24 Aug – 30 Aug 2026"));
+      const group = await screen.findByRole("group", { name: /in figures$/ });
+      await waitFor(() => expect(figure(group, "In")).toBe("$1,200.00"));
+      expect(figure(group, "Out")).toBe("$0.00");
+
+      await userEvent.click(screen.getByRole("button", { name: "Next week" }));
+      await waitFor(() => expect(heading()).toHaveTextContent("31 Aug – 6 Sep 2026"));
+
+      (await screen.findByRole("gridcell", { name: /^2026-09-06/ })).focus();
+      await userEvent.keyboard("{ArrowRight}");
+      await waitFor(() => expect(heading()).toHaveTextContent("7 Sep – 13 Sep 2026"));
+      await waitFor(() => {
+        expect((document.activeElement as HTMLElement).dataset.iso).toBe("2026-09-07");
+      });
+    });
+
+    it("back to the month keeps the chosen day, in the month it belongs to", async () => {
+      // 26 September opens this account's October; the week began in its September.
+      window.localStorage.setItem("everything-everywhere.calendarView", "week");
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      // A picked month opens the week that holds its first day.
+      await setMonth("2026-10");
+      await waitFor(() => expect(heading()).toHaveTextContent("21 Sep – 27 Sep 2026"));
+      await userEvent.click(screen.getByRole("gridcell", { name: /^2026-09-26/ }));
+
+      await userEvent.click(screen.getByRole("button", { name: "Month" }));
+
+      await waitFor(() => expect(screen.getByLabelText("Month")).toHaveValue("2026-10"));
+      expect(screen.getByRole("region", { name: "Sat 26 September" })).toBeInTheDocument();
+      expect(window.localStorage.getItem("everything-everywhere.calendarView")).toBe("month");
+    });
+  });
+
+  describe("on a phone", () => {
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: query.includes("max-width: 720px"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("opens a day over the grid and Escape puts it away, back on the day", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+
+      // Nothing covers the month on arrival.
+      expect(screen.queryByRole("region")).toBeNull();
+
+      const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+      await userEvent.click(day);
+      const panel = await screen.findByRole("region", { name: "Wed 2 September" });
+      expect(within(panel).getByText("Fuel")).toBeInTheDocument();
+
+      // From inside the panel: focus must land back on the day, not be lost with it.
+      within(panel).getByRole("button", { name: "Close the day" }).focus();
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+      expect(document.activeElement).toBe(day);
+    });
+
+    it("closes from its button, from a tap outside, and from a second tap", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const day = await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+
+      await userEvent.click(day);
+      await userEvent.click(await screen.findByRole("button", { name: "Close the day" }));
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+
+      await userEvent.click(day);
+      await screen.findByRole("region", { name: "Wed 2 September" });
+      await userEvent.click(screen.getByText("26 Aug – 25 Sep"));
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+
+      await userEvent.click(day);
+      await screen.findByRole("region", { name: "Wed 2 September" });
+      await userEvent.click(day);
+      await waitFor(() => expect(screen.queryByRole("region")).toBeNull());
+    });
+
+    it("keeps the panel's header on one line: Add is a sign named by its label", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+
+      await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
+      const panel = await screen.findByRole("region", { name: "Wed 2 September" });
+      const add = within(panel).getByRole("button", { name: "Add on this day" });
+      expect(add).toHaveTextContent("+");
+    });
+
+    it("a tap on another day swaps the panel rather than closing it", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+
+      await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
+      await screen.findByRole("region", { name: "Wed 2 September" });
+      await userEvent.click(screen.getByRole("gridcell", { name: /^2026-09-03/ }));
+      expect(await screen.findByRole("region", { name: "Thu 3 September" })).toBeInTheDocument();
+    });
+
+    /** One finger, from one point to another, over the grid. */
+    function swipe(from: [number, number], to: [number, number]) {
+      const grid = screen.getByRole("grid");
+      fireEvent.touchStart(grid, { touches: [{ clientX: from[0], clientY: from[1] }] });
+      fireEvent.touchEnd(grid, { touches: [], changedTouches: [{ clientX: to[0], clientY: to[1] }] });
+    }
+
+    it("a sideways swipe turns the month; a drifting scroll does not", async () => {
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const input = screen.getByLabelText("Month") as HTMLInputElement;
+      await screen.findByRole("gridcell", { name: /^2026-09-02/ });
+
+      swipe([250, 300], [100, 310]);
+      await waitFor(() => expect(input.value).toBe("2026-10"));
+
+      swipe([100, 300], [250, 290]);
+      await waitFor(() => expect(input.value).toBe("2026-09"));
+
+      // Mostly down: a scroll that drifted sideways, not a swipe.
+      swipe([250, 100], [180, 300]);
+      // Too short to be meant.
+      swipe([250, 300], [220, 300]);
+      // Two fingers is a pinch.
+      const grid = screen.getByRole("grid");
+      fireEvent.touchStart(grid, {
+        touches: [
+          { clientX: 250, clientY: 300 },
+          { clientX: 200, clientY: 300 },
+        ],
+      });
+      fireEvent.touchEnd(grid, { touches: [], changedTouches: [{ clientX: 50, clientY: 300 }] });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(input.value).toBe("2026-09");
+    });
+
+    it("in the week, a swipe turns the week and the hint says so", async () => {
+      window.localStorage.setItem("everything-everywhere.calendarView", "week");
+      mockApi({ startDay: 26 });
+      render(<CalendarPage />);
+      await setMonth("2026-09");
+      const heading = screen.getByRole("heading", { level: 1 });
+      await waitFor(() => expect(heading).toHaveTextContent("24 Aug – 30 Aug 2026"));
+      expect(screen.getByText(/change week\.$/)).toBeInTheDocument();
+
+      swipe([250, 300], [100, 310]);
+      await waitFor(() => expect(heading).toHaveTextContent("31 Aug – 6 Sep 2026"));
+      swipe([100, 300], [250, 290]);
+      await waitFor(() => expect(heading).toHaveTextContent("24 Aug – 30 Aug 2026"));
     });
   });
 });

@@ -102,6 +102,30 @@ export const errors = {
     en: "That savings pot still has contributions.",
     fr: "Cette enveloppe d’épargne contient encore des versements.",
   },
+  "error.savings_contribution_from_entry": {
+    en: "That withdrawal paid for an expense. Change the expense instead.",
+    fr: "Ce retrait a payé une dépense. Modifiez plutôt la dépense.",
+  },
+  "error.savings_expense_only": {
+    en: "Only an expense can be paid from savings.",
+    fr: "Seule une dépense peut être payée depuis l’épargne.",
+  },
+  "error.push_test_too_soon": {
+    en: "A test went to this device less than a minute ago. Try again in a moment.",
+    fr: "Un test a été envoyé à cet appareil il y a moins d’une minute. Réessayez dans un instant.",
+  },
+  "error.push_device_gone": {
+    en: "This device no longer accepts notifications. Turn them on again.",
+    fr: "Cet appareil n’accepte plus les notifications. Réactivez-les.",
+  },
+  "error.push_not_subscribed": {
+    en: "This device is not receiving notifications. Turn them on first.",
+    fr: "Cet appareil ne reçoit pas de notifications. Activez-les d’abord.",
+  },
+  "error.invalid_timezone": {
+    en: "That time zone is not one the server knows.",
+    fr: "Ce fuseau horaire n’est pas connu du serveur.",
+  },
   "error.savings_balance_negative": {
     en: "That would take more out of the pot than there is in it.",
     fr: "Cela retirerait de l’enveloppe plus qu’elle ne contient.",

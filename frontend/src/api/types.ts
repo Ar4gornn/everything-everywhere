@@ -56,6 +56,35 @@ export interface User {
    * 0025; read it through `preferencesOf`, which falls back to the app as it was.
    */
   preferences?: Preferences;
+  /**
+   * Epic 36 (AD-52): the IANA zone the account's day is counted in, and the local hour the
+   * daily digest may arrive. Null zone: the server's clock. Absent from an older server.
+   */
+  timezone?: string | null;
+  digest_time?: string;
+  /**
+   * AD-54: may issue invites. Only decides whether the Invites page is offered; the server
+   * refuses a non-admin on every admin route regardless. Absent from an older server.
+   */
+  is_admin?: boolean;
+}
+
+/** AD-54: an invite as the admin list shows it. Never the code — that exists once. */
+export interface Invite {
+  id: string;
+  note: string | null;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  state: "open" | "used" | "expired";
+}
+
+/** The create's answer: the only time the plaintext code is ever sent. */
+export interface IssuedInvite {
+  id: string;
+  code: string;
+  note: string | null;
+  expires_at: string;
 }
 
 /** Epic 33 (AD-49): what can be switched off. Off hides the UI; the data stays. */
@@ -72,7 +101,9 @@ export type SectionId =
   | "recipes";
 export type CardId =
   | "stats"
+  | "streaks"
   | "pending"
+  | "leftover"
   | "reading"
   | "quote"
   | "restock"
@@ -90,8 +121,30 @@ export interface Layout {
   cards: { id: CardId; on: boolean }[];
 }
 
+/** Epic 36 (AD-52): what the daily digest may talk about. */
+export type NotificationKind = "stock" | "recurring" | "habits" | "due_tomorrow" | "savings" | "streak";
+
+/** Epic 41 (AD-57): a module with a streak of its own. `overall` is the dashboard card and
+ *  has no switch. */
+export type StreakModuleId =
+  | "entries"
+  | "plan"
+  | "grow"
+  | "habits"
+  | "mood"
+  | "books"
+  | "stock"
+  | "gym"
+  | "recipes"
+  | "notes";
+
 export interface Preferences {
   modules: Record<ModuleId, boolean>;
+  notifications: Record<NotificationKind, boolean>;
+  /** Which tab streaks are shown; every one is off until switched on. */
+  streaks: Record<StreakModuleId, boolean>;
+  /** The person's word for points (Epic 41.3), or null for the default label. */
+  points_name: string | null;
   phone: Layout;
   desktop: Layout;
 }
@@ -114,6 +167,8 @@ export interface Category {
   id: string;
   kind: EntryKind;
   name: string;
+  /** Epic 35.3: pre-fills "Paid from". Absent from servers older than Epic 35. */
+  default_savings_type_id?: string | null;
   created_at: string;
 }
 
@@ -164,6 +219,8 @@ export interface Entry {
   unit: Unit | null;
   /** Computed by the server from amount and quantity; null when there is no quantity. */
   unit_price: Rate | null;
+  /** AD-51: the pot this expense was paid from. Absent from servers older than Epic 35. */
+  savings_type_id?: string | null;
   created_at: string;
 }
 
@@ -172,6 +229,8 @@ export interface SavingsType {
   name: string;
   goal_amount?: Money | null;
   goal_date?: string | null;
+  /** Epic 36: false keeps it out of the daily digest. Absent from an older server. */
+  notify?: boolean;
   created_at: string;
 }
 
@@ -186,6 +245,8 @@ export interface Contribution {
   amount: Money;
   occurred_on: string;
   note: string | null;
+  /** AD-51: the expense this withdrawal paid for; such a row is changed on the entry. */
+  entry_id?: string | null;
   created_at: string;
 }
 
@@ -209,6 +270,8 @@ export interface Pot {
   goal_amount: Money | null;
   goal_date: string | null;
   needed_per_month: Money | null;
+  /** Epic 36: false keeps the pot out of the daily digest. Absent from an older server. */
+  notify?: boolean;
 }
 
 export interface SavingsOverview {
@@ -243,6 +306,20 @@ export interface TargetVsActual {
 
 /** How wide a window the headline figures cover. */
 export type Period = "month" | "year" | "all";
+
+/** Story 35.4: the last closed budget month, and what it left over. */
+export interface Leftover {
+  month: string;
+  /** Inclusive; `end` is the date a deposit of the leftover is recorded on. */
+  start: string;
+  end: string;
+  income: Money;
+  expense: Money;
+  saved: Money;
+  /** income − expenses − net savings. Negative when the month overspent. */
+  leftover: Money;
+  dismissed: boolean;
+}
 
 export interface Summary {
   /** The anchor that was asked for, echoed back. */
@@ -310,6 +387,8 @@ export interface InventoryItem {
   /** AD-30: computed in SQL from quantity and restock_below; never stored. */
   needs_restock: boolean;
   restocked_at: string | null;
+  /** Epic 36: false keeps it out of the daily digest; the page still lists it. */
+  notify?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -355,6 +434,8 @@ export interface RecurringTemplate {
   /** Opt-in: create the entry without asking. Off by default, deliberately. */
   auto: boolean;
   paused: boolean;
+  /** Epic 36: false keeps it out of the daily digest. */
+  notify?: boolean;
   next_due: string;
   created_at: string;
 }
@@ -435,6 +516,25 @@ export interface PushStatus {
   /** False when the instance has no VAPID keys: the toggle is hidden rather than broken. */
   enabled: boolean;
   devices: number;
+}
+
+/** Tonight's digest, as the server would compose it now (Epic 36). */
+export interface PushPreview {
+  empty: boolean;
+  title: string;
+  /** Already in the account's language: the digest is the one server-written prose. */
+  body: string | null;
+  url: string;
+  local_date: string;
+  digest_time: string;
+  timezone: string | null;
+}
+
+/** A row kept out of the digest, for the muted list in Settings. */
+export interface MutedRow {
+  kind: "stock" | "recurring" | "savings";
+  id: string;
+  name: string;
 }
 
 /** A weight, as a two-place decimal string. Null for a bodyweight set — 0 would be a weight. */
@@ -918,6 +1018,49 @@ export interface BookQuoteDraw {
   author: string;
 }
 
+/** Epic 41 (AD-57): one day of a streak, as the four-week dots draw it. */
+/** `before`: a day before the first active one — no streak yet, so not missed either. */
+export type StreakState = "active" | "pending" | "missed" | "before" | "frozen" | "repaired";
+
+export interface Streak {
+  id: string;
+  current: number;
+  best: number;
+  today_active: boolean;
+  /** Freezes bought and not yet used (Story 41.4); absent on an older server. */
+  held_freezes?: number;
+  /** The repair on offer for the one or two days missed just before today (Story 41.5): how many days and the total price. Null when none; absent on an older server. */
+  repair?: { days: number; cost: number } | null;
+  recent: { day: string; state: StreakState }[];
+}
+
+/** Points are computed by the server from activity alone (AD-57); `spent` is what purchases cost. */
+export interface StreakPoints {
+  balance: number;
+  earned: number;
+  spent: number;
+}
+
+export interface StreaksOverview {
+  /** The account's local date, worked out by the server: the client never sends a day. */
+  today: string;
+  /** Absent on a server older than Story 41.3: the card then shows no balance. */
+  points?: StreakPoints;
+  prices?: {
+    freeze?: number;
+    max_held?: number;
+    repair_per_day?: number;
+    milestones: { days: number; bonus: number }[];
+  };
+  streaks: Streak[];
+}
+
+/** What a purchase answers with: the balance after it, and the streak it was for. */
+export interface StreakPurchaseResult {
+  points: StreakPoints;
+  streak: Streak;
+}
+
 /** A series exists exactly as long as one book names it, so `books` is never zero. */
 export interface BookSeries {
   id: string;
@@ -974,4 +1117,31 @@ export interface Note extends NoteInput {
   id: string;
   created_at: string;
   updated_at: string;
+}
+
+/** Epic 39 (AD-55): the layers a calendar feed may carry. */
+export type FeedLayer =
+  | "due"
+  | "money"
+  | "savings"
+  | "stock"
+  | "gym"
+  | "habits"
+  | "schedule"
+  | "mood"
+  | "meals";
+
+/** The feed's settings. The URL is never here: it exists only in {@link MintedFeed}. */
+export interface CalendarFeed {
+  on: boolean;
+  layers: FeedLayer[];
+  detailed: boolean;
+  alarm: boolean;
+  created_at: string | null;
+  last_fetched_at: string | null;
+}
+
+/** The one answer that carries the feed's path: turning it on, or a new URL. */
+export interface MintedFeed extends CalendarFeed {
+  path: string;
 }

@@ -10,6 +10,7 @@ two slot names) are the request schema's; everything that needs to know the cata
 below — unknown ids, duplicates, completeness, the phone's caps — is here, with a code.
 """
 
+import unicodedata
 import uuid
 
 from sqlalchemy import bindparam, update
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import Invalid
 from app.models.user import User
+from app.services.activity import MODULES as STREAK_MODULES
 
 #: The eight sections, in their default order, with the slot each starts in. The first
 #: five are the bottom tab bar on a phone (``.nav`` on a desktop); the last three are the
@@ -42,7 +44,9 @@ MODULES: tuple[str, ...] = ("habits", "books", "mood", "stock", "gym", "recipes"
 #: Dashboard cards in today's render order, all shown by default.
 CARDS: tuple[str, ...] = (
     "stats",
+    "streaks",
     "pending",
+    "leftover",
     "reading",
     "quote",
     "restock",
@@ -53,6 +57,29 @@ CARDS: tuple[str, ...] = (
 )
 
 LAYOUTS: tuple[str, ...] = ("phone", "desktop")
+
+#: Streaks a person may show (Epic 41, AD-57): one per module streak, all **off** by
+#: default so tab streaks stay optional. ``overall`` is not here: it is the dashboard card.
+STREAKS: tuple[str, ...] = STREAK_MODULES
+
+#: The person's name for points (Epic 41, AD-57): 1 to 24 characters once trimmed, shown
+#: verbatim beside the number. Null or empty means the client's default label.
+POINTS_NAME_MAX = 24
+# Cs: a lone surrogate is valid in a Python str but not in JSON, and jsonb refuses it -> 500.
+_REFUSED_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
+
+#: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
+#: three that existed before stay on; the two new ones are opt-in, so the digest keeps
+#: meaning "something is exceptional" for everyone who never opens Settings.
+NOTIFICATIONS: tuple[tuple[str, bool], ...] = (
+    ("stock", True),
+    ("recurring", True),
+    ("habits", True),
+    ("due_tomorrow", False),
+    ("savings", False),
+    ("streak", False),
+)
+_NOTIFICATION_DEFAULT = dict(NOTIFICATIONS)
 
 #: The phone top bar's content box is 335px at a 375px viewport, and French is the wide
 #: language (Epic 27). Five tabs and three top links are what was measured to fit.
@@ -116,16 +143,52 @@ def _resolve_layout(stored: object) -> dict:
     return {"tabs": tabs, "cards": cards}
 
 
+def clean_points_name(raw: str) -> str:
+    """Trimmed, with no control characters; raises ``ValueError`` (a pydantic validator may
+    raise nothing else) when longer than :data:`POINTS_NAME_MAX`. Empty is allowed: it
+    means "use the default"."""
+    name = raw.strip()
+    if len(name) > POINTS_NAME_MAX:
+        raise ValueError(f"at most {POINTS_NAME_MAX} characters")
+    # Only control and line/paragraph separators: `isprintable()` would also refuse a
+    # zero-width joiner (emoji sequences) and a no-break space (French typography).
+    if any(unicodedata.category(c) in _REFUSED_CATEGORIES for c in name):
+        raise ValueError("no control characters")
+    return name
+
+
+def _resolve_points_name(stored: object) -> str | None:
+    """The stored name, or None (the default) for anything that is not a usable one. Read,
+    never refused: a value from an older rule must not break ``/me``."""
+    if not isinstance(stored, str):
+        return None
+    try:
+        return clean_points_name(stored) or None
+    except ValueError:
+        return None
+
+
 def resolve(stored: object) -> dict:
     """The full preferences for a stored value, defaults filled in. Never raises: a stored
     value from an older catalogue is read, not refused."""
     prefs = stored if isinstance(stored, dict) else {}
     modules = prefs.get("modules") if isinstance(prefs.get("modules"), dict) else {}
+    kinds = prefs.get("notifications") if isinstance(prefs.get("notifications"), dict) else {}
+    shown = prefs.get("streaks") if isinstance(prefs.get("streaks"), dict) else {}
     return {
         "modules": {
             module: modules[module] if isinstance(modules.get(module), bool) else True
             for module in MODULES
         },
+        "notifications": {
+            kind: kinds[kind] if isinstance(kinds.get(kind), bool) else default
+            for kind, default in NOTIFICATIONS
+        },
+        "streaks": {
+            streak: shown[streak] if isinstance(shown.get(streak), bool) else False
+            for streak in STREAKS
+        },
+        "points_name": _resolve_points_name(prefs.get("points_name")),
         **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
     }
 
@@ -145,6 +208,18 @@ def _check_modules(modules: dict[str, bool]) -> None:
                           "pref_core_module")
         if module not in MODULES:
             raise Invalid(f"no module called {module!r}", "pref_unknown_id")
+
+
+def _check_notifications(kinds: dict[str, bool]) -> None:
+    for kind in kinds:
+        if kind not in _NOTIFICATION_DEFAULT:
+            raise Invalid(f"no notification called {kind!r}", "pref_unknown_id")
+
+
+def _check_streaks(shown: dict[str, bool]) -> None:
+    for streak in shown:
+        if streak not in STREAKS:
+            raise Invalid(f"no streak called {streak!r}", "pref_unknown_id")
 
 
 def _check_layout(name: str, layout: dict) -> None:
@@ -178,6 +253,10 @@ def validate(patch: dict) -> None:
     the top-level keys the request sent, already shape-checked by the schema."""
     if "modules" in patch:
         _check_modules(patch["modules"])
+    if "notifications" in patch:
+        _check_notifications(patch["notifications"])
+    if "streaks" in patch:
+        _check_streaks(patch["streaks"])
     for layout in LAYOUTS:
         if layout in patch:
             _check_layout(layout, patch[layout])

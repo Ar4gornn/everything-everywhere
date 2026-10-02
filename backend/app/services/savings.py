@@ -9,6 +9,10 @@ go below zero. A CHECK cannot see a sum over rows, so every write that could low
 balance locks the type rows it touches, writes, and then re-reads the sums; a negative one
 raises, and the request's transaction rolls back with it. The lock is what makes two
 concurrent withdrawals queue rather than both pass the same check.
+
+Epic 35 (AD-51): a withdrawal can pay for an expense. It belongs to the entry — written,
+moved and removed with it by ``set_entry_withdrawal`` — so the contribution endpoints refuse
+to edit or delete it on its own.
 """
 
 import datetime as dt
@@ -25,6 +29,7 @@ from app.core.months import DEFAULT_START_DAY, month_of, month_range, parse_mont
 from app.models.ledger import Budget, Category, EntryKind
 from app.models.savings import (
     DEPOSIT,
+    WITHDRAWAL,
     SavingsContribution,
     SavingsSkip,
     SavingsTarget,
@@ -228,6 +233,15 @@ def _get_contribution(
     return found
 
 
+def _refuse_entry_owned(contribution: SavingsContribution) -> None:
+    # AD-51: editing it here would leave the entry saying one thing and the pot another.
+    if contribution.entry_id is not None:
+        raise Conflict(
+            "That withdrawal paid for an entry; change the entry instead",
+            "savings_contribution_from_entry",
+        )
+
+
 def update_contribution(
     session: Session,
     user_id: uuid.UUID,
@@ -241,6 +255,7 @@ def update_contribution(
     kind: str | None = None,
 ) -> SavingsContribution:
     contribution = _get_contribution(session, user_id, contribution_id)
+    _refuse_entry_owned(contribution)
     touched = {contribution.savings_type_id}
     if savings_type_id is not None:
         require_type(session, user_id, savings_type_id)
@@ -267,7 +282,9 @@ def delete_contribution(
     session: Session, user_id: uuid.UUID, contribution_id: uuid.UUID
 ) -> None:
     # Deleting a deposit lowers the balance as surely as a withdrawal does.
-    type_id = _get_contribution(session, user_id, contribution_id).savings_type_id
+    contribution = _get_contribution(session, user_id, contribution_id)
+    _refuse_entry_owned(contribution)
+    type_id = contribution.savings_type_id
     _lock_types(session, user_id, {type_id})
     session.execute(
         delete(SavingsContribution).where(
@@ -275,6 +292,58 @@ def delete_contribution(
         )
     )
     _refuse_negative(session, user_id, {type_id})
+
+
+def set_entry_withdrawal(
+    session: Session,
+    user_id: uuid.UUID,
+    *,
+    entry_id: uuid.UUID,
+    savings_type_id: uuid.UUID | None,
+    amount: Decimal,
+    occurred_on: dt.date,
+) -> None:
+    """Make the entry's withdrawal match it: this pot, this amount, this date — or none.
+
+    AD-51: the one writer of an entry-owned withdrawal, called inside the entry's own write
+    so the two are one transaction. A pot that cannot cover it raises AD-50's
+    ``savings_balance_negative`` and the entry is rolled back with it.
+    """
+    existing = session.execute(
+        select(SavingsContribution).where(
+            SavingsContribution.user_id == user_id, SavingsContribution.entry_id == entry_id
+        )
+    ).scalar_one_or_none()
+
+    if savings_type_id is None:
+        if existing is not None:
+            # Removing a withdrawal only raises a balance: nothing to lock or check.
+            session.delete(existing)
+            session.flush()
+        return
+
+    require_type(session, user_id, savings_type_id)
+    touched = {savings_type_id}
+    if existing is not None:
+        touched.add(existing.savings_type_id)
+    _lock_types(session, user_id, touched)
+    if existing is None:
+        session.add(
+            SavingsContribution(
+                user_id=user_id,
+                savings_type_id=savings_type_id,
+                kind=WITHDRAWAL,
+                amount=amount,
+                occurred_on=occurred_on,
+                entry_id=entry_id,
+            )
+        )
+    else:
+        existing.savings_type_id = savings_type_id
+        existing.amount = amount
+        existing.occurred_on = occurred_on
+    session.flush()
+    _refuse_negative(session, user_id, touched)
 
 
 # --------------------------------------------------------- targets and budgets
@@ -364,6 +433,7 @@ _OVERVIEW = text(
            s.name            AS name,
            s.goal_amount     AS goal_amount,
            s.goal_date       AS goal_date,
+           s.notify          AS notify,
            t.monthly_amount  AS target,
            COALESCE(SUM(CASE WHEN c.kind = 'withdrawal' THEN -c.amount ELSE c.amount END), 0)
                AS balance,
@@ -380,7 +450,7 @@ _OVERVIEW = text(
     LEFT JOIN savings_contributions c
            ON c.user_id = s.user_id AND c.savings_type_id = s.id
     WHERE s.user_id = :uid
-    GROUP BY s.id, s.name, s.goal_amount, s.goal_date, t.monthly_amount
+    GROUP BY s.id, s.name, s.goal_amount, s.goal_date, s.notify, t.monthly_amount
     ORDER BY lower(s.name), s.id
     """
 )
@@ -423,6 +493,63 @@ def needed_per_month(
         return None
     months = max(1, _months_between(current_month, month_of(goal_date, start_day)))
     return ((goal_amount - balance) / months).quantize(_CENT, rounding=ROUND_UP)
+
+
+#: How far ahead a goal date may be for the digest to say the pot is behind (AD-52). Further
+#: out, the Plan page's "needed per month" is the right place to read it, not a push.
+BEHIND_WINDOW = dt.timedelta(days=30)
+
+
+def is_behind(
+    goal_amount: Decimal | None,
+    goal_date: dt.date | None,
+    started_on: dt.date,
+    balance: Decimal,
+    today: dt.date,
+) -> bool:
+    """Is this pot below the straight line to its goal, with the goal less than a month off?
+
+    The line runs from nothing on the day the pot was created to the goal on its date, so
+    ``expected = goal × elapsed / total``. A goal already reached, already past, or more
+    than :data:`BEHIND_WINDOW` away is never behind — a past goal nagged about every
+    evening is the notification people switch off. Epic 36, AD-52.
+    """
+    if goal_amount is None or goal_date is None or balance >= goal_amount:
+        return False
+    if not today <= goal_date <= today + BEHIND_WINDOW:
+        return False
+    total = (goal_date - started_on).days
+    if total <= 0:
+        return True
+    elapsed = min(max((today - started_on).days, 0), total)
+    return balance < goal_amount * elapsed / total
+
+
+_GOALS = text(
+    """
+    SELECT s.id, s.name, s.notify, s.goal_amount, s.goal_date, s.created_at,
+           COALESCE(SUM(CASE WHEN c.kind = 'withdrawal' THEN -c.amount ELSE c.amount END), 0)
+               AS balance
+    FROM savings_types s
+    LEFT JOIN savings_contributions c
+           ON c.user_id = s.user_id AND c.savings_type_id = s.id
+    WHERE s.user_id = :uid AND s.goal_amount IS NOT NULL AND s.goal_date IS NOT NULL
+    GROUP BY s.id, s.name, s.notify, s.goal_amount, s.goal_date, s.created_at
+    ORDER BY lower(s.name), s.id
+    """
+)
+
+
+def behind_pots(session: Session, user_id: uuid.UUID, *, today: dt.date) -> list:
+    """The pots :func:`is_behind` says are behind, with the same signed balance as the
+    overview (AD-50). Muted pots are included; ``notify`` is the caller's to read."""
+    return [
+        row
+        for row in session.execute(_GOALS, {"uid": user_id}).all()
+        if is_behind(
+            row.goal_amount, row.goal_date, row.created_at.date(), row.balance, today
+        )
+    ]
 
 
 def overview(

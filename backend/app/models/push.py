@@ -27,3 +27,5 @@ class PushSubscription(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     notified_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    # Epic 36 (AD-52): the last "Send test", for the one-a-minute limit.
+    tested_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

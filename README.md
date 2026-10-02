@@ -239,28 +239,45 @@ The code is printed once and stored only as a hash; there is no way to recover i
 another if it is lost. Send it over something private — anyone holding it can create one account.
 `invite.py list` shows what has been issued and whether it was used.
 
-### Notifications
-
-Optional, and off until it is configured. Generate a key pair:
+Or issue them from the app. Make your own account an admin once:
 
 ```bash
-cd backend && ./.venv/Scripts/python.exe vapid.py
+docker compose -f docker-compose.prod.yml run --rm migrate python admin.py grant you@example.com
+```
+
+Settings then shows **Invite someone**. The page mints a code, and writes a message holding a
+sign-up link (`/?invite=CODE`) that you can copy or share. It also lists every invite with its state,
+and lets you revoke an open one.
+
+### Notifications
+
+Optional, and off until it is configured. Generate a key pair on the server:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --no-deps notify python vapid.py
 ```
 
 Paste the three lines it prints into `.env` — `VAPID_SUBJECT` must be a real address a push
-service can reach — and restart the API. Each person then turns notifications on per device
+service can reach — and recreate the API with
+`docker compose -f docker-compose.prod.yml up -d api`. Each person then turns notifications on per device
 in Settings.
 
 Sending is a cron job on the host, not a scheduler inside the API: this is one container, and
-an in-process scheduler would die with it and double up if a second ever ran. Once a day is
-plenty:
+an in-process scheduler would die with it and double up if a second ever ran. Run it every
+15 minutes — each person picks the hour their digest arrives, in their own time zone, and a run
+sends only to those whose hour has come:
 
 ```bash
-0 8 * * *  cd /srv/everything-everywhere/backend && python notify.py
+*/15 * * * *  cd /srv/everything-everywhere && docker compose -f docker-compose.prod.yml run --rm notify
 ```
 
-It sends at most one notification per device per day, nothing at all to someone with nothing
-waiting, and never creates an entry. `python notify.py --dry-run` shows what it would send.
+It runs in a container because the database publishes no port, so a host-side Python would
+have nothing to connect to. It sends at most one notification per device per local day,
+nothing at all to someone with nothing waiting, and never creates an entry. What it may
+mention — low stock, waiting and upcoming recurring entries, savings goals falling behind,
+habits — and which items stay quiet is each person's choice in Settings, where "Send test"
+checks a device on the spot. Append `python notify.py --dry-run` to the command to see what a
+run would send.
 
 ### When someone forgets their password
 

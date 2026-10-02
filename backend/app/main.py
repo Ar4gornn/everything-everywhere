@@ -1,3 +1,6 @@
+import logging
+import re
+
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
@@ -7,9 +10,11 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
+    admin,
     auth,
     books,
     budgets,
+    calendar,
     categories,
     dashboard,
     entries,
@@ -23,13 +28,34 @@ from app.api import (
     recipes,
     recurring,
     savings,
+    streaks,
     vendors,
 )
 from app.core.config import get_settings
 from app.core.errors import Conflict, DomainError, Invalid, NotFound
 from app.core.months import InvalidMonth
+from app.services import activity
 
 settings = get_settings()
+
+
+class _MaskFeedToken(logging.Filter):
+    """The calendar feed's URL is its credential (AD-55), so it never reaches a log line.
+
+    Uvicorn's access record carries the path as its third argument; the token in it is
+    replaced before the line is formatted. Caddy writes no access log (no ``log`` block).
+    """
+
+    _TOKEN = re.compile(r"(/api/calendar/feed/)[^/?.\s]+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
+            record.args = (*args[:2], self._TOKEN.sub(r"\1***", args[2]), *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_MaskFeedToken())
 
 app = FastAPI(
     title="Everything Everywhere",
@@ -122,25 +148,44 @@ def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
 app.add_exception_handler(FastAPIHTTPException, _http_error)
 
 
-app.include_router(auth.router)
-app.include_router(categories.router)
-app.include_router(entries.router)
-app.include_router(savings.router)
-app.include_router(budgets.router)
-app.include_router(dashboard.router)
-app.include_router(inventory.router)
-app.include_router(recurring.router)
-app.include_router(export.router)
-app.include_router(vendors.router)
-app.include_router(push.router)
-app.include_router(gym.router)
-app.include_router(habits.router)
-app.include_router(mood.router)
-app.include_router(recipes.router)
-app.include_router(recipes.foods_router)
-app.include_router(recipes.meals_router)
-app.include_router(books.router)
-app.include_router(notes.router)
+def _mount(router) -> None:
+    """Include ``router``, with the activity dependency when its prefix is mapped (AD-57).
+
+    The map in ``services/activity.py`` is the one place that says which prefix counts for
+    which module, and ``tests/test_activity_map.py`` refuses a write route it does not
+    classify, so a router cannot be added without deciding.
+    """
+    module = activity.module_for(router.prefix)
+    app.include_router(
+        router, dependencies=[activity.record_activity(module)] if module else None
+    )
+
+
+for _router in (
+    auth.router,
+    categories.router,
+    entries.router,
+    savings.router,
+    budgets.router,
+    calendar.router,
+    dashboard.router,
+    inventory.router,
+    recurring.router,
+    export.router,
+    vendors.router,
+    push.router,
+    gym.router,
+    habits.router,
+    mood.router,
+    recipes.router,
+    recipes.foods_router,
+    recipes.meals_router,
+    books.router,
+    notes.router,
+    streaks.router,
+    admin.router,
+):
+    _mount(_router)
 
 
 @app.get("/health", tags=["meta"])

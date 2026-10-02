@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from app.schemas.common import Money, NonNegativeMoney
 
@@ -70,6 +70,16 @@ class ItemUpdate(BaseModel):
     cost: NonNegativeMoney | None = None
     note: str | None = Field(default=None, max_length=500)
     space_id: uuid.UUID | None = None
+    # Epic 36 (AD-52): false keeps this row out of the daily digest. Strict, and never null:
+    # "off" or null would otherwise be read as a choice nobody made.
+    notify: StrictBool | None = None
+
+    @field_validator("notify")
+    @classmethod
+    def _notify_not_null(cls, value: bool | None) -> bool:
+        if value is None:
+            raise ValueError("notify is true or false, never null")
+        return value
 
     @model_validator(mode="after")
     def _trim(self) -> "ItemUpdate":
@@ -93,6 +103,7 @@ class ItemOut(BaseModel):
     # AD-30: read from the model's column_property — computed in SQL, never stored.
     needs_restock: bool
     restocked_at: dt.datetime | None
+    notify: bool
     created_at: dt.datetime
     updated_at: dt.datetime
 

@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import type { FoodInput } from "../api/client";
 import { FOOD_BASES, type Food, type FoodBasis, type Meal, type Recipe } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
+import { CheckInButton } from "../components/CheckInButton";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useT } from "../i18n";
@@ -153,7 +154,10 @@ export function RecipesPage() {
 
   return (
     <>
-      <h1 style={{ fontSize: 18, marginTop: 0 }}>{t("rec.title")}</h1>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h1 style={{ fontSize: 18, margin: 0 }}>{t("rec.title")}</h1>
+        <CheckInButton streak="recipes" />
+      </div>
       <ErrorBanner message={error ?? failure} />
 
       <Card title={t("rec.yours")}>

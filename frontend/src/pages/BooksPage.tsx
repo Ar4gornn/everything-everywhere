@@ -14,6 +14,7 @@ import {
 import { BookQuotes } from "../components/BookQuotes";
 import { Card, Empty, ErrorBanner } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { CheckInButton } from "../components/CheckInButton";
 import { HABITS_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { useT, type MessageKey } from "../i18n";
 import { errorMessage } from "../i18n/errors";
@@ -332,7 +333,10 @@ export function BooksPage() {
         <h1 style={{ fontSize: 18, margin: 0 }}>{t("books.title")}</h1>
         {/* Two views of one section: habits next door, books here. The shelf takes no
             bottom tab of its own — see App.tsx for the whole argument. */}
-        <ViewSwitch label="view.habitsView" views={HABITS_VIEWS} current="/books" />
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <ViewSwitch label="view.habitsView" views={HABITS_VIEWS} current="/books" />
+          <CheckInButton streak="books" />
+        </div>
       </div>
 
       <ErrorBanner message={error ?? failure} />

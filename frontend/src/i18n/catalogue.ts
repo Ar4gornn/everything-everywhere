@@ -32,8 +32,12 @@ import { plan } from "./messages/plan";
 import { recipes } from "./messages/recipes";
 import { books } from "./messages/books";
 import { notes } from "./messages/notes";
+import { notifications } from "./messages/notifications";
 import { layout } from "./messages/layout";
 import { tour } from "./messages/tour";
+import { invites } from "./messages/invites";
+import { calendarFeed } from "./messages/calendarFeed";
+import { streaks } from "./messages/streaks";
 
 export const LANGUAGES = ["en", "fr"] as const;
 export type Lang = (typeof LANGUAGES)[number];
@@ -54,8 +58,12 @@ export const messages = {
   ...recipes,
   ...books,
   ...notes,
+  ...notifications,
   ...layout,
   ...tour,
+  ...invites,
+  ...calendarFeed,
+  ...streaks,
   ...errors,
 };
 

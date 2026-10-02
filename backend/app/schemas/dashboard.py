@@ -102,3 +102,18 @@ class VendorPrice(BaseModel):
 class VendorPricesOut(BaseModel):
     months: list[str]
     vendors: list[VendorPrice]
+
+
+class LeftoverOut(BaseModel):
+    """Story 35.4: the last closed budget month, and what it left over."""
+
+    month: str
+    # Inclusive at both ends; ``end`` is the date a deposit of the leftover is recorded on.
+    start: dt.date
+    end: dt.date
+    income: NonNegativeMoney
+    expense: NonNegativeMoney
+    saved: SignedMoney
+    # Negative when the month spent more than it earned and saved; nothing is proposed then.
+    leftover: SignedMoney
+    dismissed: bool

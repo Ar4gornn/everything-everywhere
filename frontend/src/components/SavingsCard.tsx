@@ -8,10 +8,12 @@
  */
 
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
-import type { MovementKind, Pot, SavingsOverview } from "../api/types";
+import type { Contribution, MovementKind, Pot, SavingsOverview } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
+import { useLayout } from "../layout/useLayout";
 import { ProgressBar } from "../charts/ProgressBar";
 import { errorMessage } from "../i18n/errors";
 import { type MessageKey, useT } from "../i18n";
@@ -26,6 +28,8 @@ import { shiftMonth, todayIso } from "../months";
 import { useDates } from "../useDates";
 import { useLoad } from "../useLoad";
 import { useMoney } from "../useMoney";
+import { ListRow, useOpenRow } from "./ListRow";
+import { NotifyBell, usePushEnabled } from "./NotifyBell";
 import { useToast } from "./Toast";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
 
@@ -63,6 +67,8 @@ export function SavingsCard() {
   const [recordKind, setRecordKind] = useState<MovementKind>("deposit");
   const [recordAmount, setRecordAmount] = useState("");
   const [recordDate, setRecordDate] = useState(todayIso());
+  const phone = useLayout() === "phone";
+  const [openMovement, toggleMovement] = useOpenRow();
 
   const {
     data: { overview, contributions },
@@ -138,6 +144,40 @@ export function SavingsCard() {
       "plan.couldNotRecordContribution",
     );
   }
+
+  /** A movement's one action: Delete, or where to change it when an entry owns it. */
+  const movementAction = (contribution: Contribution) =>
+    // AD-51: it belongs to the entry, and the API refuses it here.
+    contribution.entry_id ? (
+      <Link to="/entries">{t("pots.changeOnEntry")}</Link>
+    ) : (
+      <button
+        type="button"
+        className="quiet"
+        onClick={() =>
+          void guard(
+            "record",
+            async () => {
+              await api.deleteContribution(contribution.id);
+              toast.show(t("entries.deleted", { amount: money.amount(contribution.amount) }), {
+                onUndo: async () => {
+                  await api.createContribution({
+                    savings_type_id: contribution.savings_type_id,
+                    kind: contribution.kind ?? "deposit",
+                    amount: contribution.amount,
+                    occurred_on: contribution.occurred_on,
+                  });
+                  await reload();
+                },
+              });
+            },
+            "plan.couldNotDeleteContribution",
+          )
+        }
+      >
+        {t("action.delete")}
+      </button>
+    );
 
   return (
     <>
@@ -257,6 +297,33 @@ export function SavingsCard() {
 
         {contributions.length === 0 ? (
           <Empty>{t("pots.nothingMoved", { month: dates.month(viewed) })}</Empty>
+        ) : phone ? (
+          <ul className="list-rows" style={{ marginTop: 12 }}>
+            {contributions.map((contribution) => {
+              const out = contribution.kind === "withdrawal";
+              return (
+                <ListRow
+                  key={contribution.id}
+                  title={
+                    <>
+                      {typeName(contribution.savings_type_id)}
+                      {out && (
+                        <span className="tag">
+                          {t(contribution.entry_id ? "pots.paidAnExpense" : "pots.withdrawal")}
+                        </span>
+                      )}
+                    </>
+                  }
+                  meta={dates.day(contribution.occurred_on)}
+                  amount={`${out ? "−" : "+"}${money.plain(contribution.amount)}`}
+                  amountTone={out ? "over" : undefined}
+                  open={openMovement === contribution.id}
+                  onToggle={() => toggleMovement(contribution.id)}
+                  details={<div className="row">{movementAction(contribution)}</div>}
+                />
+              );
+            })}
+          </ul>
         ) : (
           <TableWrap>
             <table className="stacked" style={{ marginTop: 12 }}>
@@ -276,7 +343,11 @@ export function SavingsCard() {
                       <td data-label={t("field.date")}>{contribution.occurred_on}</td>
                       <td data-label={t("dash.colType")}>
                         {typeName(contribution.savings_type_id)}
-                        {out && <span className="tag">{t("pots.withdrawal")}</span>}
+                        {out && (
+                          <span className="tag">
+                            {t(contribution.entry_id ? "pots.paidAnExpense" : "pots.withdrawal")}
+                          </span>
+                        )}
                       </td>
                       <td
                         className="num"
@@ -286,39 +357,7 @@ export function SavingsCard() {
                         {out ? "−" : ""}
                         {money.plain(contribution.amount)}
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="quiet"
-                          onClick={() =>
-                            void guard(
-                              "record",
-                              async () => {
-                                await api.deleteContribution(contribution.id);
-                                toast.show(
-                                  t("entries.deleted", {
-                                    amount: money.amount(contribution.amount),
-                                  }),
-                                  {
-                                    onUndo: async () => {
-                                      await api.createContribution({
-                                        savings_type_id: contribution.savings_type_id,
-                                        kind: contribution.kind ?? "deposit",
-                                        amount: contribution.amount,
-                                        occurred_on: contribution.occurred_on,
-                                      });
-                                      await reload();
-                                    },
-                                  },
-                                );
-                              },
-                              "plan.couldNotDeleteContribution",
-                            )
-                          }
-                        >
-                          {t("action.delete")}
-                        </button>
-                      </td>
+                      <td>{movementAction(contribution)}</td>
                     </tr>
                   );
                 })}
@@ -351,6 +390,7 @@ function PotRow({
   const dates = useDates();
   const [dueDraft, setDueDraft] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const pushOn = usePushEnabled();
 
   const name = pot.name;
   const monthPercent = pot.target === null ? null : progress(pot.saved, pot.target);
@@ -384,6 +424,19 @@ function PotRow({
       <div className="pot-head">
         <strong>{name}</strong>
         <span className="num">{t("pots.balance", { amount: money.amount(pot.balance) })}</span>
+        {pushOn && pot.notify !== undefined && (
+          <NotifyBell
+            on={pot.notify}
+            name={name}
+            onToggle={(next) =>
+              void guard(
+                "pots",
+                () => api.updateSavingsType(pot.savings_type_id, { notify: next }),
+                "notify.couldNotSave",
+              )
+            }
+          />
+        )}
         <button
           type="button"
           className="quiet"

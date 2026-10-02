@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 
 import { api } from "../api/client";
 import {
@@ -9,14 +9,20 @@ import {
   type PendingEntry,
   type RecurringTemplate,
 } from "../api/types";
-import { isPositiveMoney, normalizeMoney } from "../money";
+import { isNonNegativeMoney, isPositiveMoney, normalizeMoney } from "../money";
 import { useMoney } from "../useMoney";
 import { todayIso } from "../months";
+import { useDates } from "../useDates";
+import { useLayout } from "../layout/useLayout";
 import { useT } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { dueEvent } from "../ics";
+import { AddToCalendar } from "./AddToCalendar";
+import { ListRow, useOpenRow } from "./ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
+import { NotifyBell, usePushEnabled } from "./NotifyBell";
 import { useToast } from "./Toast";
 
 /**
@@ -35,8 +41,14 @@ const NOTHING = {
 
 export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
   const money = useMoney();
+  const pushOn = usePushEnabled();
   const t = useT();
   const toast = useToast();
+  const dates = useDates();
+  const phone = useLayout() === "phone";
+  const [openProposal, toggleProposal] = useOpenRow();
+  const [openTemplate, toggleTemplate] = useOpenRow();
+  const fieldId = useId();
 
   // Failures of the card's own actions. The load's failure is `failure`, from the hook.
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +164,132 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
     }
   }
 
+  /** A typed amount as money when it is one, as typed when it is not yet. */
+  const shownMoney = (value: string) =>
+    isNonNegativeMoney(value) ? money.plain(normalizeMoney(value)) : value;
+
+  // One of each control, placed in table cells on a desktop and in the row on a phone.
+  const proposalAmount = (proposal: PendingEntry, id?: string) => (
+    <input
+      id={id}
+      className="num"
+      inputMode="decimal"
+      aria-label={t("recurring.amountFor", {
+        name: proposal.category_name,
+        date: proposal.due_on,
+      })}
+      value={drafts[proposal.id] ?? proposal.amount}
+      onChange={(event) => setDrafts({ ...drafts, [proposal.id]: event.target.value })}
+    />
+  );
+  const addButton = (proposal: PendingEntry) => (
+    <button
+      type="button"
+      disabled={busy === proposal.id}
+      onClick={() => void confirm(proposal)}
+      // Named for its row: the card also has a form whose submit button
+      // says "Add", and "which Add?" is a fair question to ask of a screen
+      // reader as much as of a test.
+      aria-label={t("recurring.addFor", {
+        name: proposal.category_name,
+        date: proposal.due_on,
+      })}
+    >
+      {t("action.add")}
+    </button>
+  );
+  const skipButton = (proposal: PendingEntry) => (
+    <button
+      type="button"
+      className="quiet"
+      disabled={busy === proposal.id}
+      onClick={() => void skip(proposal)}
+      aria-label={t("recurring.skipFor", {
+        name: proposal.category_name,
+        date: proposal.due_on,
+      })}
+    >
+      {t("recurring.skip")}
+    </button>
+  );
+  const pauseButton = (template: RecurringTemplate) => (
+    <button
+      type="button"
+      className="quiet"
+      disabled={busy === template.id}
+      onClick={() =>
+        void run(
+          template.id,
+          () => api.updateTemplate(template.id, { paused: !template.paused }),
+          "recurring.couldNotChange",
+        )
+      }
+      aria-label={
+        template.paused
+          ? t("recurring.resumeNamed", {
+              name: nameOf(template.category_id),
+            })
+          : t("recurring.pauseNamed", {
+              name: nameOf(template.category_id),
+            })
+      }
+    >
+      {template.paused ? t("recurring.resume") : t("recurring.pause")}
+    </button>
+  );
+  // Epic 39: the next due date as an .ics file. A paused rule has no next date to add.
+  const calButton = (template: RecurringTemplate) =>
+    template.paused ? null : (
+      <AddToCalendar
+        name={nameOf(template.category_id)}
+        event={dueEvent(
+          template.id,
+          template.next_due,
+          nameOf(template.category_id),
+          money.amount(template.amount),
+          template.note,
+        )}
+      />
+    );
+  const deleteButton = (template: RecurringTemplate) => (
+    <button
+      type="button"
+      className="quiet"
+      disabled={busy === template.id}
+      onClick={() =>
+        void run(template.id, () => api.deleteTemplate(template.id), "recurring.couldNotDelete")
+      }
+      aria-label={t("recurring.deleteNamed", {
+        name: nameOf(template.category_id),
+      })}
+    >
+      {t("action.delete")}
+    </button>
+  );
+  // Epic 36 (AD-52): whether the digest may mention this rule. Absent from older servers.
+  const bellButton = (template: RecurringTemplate) =>
+    pushOn &&
+    template.notify !== undefined && (
+      <NotifyBell
+        on={template.notify}
+        name={template.note || nameOf(template.category_id)}
+        disabled={busy === template.id}
+        onToggle={(next) =>
+          void run(
+            template.id,
+            () => api.updateTemplate(template.id, { notify: next }),
+            "notify.couldNotSave",
+          )
+        }
+      />
+    );
+  const tags = (template: RecurringTemplate) => (
+    <>
+      {template.auto ? <span className="tag">{t("recurring.tagAuto")}</span> : null}
+      {template.paused ? <span className="tag">{t("recurring.tagPaused")}</span> : null}
+    </>
+  );
+
   return (
     <Card
       title={t("recurring.title")}
@@ -164,7 +302,39 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
     >
       <ErrorBanner message={error ?? failure} />
 
-      {pending.length > 0 && (
+      {pending.length > 0 && phone && (
+        <ul className="list-rows" aria-label={t("recurring.entriesToConfirm")}>
+          {pending.map((proposal) => (
+            <ListRow
+              key={proposal.id}
+              title={
+                <>
+                  {proposal.category_name}
+                  {proposal.note ? <span className="hint"> · {proposal.note}</span> : null}
+                </>
+              }
+              meta={dates.day(proposal.due_on)}
+              // What Add will confirm: the corrected amount once there is one.
+              amount={shownMoney(drafts[proposal.id] ?? proposal.amount)}
+              // Saying yes is the card's frequent act; correcting the amount is rare.
+              trailing={addButton(proposal)}
+              open={openProposal === proposal.id}
+              onToggle={() => toggleProposal(proposal.id)}
+              details={
+                <div className="list-row-fields">
+                  <label htmlFor={`${fieldId}-${proposal.id}`}>
+                    {t("field.amount")}
+                    {proposalAmount(proposal, `${fieldId}-${proposal.id}`)}
+                  </label>
+                  {skipButton(proposal)}
+                </div>
+              }
+            />
+          ))}
+        </ul>
+      )}
+
+      {pending.length > 0 && !phone && (
         <TableWrap>
           <table className="stacked" aria-label={t("recurring.entriesToConfirm")}>
             <thead>
@@ -186,47 +356,12 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                     {proposal.note ? <span className="hint"> · {proposal.note}</span> : null}
                   </td>
                   <td className="num" data-label={t("entries.colAmountShort")}>
-                    <input
-                      className="num"
-                      inputMode="decimal"
-                      aria-label={t("recurring.amountFor", {
-                        name: proposal.category_name,
-                        date: proposal.due_on,
-                      })}
-                      value={drafts[proposal.id] ?? proposal.amount}
-                      onChange={(event) =>
-                        setDrafts({ ...drafts, [proposal.id]: event.target.value })
-                      }
-                    />
+                    {proposalAmount(proposal)}
                   </td>
                   <td>
                     <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
-                      <button
-                        type="button"
-                        disabled={busy === proposal.id}
-                        onClick={() => void confirm(proposal)}
-                        // Named for its row: the card also has a form whose submit button
-                        // says "Add", and "which Add?" is a fair question to ask of a screen
-                        // reader as much as of a test.
-                        aria-label={t("recurring.addFor", {
-                          name: proposal.category_name,
-                          date: proposal.due_on,
-                        })}
-                      >
-                        {t("action.add")}
-                      </button>
-                      <button
-                        type="button"
-                        className="quiet"
-                        disabled={busy === proposal.id}
-                        onClick={() => void skip(proposal)}
-                        aria-label={t("recurring.skipFor", {
-                          name: proposal.category_name,
-                          date: proposal.due_on,
-                        })}
-                      >
-                        {t("recurring.skip")}
-                      </button>
+                      {addButton(proposal)}
+                      {skipButton(proposal)}
                     </div>
                   </td>
                 </tr>
@@ -330,6 +465,40 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
         <p className="empty">{t("state.loading")}</p>
       ) : templates.length === 0 ? (
         <Empty>{t("recurring.none")}</Empty>
+      ) : phone ? (
+        <ul className="list-rows" aria-label={t("recurring.templatesAria")}>
+          {templates.map((template) => {
+            const cadence = t(`cadence.${template.cadence}` as MessageKey);
+            return (
+              <ListRow
+                key={template.id}
+                muted={template.paused}
+                title={
+                  <>
+                    {nameOf(template.category_id)}
+                    {tags(template)}
+                  </>
+                }
+                meta={
+                  template.paused
+                    ? cadence
+                    : `${cadence} · ${t("rows.nextOn", { date: dates.day(template.next_due) })}`
+                }
+                amount={money.plain(template.amount)}
+                open={openTemplate === template.id}
+                onToggle={() => toggleTemplate(template.id)}
+                details={
+                  <div className="row" style={{ gap: 6 }}>
+                    {bellButton(template)}
+                    {calButton(template)}
+                    {pauseButton(template)}
+                    {deleteButton(template)}
+                  </div>
+                }
+              />
+            );
+          })}
+        </ul>
       ) : (
         <TableWrap>
           <table className="stacked" aria-label={t("recurring.templatesAria")}>
@@ -349,12 +518,7 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                 <tr key={template.id} className={template.paused ? "muted" : undefined}>
                   <td data-label={t("field.category")}>
                     {nameOf(template.category_id)}
-                    {template.auto ? (
-                      <span className="tag">{t("recurring.tagAuto")}</span>
-                    ) : null}
-                    {template.paused ? (
-                      <span className="tag">{t("recurring.tagPaused")}</span>
-                    ) : null}
+                    {tags(template)}
                   </td>
                   <td className="num" data-label={t("entries.colAmountShort")}>
                     {money.plain(template.amount)}
@@ -366,47 +530,11 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
                     {template.paused ? "—" : template.next_due}
                   </td>
                   <td>
-                    <div className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
-                      <button
-                        type="button"
-                        className="quiet"
-                        disabled={busy === template.id}
-                        onClick={() =>
-                          void run(
-                            template.id,
-                            () => api.updateTemplate(template.id, { paused: !template.paused }),
-                            "recurring.couldNotChange",
-                          )
-                        }
-                        aria-label={
-                          template.paused
-                            ? t("recurring.resumeNamed", {
-                                name: nameOf(template.category_id),
-                              })
-                            : t("recurring.pauseNamed", {
-                                name: nameOf(template.category_id),
-                              })
-                        }
-                      >
-                        {template.paused ? t("recurring.resume") : t("recurring.pause")}
-                      </button>
-                      <button
-                        type="button"
-                        className="quiet"
-                        disabled={busy === template.id}
-                        onClick={() =>
-                          void run(
-                            template.id,
-                            () => api.deleteTemplate(template.id),
-                            "recurring.couldNotDelete",
-                          )
-                        }
-                        aria-label={t("recurring.deleteNamed", {
-                          name: nameOf(template.category_id),
-                        })}
-                      >
-                        {t("action.delete")}
-                      </button>
+                    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+                      {bellButton(template)}
+                      {calButton(template)}
+                      {pauseButton(template)}
+                      {deleteButton(template)}
                     </div>
                   </td>
                 </tr>

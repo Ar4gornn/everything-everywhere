@@ -11,6 +11,9 @@ import type { Entry } from "../catalogue";
  */
 export const calendar = {
   "cal.layers": { en: "Layers", fr: "Couches" },
+  // Epic 40.2: the layers menu and the key under the grid.
+  "cal.layersCount": { en: "Layers ({on}/{total})", fr: "Couches ({on}/{total})" },
+  "cal.legend": { en: "Key", fr: "Légende" },
   "cal.layerMoney": { en: "Money", fr: "Argent" },
   "cal.layerSavings": { en: "Savings", fr: "Épargne" },
   "cal.layerStock": { en: "Stock", fr: "Stock" },
@@ -28,11 +31,46 @@ export const calendar = {
     fr: "{date}, hors de cette période — ouvrir {month}",
   },
   "cal.more": { en: "+{count} more", fr: "+{count} de plus" },
+  // Epic 40.3: the period in figures above the grid, and the swipe that turns it.
+  "cal.summary": { en: "{month} in figures", fr: "{month} en chiffres" },
+  "cal.in": { en: "In", fr: "Entrées" },
+  "cal.out": { en: "Out", fr: "Sorties" },
+  "cal.swipeHint": {
+    en: "Swipe the grid sideways to change month.",
+    fr: "Glissez la grille sur le côté pour changer de mois.",
+  },
   "cal.gridHint": {
     en: "Day totals are rounded; tap a day for exact amounts. Stock is placed by its UTC day, since a quantity change is an instant rather than a date anybody chose.",
     fr: "Les totaux du jour sont arrondis ; touchez un jour pour les montants exacts. Le stock est placé selon son jour UTC, un changement de quantité étant un instant et non une date choisie.",
   },
+  // Epic 40.4: the week view.
+  "cal.view": { en: "Calendar view", fr: "Vue du calendrier" },
+  "cal.viewMonth": { en: "Month", fr: "Mois" },
+  "cal.viewWeek": { en: "Week", fr: "Semaine" },
+  "cal.previousWeek": { en: "Previous week", fr: "Semaine précédente" },
+  "cal.nextWeek": { en: "Next week", fr: "Semaine suivante" },
+  "cal.weekGridAria": { en: "Calendar, week of {range}", fr: "Calendrier, semaine du {range}" },
+  "cal.swipeHintWeek": {
+    en: "Swipe the grid sideways to change week.",
+    fr: "Glissez la grille sur le côté pour changer de semaine.",
+  },
+  "cal.gridHintWeek": {
+    en: "Stock is placed by its UTC day, since a quantity change is an instant rather than a date anybody chose.",
+    fr: "Le stock est placé selon son jour UTC, un changement de quantité étant un instant et non une date choisie.",
+  },
+  "cal.partialWeek": {
+    en: "Some of this week could not be loaded: {layers}. Everything else is shown.",
+    fr: "Une partie de cette semaine n’a pas pu être chargée : {layers}. Tout le reste est affiché.",
+  },
   "cal.addOnThisDay": { en: "Add on this day", fr: "Ajouter ce jour-là" },
+  // Epic 40.1: the day panel, beside the grid or over it.
+  "cal.today": { en: "Today", fr: "Aujourd'hui" },
+  "cal.closeDay": { en: "Close the day", fr: "Fermer le jour" },
+  "cal.dayPanel": { en: "Day details", fr: "Détails du jour" },
+  "cal.pickADay": {
+    en: "Pick a day to see what happened on it. Arrow keys move between days.",
+    fr: "Choisissez un jour pour voir ce qui s'y est passé. Les flèches passent d'un jour à l'autre.",
+  },
   "cal.couldNotLoad": {
     en: "Could not load the calendar.",
     fr: "Impossible de charger le calendrier.",

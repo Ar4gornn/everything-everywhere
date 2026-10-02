@@ -973,6 +973,213 @@ security-definer function
   savings fields became `SignedMoney` for it (they were non-negative, and a withdrawal month
   would have been a 500). The export gains a `kind` column before `amount`.
 
+### AD-51 — An expense paid from a pot is spending and a withdrawal, written as one, owned by the entry
+
+- **Binds:** entries, savings contributions, the Entries page, the Plan page's savings card,
+  the dashboard's leftover card.
+- **Extends:** AD-50 (the balance rule and its lock, unchanged), AD-18 (the new foreign key
+  is composite), AD-4 (one request, one transaction), AD-44 (refusals carry a code).
+- **Numbered 51:** Epic 35's. AD-52 is Epic 36's, on its own branch.
+- **Prevents:** three failures.
+
+  **Money counted once, or twice, depending on where you look.** A pot-funded expense is
+  both: it counts as spending (totals, the category's budget) *and* as a withdrawal from the
+  pot. Neither side is special-cased in any sum; the month's net savings go down by the same
+  amount its spending goes up, which is what Story 35.4's leftover will cancel out.
+
+  **An expense and a pot that disagree.** `savings_contributions.entry_id` points at the
+  entry — composite `(user_id, entry_id)` to `entries (user_id, id)`, `ON DELETE CASCADE`,
+  unique, and a CHECK that only a withdrawal carries it. `services/savings.set_entry_withdrawal`
+  is its one writer, called inside the entry's create or update: the withdrawal takes the
+  entry's pot, amount and date, or is removed. A pot that cannot cover it raises AD-50's
+  `409 savings_balance_negative` and the entry is rolled back with it. The contribution
+  endpoints refuse to edit or delete such a row (`409 savings_contribution_from_entry`), and
+  the Savings card shows it read-only with a link to Entries. Deleting the entry cascades,
+  which can only raise a balance, so the cascade needs no lock.
+
+  **A pot on income.** Only an expense can name a pot: `EntryCreate` refuses it (422), and
+  `PATCH` on an income answers `422 savings_expense_only` — an entry's kind cannot change, so
+  those two doors are all there are. The database does not hold this rule.
+
+  The entry reads its pot back through a `column_property` over the withdrawal, so the
+  answer is stored once. `PATCH /api/entries/{id}`: a pot moves the withdrawal, an explicit
+  `null` removes it, an absent key leaves it. The Entries form clears the choice after each
+  write, as a remembered pot would silently pay for the next entry too.
+
+  **A category's default pot (Story 35.3)** is a form default and nothing more.
+  `categories.default_savings_type_id` is composite to `savings_types (user_id, id)`,
+  `ON DELETE SET NULL (default_savings_type_id)`, with a CHECK that only an expense category
+  carries it (migration 0029). The entry endpoints never read it: an entry sent without a
+  pot is paid from nothing, whatever its category says, so setting or clearing a default
+  rewrites no entry and writes no withdrawal. The Entries form fills "Paid from" from it and
+  shows the choice, which is why re-offering it after a write does not break the rule above:
+  what is remembered is visible and belongs to the category, not to the last entry.
+
+  **What a closed month left over (Story 35.4)** is `income − expenses − net savings` of the
+  previous budget month, over the dashboard summary's own two aggregates, so it cannot
+  disagree with that month's figures. A pot-funded expense adds to expenses and subtracts
+  from net savings by the same amount, so it cancels with no special case. It is proposed,
+  never recorded (AD-50): taking it is an ordinary deposit dated on the month's last day,
+  which lowers the figure it answers, so a taken leftover disappears by arithmetic and a
+  partial one leaves the rest proposed. Only "not this time" has no trace of its own, so it
+  is a row in `leftover_dismissals (user_id, month)`, keyed by label like `savings_skips`
+  (migration 0030). The client picks no pot for the person, as rejected at scoping.
+
+### AD-52 — The person chooses what the digest says and when; it is still one push a day
+
+- **Binds:** `services/push.py` (the digest), `notify.py`, the preferences' `notifications`
+  key, the `notify` flag on savings types, recurring templates and inventory items,
+  `users.timezone` / `users.digest_time`, the Settings notifications section.
+- **Extends:** AD-34 (cron, runtime role, read-only), AD-30 (one predicate per question),
+  AD-49 (sparse preferences resolved on read), AD-19 (named-column grants on `users`).
+- **Numbered 52:** AD-51 is Epic 35's (plan ↔ entries), which landed first.
+- **Prevents:** three failures.
+
+  **The all-or-nothing switch.** Before this, a person who did not want to hear about one
+  noisy stock item could only switch notifications off for the device, and lost the recurring
+  and habit reminders with it. Control is now two levels, both opt-*out* of what already
+  existed and opt-*in* to what is new: a switch per **kind** (`stock`, `recurring`,
+  `habits` on; `due_tomorrow`, `savings` off — the digest keeps meaning "something is
+  exceptional"), stored sparse in `preferences.notifications`, and a `notify` flag per
+  **item** (default true) on the three tables whose rows the digest names. Habits keep their
+  own `remind`, opt-in since Epic 26. A module switched off (AD-49) silences its kind
+  whatever the kind's switch says. Muting never touches the page: the restock card still
+  lists a muted item; only the push stays quiet.
+
+  **A digest at the host's midnight.** "Today" was `date.today()` on the host, so a person
+  eight hours away had their day's digest cut at the wrong hour and their habits judged
+  against the wrong date. The account now holds an IANA `timezone` (filled by the browser
+  when empty, validated against `zoneinfo`) and a `digest_time` (default 19:00). Cron runs
+  every 15 minutes; a device is sent to when the person's **local** time has reached
+  `digest_time` and its `notified_on` is before the **local** today. Every date the digest
+  reasons about — habits due, recurring due tomorrow, a goal's distance — is that local
+  today. A null timezone keeps the old behaviour (host time), so nothing changes for an
+  account that never opened Settings.
+
+  **A test that lies, or a test that spams.** "Send test" goes to the caller's own device
+  only (the endpoint must be one of theirs), ignores and does not write `notified_on` — a
+  test must not eat the evening's digest — and is limited to one per device per minute by a
+  `tested_at` column, not an in-process counter that forgets on restart. It is the one push
+  sent from inside a request — an explicit click is the exception AD-34 allows, not a
+  schedule — and it is sent only after the subscription row is locked `FOR UPDATE` and
+  stamped, so two quick clicks queue and the second is a 429. A dead device (404/410 from
+  the push service) is forgotten and answered `410 push_device_gone`, returned rather than
+  raised so the forget is committed. The preview is the same `Digest` read-only, so the two
+  cannot disagree.
+
+  The two new clauses are defined once. **Due tomorrow**: an active recurring template
+  (`paused` false, not past `end_on`) whose `next_due` is local tomorrow. **Savings
+  behind**: a pot with a goal amount and date, the date 0-30 days ahead, and a balance below
+  the straight line from the pot's creation to the goal — `goal × elapsed / total` — using the
+  same signed balance as the overview (AD-50). A goal already past is not nagged about.
+
+  Each clause carries its page; the push opens the first clause's page (`/inventory`,
+  `/`, `/plan`, `/habits`), not always `/`.
+
+### AD-54 — An admin may issue invites from the app, through one audited function; the API still cannot INSERT one
+
+- **Binds:** `users.is_admin`, `invites.created_by`, `invite_issue()` (migration 0031),
+  `api/admin.py`, `services/invites.py`, `backend/admin.py`, `pages/InvitesPage.tsx`,
+  `components/InvitesCard.tsx`, the `?invite=` link read by `SignInPage`.
+- **Extends:** Story 7.1 (invites are hashed, single-use, expiring), AD-19 (named-column
+  grants on `users`; a SECURITY DEFINER function as the one narrow door), AD-8 (404, never 403).
+- **Decision:** an account flagged `is_admin` issues invites from the web client. The flag is
+  readable by the runtime role and writable only by the owner (`admin.py grant <email>`). The
+  runtime role still has no INSERT on `invites`: minting goes through `invite_issue(hash, note,
+  days)`, which refuses unless the transaction's tenant is an admin, bounds the days to 1-90,
+  and records the issuer. Revoking is a plain UPDATE (expires the invite now), because the
+  runtime role already holds UPDATE to spend one and a function would guard nothing more.
+  Every `/api/admin/*` route answers 404 to a non-admin. The plaintext code is returned once,
+  by the create, and becomes a message with a link `/?invite=CODE`; the sign-in page opens on
+  registration with it filled in and removes it from the address bar.
+- **What this gives up, stated plainly.** Before, a compromised API process could not mint
+  an invite at all. Now it can, by setting its tenant to an admin's id. That guarantee was
+  already thin — the same process can impersonate any tenant and read every row (RLS binds
+  the role, and the role is the API's) — so the worst new outcome is "an attacker creates
+  an account", strictly smaller than what that compromise already grants. `invite.py` stays
+  as the owner-side path and still works with no admin at all.
+- **Rejected:** every user inviting with a quota (a stolen account spends it; nobody asked
+  for viral growth); a local-only tool (keeps the old guarantee, loses "from my phone");
+  code and link as separate lines (safer URL hygiene, one more paste for every invitee —
+  the code is single-use and expiring, and the page strips it from the URL on arrival).
+
+### AD-55 — A calendar app reads a secret-URL feed; the server composes it from module services
+
+- **Binds:** `calendar_feeds`, `calendar_feed_lookup()` (migration 0032),
+  `services/calendar_feed.py`, `core/ical.py`, `api/calendar.py`, the access-log mask in
+  `main.py`, `components/CalendarFeedCard.tsx`, `frontend/src/ics.ts`,
+  `components/AddToCalendar.tsx`.
+- **Extends:** AD-19 (a SECURITY DEFINER lookup as the only way in without a tenant), 0005's
+  token reasoning (256 random bits, SHA-256, no slow hash), AD-8 (404 for every wrong URL),
+  AD-44 (the feed, like the push digest, writes its own prose in `users.language`), AD-43
+  (habit days come from `is_scheduled`, the one definition).
+- **Decision:** one feed per account, off until made. The URL `/api/calendar/feed/<token>.ics`
+  is the credential, because a calendar app cannot sign in; it is returned once, by the
+  create or the rotate, and stored only as a hash. "New link" replaces the hash in place, so
+  the old URL is dead in the same transaction; "Turn off" deletes the row. The person picks
+  the layers (bills due by default); titles are vague ("Bill due") unless "Show names and
+  amounts" is on, because the calendar provider stores whatever the feed says; an optional
+  09:00 alarm. All-day events only, from the first of last month to the end of six months
+  ahead. One event per layer per day, except bills, one per occurrence; UIDs are stable
+  (`<layer>-<day>`, `due-<template>-<day>`) so a change updates rather than duplicates.
+  Rate-limited per token (30 per 10 minutes, in memory), `Cache-Control: private`, and the
+  token is masked out of uvicorn's access log; Caddy writes none.
+- **Composition moves to the server for this one reader.** The web calendar composes layers
+  in the browser (AD-31, AD-37). A calendar app cannot, so `calendar_feed.render` calls each
+  module's own service function and joins nothing across modules. Reading bills due runs
+  `materialise` first, as `/pending` does (AD-33).
+- **"Add to calendar" is built on the device.** One event, as a file, from `ics.ts`; no
+  endpoint and nothing stored. It carries names and amounts because the file goes to the
+  person's own calendar, not through a provider's fetch. It sits on bills due and forecast
+  in the calendar's day view and on each recurring rule's next date in Plan.
+- **Rejected:** CalDAV and Google/Microsoft OAuth (two-way, far larger, and the second stores
+  provider tokens); a feed per layer (more URLs to leak and rotate); a URL that can be shown
+  again (it would have to be stored reversibly); timed events (VTIMEZONE, for little gain);
+  a server endpoint for single events (a round trip to build a file the browser can build).
+
+### AD-56 — The calendar's day sits beside the grid on a wide screen and over it on a phone; never a modal
+
+- **Binds:** `pages/CalendarPage.tsx` (`.cal-layout`, `.cal-side`, `onCellKey`), the Epic 40
+  block in `styles.css`.
+- **Extends:** Epic 24's `MoodCheckin` note (no modal in this app), AD-49 (`useLayout()` is
+  the one phone/desktop switch).
+- **Decision:** one panel element, placed by CSS: pinned beside the grid at ≥1000px, in the
+  flow below it from 721px, fixed above the tabs on a phone. On a phone it is a disclosure:
+  no backdrop, nothing inert, no focus trap; Escape, Close and a tap outside close it and
+  focus returns to the day. The grid is one tab stop (roving tabindex); arrows move focus
+  and cross into the neighbouring period, Enter chooses.
+- **Rejected:** a modal bottom sheet (focus trap, scroll lock, inert background — new
+  machinery for a read-only panel); two components, one per layout (two sets of behaviour
+  to keep in step); selection following focus (every arrow press would re-render the panel
+  and move a screen reader's context).
+
+### AD-57 — A day is active once, stored; a streak, a balance and a freeze's use are computed; only purchases are stored
+
+- **Binds:** `services/activity.py` (the route map, `record_activity`), `services/streaks.py`
+  (the walk, points, prices), `core/clock.py`, migrations 0033 and 0034, the preferences'
+  `streaks` and `points_name` keys, `components/StreakCard.tsx`, `CheckInButton.tsx`.
+- **Extends:** AD-40 (nothing stored that can be computed), AD-49 (sparse preferences, a
+  module off hides UI only), AD-52 (the account's local day; one digest a day), AD-30 (one
+  definition per question), AD-3 (tenancy on every row).
+- **Decision:** activity is the one fact that cannot be recomputed. No module's own rows
+  can say "something was done today", because edits and deletes leave no trace. So it is
+  stored: one append-only row per user, local day and module, written by a router
+  dependency inside the write's own transaction, only when the handler did not raise. A
+  check-in writes the same row. Everything else is computed on read: each streak's
+  current and best, which held freeze covered which missed day, the points earned, and
+  the balance. Purchases are the only other stored fact, also append-only. Earned points
+  never decrease: rows are never deleted, bonuses are walked over activity and freezes to
+  the last active day with no clock, and repairs never enter that walk (2026-10-01). So a
+  balance checked under a per-user advisory lock at purchase time cannot go negative
+  later. Module ids are a Python tuple, not a CHECK, so a new module gets a streak without
+  a migration. A test fails any write route whose prefix is unclassified.
+- **Rejected:** a stored `streak` / `points` column updated on write (a second copy of the
+  truth that drifts on every bug, and wrong after a timezone change); a nightly cron that
+  finalises the day (AD-34 keeps cron read-only, and a missed run would break streaks);
+  deriving activity from each module's tables (edits invisible, a deletion rewrites the
+  past, eleven queries); earning only for the streaks that are shown (hiding one would take
+  points back); `SELECT … FOR UPDATE` on `users` (grants there are by column, AD-19).
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -1143,6 +1350,11 @@ Everything Everywhere/
 | Notes — text or a sketch, drafts on the device, shortcuts | `api/notes.py`, `services/notes.py`, migration 0024, `frontend/src/notes/`, `NotesPage.tsx`, `NotePage.tsx`, `public/manifest.webmanifest` | AD-48, AD-8, AD-30, AD-31, AD-24 |
 | Preferences — modules, tab order, dashboard cards, per layout | `services/preferences.py`, `api/auth.py`, migration 0025 | AD-49, AD-19, AD-24, AD-44 |
 | Savings pots — balances, withdrawals, goals, what is due | `api/savings.py`, `services/savings.py`, migration 0026, `frontend/src/components/SavingsCard.tsx` | AD-50, AD-10, AD-11, AD-18, AD-24 |
+| An expense paid from a pot, a category's default pot | `services/ledger.py` (`set_default_pot`), `services/savings.py` (`set_entry_withdrawal`), migrations 0027 and 0029, `frontend/src/pages/EntriesPage.tsx`, `PlanPage.tsx` | AD-51, AD-50, AD-18, AD-4 |
+| What a closed month left over | `services/dashboard.py` (`leftover`, `dismiss_leftover`), migration 0030, `frontend/src/components/LeftoverCard.tsx`, `DashboardPage.tsx` | AD-51, AD-50, AD-49, AD-10 |
+| Notification control — kinds, muted items, local send time, preview, test | `services/push.py`, `api/push.py`, `notify.py`, migration 0028 (after 0030) | AD-52, AD-34, AD-30, AD-49, AD-19 |
+| Invites from the app — admin flag, issue, list, revoke, sign-up link | `api/admin.py`, `services/invites.py`, migration 0031, `backend/admin.py`, `frontend/src/pages/InvitesPage.tsx` | AD-54, AD-19, AD-8 |
+| Streaks and points — activity days, the walk, freeze, repair | `services/activity.py`, `services/streaks.py`, `api/streaks.py`, `core/clock.py`, migrations 0033 and 0034, `frontend/src/components/StreakCard.tsx` | AD-57, AD-40, AD-49, AD-52, AD-30 |
 | Test strategy | `backend/tests/` | AD-24 |
 
 ## Deferred
