@@ -540,9 +540,13 @@ export interface MutedRow {
 /** A weight, as a two-place decimal string. Null for a bodyweight set — 0 would be a weight. */
 export type Weight = string;
 
+/** What a set of an exercise measures (Epic 42). Weight is optional for all three. */
+export type ExerciseKind = "reps" | "duration" | "distance";
+
 export interface Exercise {
   id: string;
   name: string;
+  kind: ExerciseKind;
   /** An https link to a form video. Opened externally, never embedded. */
   video_url: string | null;
   note: string | null;
@@ -556,14 +560,24 @@ export interface Routine {
   created_at: string;
 }
 
-export interface RoutineLine {
+/** The targets a routine line can carry. Null means "no target", never zero. */
+export interface LineTargets {
+  target_sets: number | null;
+  target_reps: number | null;
+  target_seconds: number | null;
+  target_distance_m: number | null;
+  target_weight: Weight | null;
+  rest_seconds: number | null;
+  note: string | null;
+}
+
+export interface RoutineLine extends LineTargets {
   id: string;
   exercise_id: string;
   exercise_name: string;
+  kind: ExerciseKind;
   video_url: string | null;
   position: number;
-  target_sets: number | null;
-  target_reps: number | null;
 }
 
 export interface RoutineDetail {
@@ -577,6 +591,8 @@ export interface Workout {
   id: string;
   routine_id: string | null;
   performed_on: string;
+  started_at: string | null;
+  ended_at: string | null;
   note: string | null;
   created_at: string;
 }
@@ -585,15 +601,20 @@ export interface WorkoutSet {
   id: string;
   exercise_id: string;
   exercise_name: string;
+  kind: ExerciseKind;
   position: number;
-  reps: number;
+  reps: number | null;
   weight: Weight | null;
+  duration_seconds: number | null;
+  distance_m: number | null;
 }
 
 export interface WorkoutDetail {
   id: string;
   routine_id: string | null;
   performed_on: string;
+  started_at: string | null;
+  ended_at: string | null;
   note: string | null;
   sets: WorkoutSet[];
 }
@@ -601,16 +622,64 @@ export interface WorkoutDetail {
 export interface HistoryPoint {
   performed_on: string;
   top_weight: Weight | null;
+  /** Total reps that session; 0 when the exercise is not counted in reps. */
   reps: number;
   sets: number;
   /** Null on a session where nothing carried a weight. */
   volume: Weight | null;
+  best_seconds: number | null;
+  total_seconds: number | null;
+  best_distance_m: number | null;
+  total_distance_m: number | null;
 }
 
 export interface ExerciseHistory {
   exercise_id: string;
   exercise_name: string;
   points: HistoryPoint[];
+}
+
+/** One measured set, as sent. Exactly one of exercise_id / exercise_name. */
+export interface SetInput {
+  exercise_id?: string;
+  exercise_name?: string;
+  /** Used only when exercise_name coins a new exercise. */
+  kind?: ExerciseKind;
+  reps?: number;
+  weight?: Weight;
+  duration_seconds?: number;
+  distance_m?: number;
+}
+
+/** POST /api/gym/workouts/complete — a whole session, idempotent on client_ref (AD-58). */
+export interface WorkoutComplete {
+  client_ref: string;
+  routine_id?: string | null;
+  performed_on: string;
+  started_at?: string;
+  ended_at?: string;
+  note?: string;
+  sets: SetInput[];
+}
+
+export interface RoutineImportLine {
+  exercise_name: string;
+  kind: ExerciseKind;
+  video_url?: string;
+  target_sets?: number;
+  target_reps?: number;
+  target_seconds?: number;
+  target_distance_m?: number;
+  target_weight?: Weight;
+  rest_seconds?: number;
+  note?: string;
+}
+
+/** POST /api/gym/routines/import — one routine, created in one transaction. */
+export interface RoutineImport {
+  name: string;
+  note?: string;
+  lines: RoutineImportLine[];
 }
 
 // --- habits (Epic 23) -----------------------------------------------------

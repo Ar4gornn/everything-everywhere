@@ -7,6 +7,11 @@
  */
 
 import type {
+  WorkoutComplete,
+  SetInput,
+  RoutineImport,
+  LineTargets,
+  ExerciseKind,
   Book,
   BookInput,
   BookQuote,
@@ -86,7 +91,6 @@ import type {
   User,
   Vendor,
   VendorPrices,
-  Weight,
   WeightUnit,
   Workout,
   WorkoutDetail,
@@ -535,12 +539,16 @@ export const api = {
 
   listExercises: () => items(request<Page<Exercise>>("/api/gym/exercises")),
 
-  createExercise: (input: { name: string; video_url?: string | null; note?: string | null }) =>
-    request<Exercise>("/api/gym/exercises", { method: "POST", body: JSON.stringify(input) }),
+  createExercise: (input: {
+    name: string;
+    kind?: ExerciseKind;
+    video_url?: string | null;
+    note?: string | null;
+  }) => request<Exercise>("/api/gym/exercises", { method: "POST", body: JSON.stringify(input) }),
 
   updateExercise: (
     id: string,
-    patch: { name?: string; video_url?: string | null; note?: string | null },
+    patch: { name?: string; kind?: ExerciseKind; video_url?: string | null; note?: string | null },
   ) =>
     request<Exercise>(`/api/gym/exercises/${id}`, {
       method: "PATCH",
@@ -555,28 +563,55 @@ export const api = {
 
   listRoutines: () => items(request<Page<Routine>>("/api/gym/routines")),
 
+  /** Every routine with its lines, in one request: what the offline cache holds (AD-58). */
+  listRoutinesFull: () => items(request<Page<RoutineDetail>>("/api/gym/routines/full")),
+
   createRoutine: (name: string, note?: string) =>
     request<Routine>("/api/gym/routines", {
       method: "POST",
       body: JSON.stringify({ name, ...(note ? { note } : {}) }),
     }),
 
+  updateRoutine: (id: string, patch: { name?: string; note?: string | null }) =>
+    request<Routine>(`/api/gym/routines/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+
+  importRoutine: (input: RoutineImport) =>
+    request<RoutineDetail>("/api/gym/routines/import", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   readRoutine: (id: string) => request<RoutineDetail>(`/api/gym/routines/${id}`),
 
   deleteRoutine: (id: string) => request<void>(`/api/gym/routines/${id}`, { method: "DELETE" }),
+
+  reorderRoutine: (id: string, lineIds: string[]) =>
+    request<RoutineDetail>(`/api/gym/routines/${id}/order`, {
+      method: "PUT",
+      body: JSON.stringify({ line_ids: lineIds }),
+    }),
 
   addRoutineLine: (
     routineId: string,
     input: {
       exercise_id?: string;
       exercise_name?: string;
-      target_sets?: number | null;
-      target_reps?: number | null;
-    },
+      kind?: ExerciseKind;
+    } & Partial<LineTargets>,
   ) =>
     request<RoutineLine>(`/api/gym/routines/${routineId}/exercises`, {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+
+  /** Explicit null clears a target; an absent key leaves it. */
+  updateRoutineLine: (lineId: string, patch: Partial<LineTargets>) =>
+    request<RoutineLine>(`/api/gym/routines/lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
     }),
 
   removeRoutineLine: (lineId: string) =>
@@ -595,14 +630,18 @@ export const api = {
   startWorkout: (input: { performed_on?: string; routine_id?: string; note?: string }) =>
     request<Workout>("/api/gym/workouts", { method: "POST", body: JSON.stringify(input) }),
 
+  /** A whole session in one body (AD-58). A replay of the same client_ref returns the first. */
+  completeWorkout: (input: WorkoutComplete) =>
+    request<WorkoutDetail>("/api/gym/workouts/complete", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   readWorkout: (id: string) => request<WorkoutDetail>(`/api/gym/workouts/${id}`),
 
   deleteWorkout: (id: string) => request<void>(`/api/gym/workouts/${id}`, { method: "DELETE" }),
 
-  logSet: (
-    workoutId: string,
-    input: { exercise_id?: string; exercise_name?: string; reps: number; weight?: Weight },
-  ) =>
+  logSet: (workoutId: string, input: SetInput) =>
     request<WorkoutSet>(`/api/gym/workouts/${workoutId}/sets`, {
       method: "POST",
       body: JSON.stringify(input),
