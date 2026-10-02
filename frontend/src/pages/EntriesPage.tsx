@@ -16,6 +16,7 @@ import {
 import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
+import { useEntriesVersion, useQuickAdd } from "../components/QuickAdd/QuickAddContext";
 import { useToast } from "../components/Toast";
 import { useTutorial } from "../components/Tutorial/useTutorial";
 import { isPositiveMoney, normalizeMoney } from "../money";
@@ -73,6 +74,17 @@ function byDay(entries: Entry[]): [string, Entry[]][] {
   return groups;
 }
 
+/** The phone's replacement for the inline record form: the quick-add sheet opens instead. */
+function AddEntryButton() {
+  const t = useT();
+  const { open } = useQuickAdd();
+  return (
+    <button type="button" className="add-entry-button" onClick={() => open()}>
+      {t("nav.addEntry")}
+    </button>
+  );
+}
+
 export function EntriesPage() {
   const money = useMoney();
   const t = useT();
@@ -126,6 +138,8 @@ export function EntriesPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   // AD-53: on a phone the list is rows grouped by day, one open at a time.
   const phone = useLayout() === "phone";
+  // A write through the quick-add sheet bumps this, so the list behind it refreshes.
+  const version = useEntriesVersion();
   const [openEntry, toggleEntry] = useOpenRow();
 
   const {
@@ -148,21 +162,22 @@ export function EntriesPage() {
         api.savingsOverview().then((overview) => overview.pots),
       ]).then(([entries, categories, vendors, pots]) => ({ entries, categories, vendors, pots })),
     NOTHING,
-    [kindFilter, monthFilter, categoryFilter, search],
+    [kindFilter, monthFilter, categoryFilter, search, version],
     "entries.couldNotLoad",
   );
 
   // Arriving from the quick-add button: focus the amount so the keyboard opens straight
   // onto the first thing you would type, then drop the parameter so a refresh is normal.
   useEffect(() => {
-    if (searchParams.get("add") !== "1") return;
+    // On a phone the quick-add sheet owns `?add=1` (App.tsx); there is no inline form here.
+    if (phone || searchParams.get("add") !== "1") return;
     // Arriving from a day on the calendar: that day is the one being recorded, so prefill
     // it rather than leaving today's date to be corrected by hand.
     const date = searchParams.get("date");
     if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) setOccurredOn(date);
     amountRef.current?.focus();
     setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [phone, searchParams, setSearchParams]);
 
   const nameOf = useMemo(() => {
     const lookup = new Map(categories.map((category) => [category.id, category.name]));
@@ -543,6 +558,9 @@ export function EntriesPage() {
       <CheckInButton streak="entries" bar />
       <ErrorBanner message={error ?? failure} />
 
+      {phone ? (
+        <AddEntryButton />
+      ) : (
       <Card title={t("entries.record")} tour="record-form">
         <form className="row" onSubmit={submit} aria-label={t("entries.record")}>
           <label style={{ flex: "0 0 120px" }}>
@@ -734,6 +752,7 @@ export function EntriesPage() {
           {quantitySectionOpen && t("entries.formHintQuantity")}
         </p>
       </Card>
+      )}
 
       <Card title={t("entries.title")} tour="entries-list">
         {/* A filter bar, not a header action: four controls and a note do not belong on the

@@ -12,6 +12,7 @@ import { useToast } from "../components/Toast";
 import { useT } from "../i18n";
 import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
+import { useEntriesVersion } from "../components/QuickAdd/QuickAddContext";
 import { useLayout } from "../layout/useLayout";
 import { useDates } from "../useDates";
 import { addMonths, budgetMonth } from "../months";
@@ -40,6 +41,8 @@ const NOTHING = {
  * quantity exists, and it belongs beside the fuel entries rather than on the dashboard.
  */
 export function CategoryPage() {
+  // A write through the quick-add sheet bumps this, so the page behind it reloads.
+  const version = useEntriesVersion();
   const { categoryId = "" } = useParams();
   const money = useMoney();
   const t = useT();
@@ -87,7 +90,7 @@ export function CategoryPage() {
       };
     },
     NOTHING,
-    [categoryId, month],
+    [categoryId, month, version],
     "category.couldNotLoad",
   );
 

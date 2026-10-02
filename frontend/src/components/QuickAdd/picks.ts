@@ -18,12 +18,9 @@ export function vendorCategory(
   kind: EntryKind,
   chosenCategory: string,
 ): string | null {
-  void vendors;
-  void vendorName;
-  void kind;
-  void chosenCategory;
-  void same;
-  throw new Error("not built");
+  if (chosenCategory.trim() !== "" || vendorName.trim() === "") return null;
+  const pick = vendors.find((v) => v.kind === kind && same(v.vendor_name, vendorName));
+  return pick ? pick.category_name : null;
 }
 
 /**
@@ -31,10 +28,9 @@ export function vendorCategory(
  * `pots` (deleted since) is not offered. Same rule as EntriesPage's `defaultPotFor`.
  */
 export function defaultPot(categories: Category[], pots: Pot[], categoryName: string): string {
-  void categories;
-  void pots;
-  void categoryName;
-  throw new Error("not built");
+  const category = categories.find((c) => c.kind === "expense" && same(c.name, categoryName));
+  const pot = category?.default_savings_type_id;
+  return pot && pots.some((p) => p.savings_type_id === pot) ? pot : "";
 }
 
 /**
@@ -42,13 +38,18 @@ export function defaultPot(categories: Category[], pots: Pot[], categoryName: st
  * `formatAmount` is the page's money formatter, so the currency follows the account.
  */
 export function comboLabel(combo: Combo, formatAmount: (amount: string) => string): string {
-  void combo;
-  void formatAmount;
-  throw new Error("not built");
+  const parts = [combo.category_name];
+  if (combo.vendor_name) parts.push(combo.vendor_name);
+  parts.push(formatAmount(combo.amount));
+  return parts.join(" · ");
 }
 
 /** `YYYY-MM-DD` of the day before `iso`, local calendar arithmetic (no UTC shift). */
 export function dayBefore(iso: string): string {
-  void iso;
-  throw new Error("not built");
+  const [year = 0, month = 1, day = 1] = iso.split("-").map(Number);
+  // Local calendar arithmetic: Date normalises day 0 to the previous month's last day.
+  const date = new Date(year, month - 1, day - 1);
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${mm}-${dd}`;
 }

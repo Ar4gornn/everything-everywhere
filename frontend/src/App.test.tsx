@@ -128,9 +128,4 @@ describe("navigation", () => {
     renderAt("/calendar");
     expect(await screen.findByRole("button", { name: /^Layers \(/ })).toBeInTheDocument();
   });
-
-  it("shows quick add on the calendar, where a day is the thing you would record against", async () => {
-    renderAt("/calendar");
-    expect(await screen.findByRole("button", { name: "Add an entry" })).toBeInTheDocument();
-  });
 });

@@ -31,6 +31,7 @@ import { progress, subtractMoney, toChartNumber, toCents } from "../money";
 import { useMoney } from "../useMoney";
 import { useT } from "../i18n";
 import { useLoad } from "../useLoad";
+import { useEntriesVersion } from "../components/QuickAdd/QuickAddContext";
 import { useDates } from "../useDates";
 import { budgetMonth, shiftMonth } from "../months";
 
@@ -98,6 +99,8 @@ function CategoryLink({ id, label }: { id: string; label: string }) {
 }
 
 export function DashboardPage() {
+  // A write through the quick-add sheet bumps this, so the page behind it reloads.
+  const version = useEntriesVersion();
   const money = useMoney();
   const t = useT();
   const dates = useDates();
@@ -163,7 +166,7 @@ export function DashboardPage() {
         needTrends ? api.trends(trendMonths, month) : null,
       ]).then(([summary, trends]) => ({ summary, trends })),
     NOTHING,
-    [month, period, trendMonths, needSummary, needTrends],
+    [month, period, trendMonths, needSummary, needTrends, version],
     "dash.couldNotLoad",
   );
 

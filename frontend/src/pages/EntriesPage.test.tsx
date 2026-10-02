@@ -1,14 +1,19 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { QuickAddProvider, useQuickAdd } from "../components/QuickAdd/QuickAddContext";
 import { shiftMonth } from "../months";
 import { EntriesPage } from "./EntriesPage";
 
 // The page links to category detail and reads ?add=1, so it needs a router.
 function render(ui: React.ReactElement) {
-  return rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+  return rtlRender(
+    <MemoryRouter>
+      <QuickAddProvider>{ui}</QuickAddProvider>
+    </MemoryRouter>,
+  );
 }
 
 const categories = [
@@ -83,6 +88,24 @@ function mockApi(
   return fetchMock;
 }
 
+function SheetProbe() {
+  const { isOpen } = useQuickAdd();
+  return isOpen ? <div data-testid="sheet-open" /> : null;
+}
+
+function Search() {
+  return <div data-testid="search">{useLocation().search}</div>;
+}
+
+function Bumper() {
+  const { bump } = useQuickAdd();
+  return (
+    <button type="button" onClick={bump}>
+      bump
+    </button>
+  );
+}
+
 describe("EntriesPage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -103,6 +126,48 @@ describe("EntriesPage", () => {
     await waitFor(() => {
       expect(within(form).getByLabelText("Date")).toHaveValue("2026-08-15");
     });
+  });
+
+  it("on desktop, the record form is the card the tour points at", async () => {
+    mockApi();
+    render(<EntriesPage />);
+    await screen.findByRole("form", { name: "Record an entry" });
+    expect(document.querySelector('[data-tour="record-form"]')).not.toBeNull();
+  });
+
+  it("on desktop, ?add=1 focuses the inline amount and opens no sheet (Epic 44)", async () => {
+    mockApi();
+    rtlRender(
+      <MemoryRouter initialEntries={["/entries?add=1"]}>
+        <QuickAddProvider>
+          <EntriesPage />
+          <SheetProbe />
+        </QuickAddProvider>
+      </MemoryRouter>,
+    );
+
+    const form = await screen.findByRole("form", { name: "Record an entry" });
+    await waitFor(() => expect(within(form).getByLabelText("Amount")).toHaveFocus());
+    expect(screen.queryByTestId("sheet-open")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add an entry" })).toBeNull();
+  });
+
+  it("refetches the list when the quick-add version goes up (Epic 44)", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockApi();
+    render(
+      <>
+        <EntriesPage />
+        <Bumper />
+      </>,
+    );
+    await screen.findByRole("form", { name: "Record an entry" });
+    const lists = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/entries")).length;
+    await waitFor(() => expect(lists()).toBeGreaterThan(0));
+    const before = lists();
+    await user.click(screen.getByRole("button", { name: "bump" }));
+    await waitFor(() => expect(lists()).toBeGreaterThan(before));
   });
 
   it("ignores a date parameter that is not a date", async () => {
@@ -616,6 +681,41 @@ describe("on a phone (AD-53)", () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("shows an Add an entry button instead of the inline form, and it opens the sheet", async () => {
+    const user = userEvent.setup();
+    mockApi([], rows);
+    render(
+      <>
+        <EntriesPage />
+        <SheetProbe />
+      </>,
+    );
+
+    const button = await screen.findByRole("button", { name: "Add an entry" });
+    expect(screen.queryByRole("form", { name: "Record an entry" })).toBeNull();
+    expect(document.querySelector('[data-tour="record-form"]')).toBeNull();
+    expect(screen.queryByTestId("sheet-open")).toBeNull();
+    await user.click(button);
+    expect(screen.getByTestId("sheet-open")).toBeInTheDocument();
+  });
+
+  it("leaves ?add=1 for App's quick-add handler: the page neither consumes nor focuses it", async () => {
+    mockApi([], rows);
+    rtlRender(
+      <MemoryRouter initialEntries={["/entries?add=1&date=2026-08-15"]}>
+        <QuickAddProvider>
+          <EntriesPage />
+          <Search />
+        </QuickAddProvider>
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("button", { name: "Add an entry" });
+    // An effect would have stripped it by now.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByTestId("search")).toHaveTextContent("?add=1&date=2026-08-15");
   });
 
   it("groups entries under day headings, amounts signed", async () => {

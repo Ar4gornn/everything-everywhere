@@ -28,6 +28,7 @@ import { formatEnergy, sumEnergy, trim } from "../nutrition";
 import { useMoney } from "../useMoney";
 import { type MessageKey, useT, type Translate } from "../i18n";
 import { useLoad } from "../useLoad";
+import { useEntriesVersion } from "../components/QuickAdd/QuickAddContext";
 import { useDates } from "../useDates";
 import { dueEvent } from "../ics";
 import { AddToCalendar } from "../components/AddToCalendar";
@@ -266,6 +267,8 @@ const NOTHING: Loaded = {
 const UNLOADED = { layers: NOTHING, missing: [] as MissingLabel[], stale: false, allFailed: false };
 
 export function CalendarPage() {
+  // A write through the quick-add sheet bumps this, so the page behind it reloads.
+  const version = useEntriesVersion();
   const money = useMoney();
   const t = useT();
   const dates = useDates();
@@ -391,7 +394,7 @@ export function CalendarPage() {
       };
     },
     UNLOADED,
-    [firstMonth, lastMonth, modules.gym, modules.stock, modules.habits, modules.mood, modules.recipes],
+    [firstMonth, lastMonth, modules.gym, modules.stock, modules.habits, modules.mood, modules.recipes, version],
     "cal.couldNotLoad",
   );
   // Nothing above throws (allSettled), so `failure` is only ever a bug's; the page's own

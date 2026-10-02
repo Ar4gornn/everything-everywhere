@@ -1350,6 +1350,12 @@ tr.history td {
   display: none;
 }
 
+/* The phone's stand-in for the Entries form (Epic 44): one full-width button. */
+.add-entry-button {
+  width: 100%;
+  margin-bottom: var(--space-3);
+}
+
 @media (max-width: 720px) {
   .shell {
     /* Room for the fixed bottom bar, plus the iOS home indicator. */
@@ -5390,4 +5396,123 @@ button.quiet.gym-tour-button {
 .gym-tour-panel .gym-tour-status dd {
   margin: 0;
   font-weight: 700;
+}
+
+/* --- Epic 44: quick-add sheet (AD-60) --- */
+
+/* A native <dialog> pinned to the bottom edge: the browser owns the top layer, the inert page
+   and Escape; this only gives it a sheet's shape. Phone only, so no width query. */
+dialog.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 90dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
+}
+
+dialog.sheet::backdrop {
+  background: rgb(0 0 0 / 50%);
+}
+
+.sheet form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sheet .qa-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sheet .qa-head h2 {
+  margin: 0;
+  font-size: var(--fs-h3);
+}
+
+.sheet .qa-head button.quiet {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.sheet .chips {
+  gap: var(--space-2);
+}
+
+.sheet .chip {
+  min-height: 44px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-tip);
+}
+
+.sheet .qa-kind .chip {
+  flex: 1 1 0;
+}
+
+.sheet input.qa-amount {
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  min-height: 56px;
+  text-align: right;
+}
+
+.sheet .qa-group {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sheet .qa-label {
+  font-size: var(--fs-small);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sheet .qa-pot {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sheet .qa-more-toggle {
+  justify-self: start;
+  min-height: 44px;
+}
+
+.sheet .qa-more {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sheet .qa-quantity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.sheet .qa-quantity button.quiet {
+  justify-self: end;
+  min-height: 44px;
+}
+
+.sheet .qa-actions {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.sheet .qa-actions button {
+  min-height: 48px;
 }

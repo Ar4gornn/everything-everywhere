@@ -1,14 +1,24 @@
 import { type ComponentType, lazy, Suspense, useEffect } from "react";
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import type { Layout, ModuleId, SectionId } from "./api/types";
 import { useAuth } from "./auth/AuthContext";
 import { ModuleGate } from "./components/ModuleOff";
+import { QuickAddProvider, useQuickAdd } from "./components/QuickAdd/QuickAddContext";
+import { QuickAddSheet } from "./components/QuickAdd/QuickAddSheet";
 import { TutorialModal } from "./components/Tutorial/TutorialModal";
 import { TutorialProvider } from "./components/Tutorial/useTutorial";
 import { type MessageKey, useT } from "./i18n";
 import { SECTION_LABEL, useModules } from "./layout/modules";
-import { usePreferences } from "./layout/useLayout";
+import { useLayout, usePreferences } from "./layout/useLayout";
 import { flushOutbox } from "./gym/store";
 import { flushDrafts } from "./notes/drafts";
 import { SignInPage } from "./pages/SignInPage";
@@ -171,6 +181,57 @@ export function navFor(
   return { bar: pick("bar"), top: pick("top") };
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Where the quick-add `+` is not drawn (Epic 44): pages that own the bottom of the screen —
+ * Gym's session and rest bars, and a note's editor. The notes list is not one of them.
+ */
+export function quickAddHidden(pathname: string): boolean {
+  return pathname === "/gym" || pathname.startsWith("/gym/") || pathname.startsWith("/notes/");
+}
+
+/**
+ * The phone half of quick add (AD-60): the `+`, the sheet, and the `?add=1` arrival. Lives
+ * inside the provider, so it can read it. On desktop it renders nothing and consumes nothing:
+ * EntriesPage keeps its own `?add=1` handling there, and each layout has exactly one owner.
+ */
+function QuickAddHost({ pathname }: { pathname: string }) {
+  const t = useT();
+  const phone = useLayout() === "phone";
+  const { isOpen, open, close } = useQuickAdd();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const arriving = phone && searchParams.get("add") === "1";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` and the setter are stable
+  useEffect(() => {
+    if (!arriving) return;
+    const date = searchParams.get("date");
+    open(date && ISO_DAY.test(date) ? { date } : {});
+    const next = new URLSearchParams(searchParams);
+    next.delete("add");
+    next.delete("date");
+    setSearchParams(next, { replace: true });
+  }, [arriving]);
+
+  // A tablet turned across the breakpoint: the sheet exists only on a phone.
+  useEffect(() => {
+    if (!phone && isOpen) close();
+  }, [phone, isOpen, close]);
+
+  if (!phone) return null;
+  return (
+    <>
+      {!isOpen && !quickAddHidden(pathname) && (
+        <button type="button" className="fab" aria-label={t("nav.addEntry")} onClick={() => open()}>
+          +
+        </button>
+      )}
+      <QuickAddSheet />
+    </>
+  );
+}
+
 export function App() {
   const { user, loading } = useAuth();
   const t = useT();
@@ -183,12 +244,6 @@ export function App() {
   // The tabs are the account's, per layout (Epic 33): a phone and a laptop may differ.
   const { current } = usePreferences();
   const { bar: SECTIONS, top: topLinks } = navFor(current, modules);
-
-  // Quick add belongs where entries do — and on the calendar, where a day is exactly the
-  // thing you would want to record against. On the projections page there is nothing to
-  // add, and the button sat on top of a form field.
-  const showQuickAdd = pathname === "/" || pathname.startsWith("/entries") ||
-    pathname.startsWith("/categories") || pathname.startsWith("/calendar");
 
   /** A section owns more than its own path when it has two views (Dashboard / Calendar). */
   const extra = (section: Section) =>
@@ -244,6 +299,7 @@ export function App() {
     // The tour's provider sits here rather than in main.tsx so it is inside the router and
     // the auth provider, and so every test that mounts <App /> gets it for free.
     <TutorialProvider>
+    <QuickAddProvider>
     <div className="shell">
       <header className="topbar">
         <h1 className="brand">{t("app.name")}</h1>
@@ -322,19 +378,9 @@ export function App() {
         </Suspense>
       </main>
 
-      {/* Quick add: recording a transaction is the loop people repeat, so on a phone it
-          should never cost a navigation to reach. Hidden on desktop, where the entry form
-          is already one click away and a floating button would just be clutter. */}
-      {showQuickAdd && (
-        <button
-          type="button"
-          className="fab"
-          aria-label={t("nav.addEntry")}
-          onClick={() => navigate("/entries?add=1")}
-        >
-          +
-        </button>
-      )}
+      {/* Quick add (Epic 44, AD-60): a phone's `+` opens a bottom sheet over whatever page
+          this is, so recording a transaction never costs a navigation. */}
+      <QuickAddHost pathname={pathname} />
 
       {/* Notes (Epic 32): quick capture from the Dashboard, a second button above the
           entry one rather than a menu behind it. A speed dial was the alternative, and it
@@ -367,6 +413,7 @@ export function App() {
       {/* First sign-in only, or replayed from Settings (Epic 30). */}
       <TutorialModal />
     </div>
+    </QuickAddProvider>
     </TutorialProvider>
   );
 }
