@@ -152,6 +152,40 @@ describe("the service worker's share target", () => {
     expect(fake.store.get(SHARE_CACHE)?.has(SHARE_KEY) ?? false).toBe(false);
   });
 
+  it("refuses on Content-Length before reading the body", async () => {
+    const { fake, handlers } = boot();
+    let read = false;
+    const request = {
+      ...share({ text: "x" }),
+      headers: new Headers({ "Content-Length": String(10 * 1024 * 1024) }),
+      formData: async () => {
+        read = true;
+        return form({ text: "x" });
+      },
+    };
+    const response = await fetchEvent(handlers, request);
+    expect(response?.headers.get("Location")).toContain("refused=1");
+    expect(read).toBe(false);
+    expect(fake.store.get(SHARE_CACHE)?.has(SHARE_KEY) ?? false).toBe(false);
+  });
+
+  it("refuses a cross-site post: nothing stored, plain redirect", async () => {
+    const { fake, handlers } = boot();
+    const request = { ...share({ text: "x" }), headers: new Headers({ "Sec-Fetch-Site": "cross-site" }) };
+    const response = await fetchEvent(handlers, request);
+    expect(response?.status).toBe(303);
+    expect(response?.headers.get("Location")).toBe("https://app.test/gym/import");
+    expect(fake.store.get(SHARE_CACHE)?.has(SHARE_KEY) ?? false).toBe(false);
+  });
+
+  it("accepts Sec-Fetch-Site none and same-origin", async () => {
+    for (const site of ["none", "same-origin"]) {
+      const { fake, handlers } = boot();
+      await fetchEvent(handlers, { ...share({ text: "ok" }), headers: new Headers({ "Sec-Fetch-Site": site }) });
+      expect(fake.store.get(SHARE_CACHE)?.get(SHARE_KEY)).toBe("ok");
+    }
+  });
+
   it("accepts exactly 256 KB", async () => {
     const { fake, handlers } = boot();
     await fetchEvent(handlers, share({ text: "z".repeat(256 * 1024) }));

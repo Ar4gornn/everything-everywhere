@@ -92,3 +92,18 @@ describe("the end-of-session summary", () => {
     expect(equal.bests).toEqual([]);
   });
 });
+
+describe("sanitise holds the server's bound", () => {
+  it("clamps a whole number to the cap", () => {
+    expect(sanitise("5000", false, 999)).toBe("999");
+    expect(sanitise("999", false, 999)).toBe("999");
+    expect(sanitise("12", false, 999)).toBe("12");
+  });
+  it("clamps a decimal to the cap", () => {
+    expect(sanitise("123456.5", true, 99_999.99)).toBe("99999.99");
+    expect(sanitise("62,5", true, 99_999.99)).toBe("62,5");
+  });
+  it("is unbounded without a cap", () => {
+    expect(sanitise("5000", false)).toBe("5000");
+  });
+});

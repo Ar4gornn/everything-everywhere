@@ -33,13 +33,6 @@ export interface Measures {
   distance_m: number | null;
 }
 
-/** A new id for a session, exercise or set. `crypto.randomUUID` is on every browser we ship to. */
-export function newId(): string {
-  const c = globalThis.crypto;
-  if (c && typeof c.randomUUID === "function") return c.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -153,11 +146,21 @@ export function parseNumber(text: string): number | null {
  * Keep only what a number field can hold, as it is typed — a controlled numeric input
  * cannot hold a partial decimal, so these are text inputs and this is their filter.
  */
-export function sanitise(text: string, decimal: boolean): string {
-  if (!decimal) return text.replace(/\D/g, "").slice(0, 7);
-  const cleaned = text.replace(/[^\d.,]/g, "");
-  const match = /^(\d{0,6})([.,]?)(\d{0,2})/.exec(cleaned);
-  return match ? `${match[1]}${match[2]}${match[3]}` : "";
+export function sanitise(text: string, decimal: boolean, max?: number): string {
+  let out: string;
+  if (!decimal) {
+    out = text.replace(/\D/g, "").slice(0, 7);
+  } else {
+    const cleaned = text.replace(/[^\d.,]/g, "");
+    const match = /^(\d{0,6})([.,]?)(\d{0,2})/.exec(cleaned);
+    out = match ? `${match[1]}${match[2]}${match[3]}` : "";
+  }
+  // Past the server's own bound the value is held at the bound, not left to fail at Finish.
+  if (max !== undefined) {
+    const value = parseNumber(out);
+    if (value !== null && !Number.isNaN(value) && value > max) return String(max);
+  }
+  return out;
 }
 
 /** A number as the two-place string the API wants. */

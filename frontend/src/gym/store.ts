@@ -45,6 +45,9 @@ export interface GymCache {
   refreshedAt: string | null;
 }
 
+/** Where the import review keeps its draft (`pages/gym/GymImport.tsx`), per user. */
+export const IMPORT_DRAFT_PREFIX = "everything-everywhere.gym.import.";
+
 export interface OutboxEntry {
   body: WorkoutComplete;
   /** Display name for the pending list. */
@@ -279,21 +282,26 @@ function tally(userId: string, sent: number): FlushResult {
   return { sent, pending: entries.length - refused, refused };
 }
 
+/** The statuses that mean "this body is wrong", and will be said again for the same body. */
+const CONTENT_REFUSALS: ReadonlySet<number> = new Set([400, 409, 422]);
+
 /**
- * A 4xx the server will give again for the same body. 401 is the session (the client has
- * already signed the person out; signing back in sends it), 408 and 429 are "later" — those
- * stay pending like a lost network.
+ * A refusal the server will give again for the same body: 400, 409 or 422. Everything else
+ * stays pending, like a lost network — 401 (sign back in), 404/405 (a server older than the
+ * client, or a proxy), 413, 408, 429, 5xx, and any failure of the token-refresh path, none of
+ * which says anything about the workout itself. A session must never be parked as "refused"
+ * for a fault that a later deploy or a reconnect fixes.
  */
 function isRefusal(caught: unknown): caught is ApiError {
   return (
     caught instanceof ApiError &&
-    caught.status >= 400 &&
-    caught.status < 500 &&
-    caught.status !== 401 &&
-    caught.status !== 408 &&
-    caught.status !== 429
+    caught.code !== "refresh_failed" &&
+    CONTENT_REFUSALS.has(caught.status)
   );
 }
+
+/** How long Finish waits for the server before leaving the session queued and moving on. */
+export const FINISH_TIMEOUT_MS = 10_000;
 
 /** Move the active session to the outbox and clear it; then try to flush. */
 export async function finishActive(userId: string, now: Date): Promise<FlushResult> {
@@ -311,7 +319,17 @@ export async function finishActive(userId: string, now: Date): Promise<FlushResu
   const others = readOutbox(userId).filter((queued) => queued.body.client_ref !== body.client_ref);
   if (writeOutbox(userId, [...others, entry])) {
     writeActive(userId, null);
-    return flushOutbox(userId);
+    // Bounded: on a dead connection the page says "saved on this phone", it does not hang.
+    // The flush itself carries on; whatever it does not finish stays pending in the outbox.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<FlushResult>((resolve) => {
+      timer = setTimeout(() => resolve(tally(userId, 0)), FINISH_TIMEOUT_MS);
+    });
+    try {
+      return await Promise.race([flushOutbox(userId), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
   // Storage refused the write. Keep the session where it is and try the server directly,
   // so a full disk never costs the workout.
@@ -373,6 +391,20 @@ export function discardOutboxEntry(userId: string, clientRef: string): void {
   if (kept.length !== entries.length) writeOutbox(userId, kept);
 }
 
+/**
+ * Let a refused entry try again: clears the refusal and flushes. A person fixes a deploy or
+ * a plan, not the workout, so "refused" must never be a dead end.
+ */
+export function retryOutboxEntry(userId: string, clientRef: string): Promise<FlushResult> {
+  writeOutbox(
+    userId,
+    readOutbox(userId).map((entry) =>
+      entry.body.client_ref === clientRef ? { ...entry, refused: null } : entry,
+    ),
+  );
+  return flushOutbox(userId);
+}
+
 /** True when sign-out would lose something: an active session or an outbox entry. */
 export function hasUnsentGym(userId: string): boolean {
   return readActive(userId) !== null || readOutbox(userId).length > 0;
@@ -382,6 +414,14 @@ export function hasUnsentGym(userId: string): boolean {
 export function clearGymStore(userId: string): void {
   generation.set(userId, generationOf(userId) + 1);
   for (const part of [CACHE, ACTIVE, OUTBOX]) writeJson(userId, part, null);
+  // The import review's draft is a person's file content: it does not outlive the sign-out.
+  for (const area of ["sessionStorage", "localStorage"] as const) {
+    try {
+      window[area].removeItem(`${IMPORT_DRAFT_PREFIX}${userId}`);
+    } catch {
+      /* no storage */
+    }
+  }
   emit();
 }
 

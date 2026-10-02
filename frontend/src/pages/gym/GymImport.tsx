@@ -6,6 +6,7 @@ import { useToast } from "../../components/Toast";
 import { Card, ErrorBanner } from "../../components/ui";
 import { ImportError, parseWorkoutFile, toImportBody, validateLine } from "../../gym/format";
 import { takeSharedWorkout } from "../../gym/share";
+import { IMPORT_DRAFT_PREFIX } from "../../gym/store";
 import { useT } from "../../i18n";
 import { errorMessage } from "../../i18n/errors";
 import { useGym } from "./GymContext";
@@ -24,7 +25,7 @@ function readText(file: File): Promise<string> {
   });
 }
 
-const draftKey = (userId: string) => `everything-everywhere.gym.import.${userId}`;
+const draftKey = (userId: string) => `${IMPORT_DRAFT_PREFIX}${userId}`;
 
 /** The review survives a reload (and an offline stretch) in sessionStorage — this tab only. */
 function loadDraft(userId: string): Wizard | null {
@@ -146,6 +147,11 @@ export function GymImport() {
   useEffect(() => {
     if (params.get("shared") !== "1" || tookShared.current) return;
     tookShared.current = true;
+    // The worker refused the share for its size: say so, rather than "nothing was shared".
+    if (params.get("refused") === "1") {
+      setError(t("gym.fileTooBig"));
+      return;
+    }
     void takeSharedWorkout().then((shared) => {
       if (shared) {
         setText(shared);

@@ -7,7 +7,7 @@ import { startSession } from "../../gym/session";
 import { useGymData, type GymData } from "../../gym/store";
 import { useT } from "../../i18n";
 import { useBrowserOffline } from "./device";
-import { newId } from "./measure";
+import { newId } from "../../gym/id";
 
 /**
  * What every gym view reads, from one `useGymData()` so the views do not each refresh the

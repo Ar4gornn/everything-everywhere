@@ -58,6 +58,10 @@ export const gymCore = {
     en: "That is not a number.",
     fr: "Ce n’est pas un nombre.",
   },
+  "gymCore.field.ambiguous": {
+    en: "Is this 1000 or 1.000? Type it again.",
+    fr: "Est-ce 1000 ou 1,000 ? Saisissez-le à nouveau.",
+  },
   "gymCore.field.whole": {
     en: "Use a whole number.",
     fr: "Utilisez un nombre entier.",
@@ -88,6 +92,10 @@ export const gymCore = {
   "gymCore.warn.unitUnknown": {
     en: "The weight unit in the file is not kg or lb. Weights are read in your unit.",
     fr: "L’unité de poids du fichier n’est ni kg ni lb. Les poids sont lus dans votre unité.",
+  },
+  "gymCore.warn.droppedMeasure": {
+    en: "Some exercises list a measure their kind does not use. It will not be saved.",
+    fr: "Certains exercices indiquent une mesure que leur type n’utilise pas. Elle ne sera pas enregistrée.",
   },
   "gymCore.warn.emptyRoutine": {
     en: "A routine with no exercises was left out.",

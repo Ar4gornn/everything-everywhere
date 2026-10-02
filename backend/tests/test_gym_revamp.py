@@ -112,13 +112,41 @@ def test_a_name_coins_the_exercise_with_the_sets_kind_on_both_endpoints(client, 
                                            "duration_seconds": 40}])
     assert done.status_code == 201
     assert done.json()["sets"][0]["kind"] == "duration"
-    # No kind given -> reps, so a duration-only set is refused.
-    bad = _complete(client, user_a, sets=[{"exercise_name": "Squat", "duration_seconds": 4}])
+    # A set with no measure at all is refused, whatever the kind.
+    bad = _complete(client, user_a, sets=[{"exercise_name": "Squat", "weight": "20"}])
     assert bad.status_code == 422
     assert bad.json()["code"] == "set_missing_measure"
 
 
 # --------------------------------------------------------------- complete
+
+
+def test_complete_tolerates_kind_drift_but_the_single_set_endpoint_does_not(client, user_a):
+    reps_ex = _ex(client, user_a, "Drifter")  # kind reps now
+    # Carries the required measure plus a foreign one: the foreign one is dropped, set stored.
+    both = _complete(client, user_a, sets=[
+        {"exercise_id": reps_ex["id"], "reps": 8, "duration_seconds": 30, "weight": "10"}])
+    assert both.status_code == 201, both.text
+    stored = both.json()["sets"][0]
+    assert (stored["reps"], stored["duration_seconds"], stored["distance_m"]) == (8, None, None)
+    assert stored["weight"] == "10.00"
+    # Lacks the required measure but has another: the person's record wins, stored as-is.
+    other = _complete(client, user_a, sets=[
+        {"exercise_id": reps_ex["id"], "duration_seconds": 45}])
+    assert other.status_code == 201, other.text
+    stored = other.json()["sets"][0]
+    assert (stored["reps"], stored["duration_seconds"]) == (None, 45)
+    # No measure at all is still refused, and writes nothing.
+    none = _complete(client, user_a, sets=[{"exercise_id": reps_ex["id"], "weight": "5"}])
+    assert none.status_code == 422
+    # The old endpoint stays strict.
+    w = _workout(client, user_a)
+    strict = _set(client, user_a, w["id"], exercise_id=reps_ex["id"], duration_seconds=45)
+    assert strict.status_code == 422
+    assert strict.json()["code"] == "set_missing_measure"
+    strict = _set(client, user_a, w["id"], exercise_id=reps_ex["id"], reps=8, duration_seconds=3)
+    assert strict.status_code == 422
+    assert strict.json()["code"] == "set_wrong_measure"
 
 
 def test_complete_is_idempotent_per_user(client, user_a, user_b, runtime_connection):

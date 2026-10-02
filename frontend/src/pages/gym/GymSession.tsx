@@ -17,6 +17,7 @@ import {
   type SessionExercise,
   type SessionSet,
 } from "../../gym/session";
+import { newId } from "../../gym/id";
 import { finishActive, type FlushResult } from "../../gym/store";
 import { useT } from "../../i18n";
 import { vibrate, useNow, useWakeLock } from "./device";
@@ -29,7 +30,6 @@ import {
   formatSet,
   formatTarget,
   formatWeight,
-  newId,
   summarise,
   type SessionSummary,
 } from "./measure";
@@ -201,8 +201,12 @@ function NextSet({
     try {
       save(logSet(session, exercise.key, draftFromEntry(exercise.kind, entry), new Date(), newId));
       setProblem(null);
-    } catch {
-      setProblem(t(`gym.need.${exercise.kind}`));
+    } catch (caught) {
+      setProblem(
+        caught instanceof Error && caught.message === "too_many_sets"
+          ? t("gym.tooManySets")
+          : t(`gym.need.${exercise.kind}`),
+      );
     }
   }
 
@@ -250,6 +254,14 @@ export function GymSession() {
   const open = focus ?? current;
 
   if (summary) return <Summary {...summary} unit={unit} onClose={() => navigate("/gym")} />;
+  if (!active && busy) {
+    // Finish has already moved the session to the outbox: say so, not "no session".
+    return (
+      <Card title={t("gym.sessionTitle")}>
+        <p role="status">{t("gym.finishing")}</p>
+      </Card>
+    );
+  }
   if (!active) {
     return (
       <Card title={t("gym.sessionTitle")}>

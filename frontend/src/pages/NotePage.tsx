@@ -1,3 +1,4 @@
+import { newId } from "../gym/id";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -65,7 +66,7 @@ export function NotePage() {
 
   const isNew = noteId === "new";
   // Minted once per new note, and kept when the address changes to carry it.
-  const [id] = useState(() => (isNew ? crypto.randomUUID() : noteId));
+  const [id] = useState(() => (isNew ? newId() : noteId));
   const [note, setNote] = useState<NoteInput | null>(() =>
     isNew ? blank(searchParams.get("kind") === "sketch" ? "sketch" : "text") : null,
   );

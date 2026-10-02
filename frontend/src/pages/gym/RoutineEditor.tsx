@@ -113,6 +113,7 @@ function LineEditor({
           <MeasureInput
             label={t("gym.targetSetsOf", { name })}
             value={draft.sets}
+            field="sets"
             onChange={(sets) => set({ sets })}
           />
         </Field>
@@ -121,6 +122,7 @@ function LineEditor({
             <MeasureInput
               label={t("gym.targetRepsOf", { name })}
               value={draft.reps}
+              field="reps"
               onChange={(reps) => set({ reps })}
             />
           </Field>
@@ -130,6 +132,7 @@ function LineEditor({
             <MeasureInput
               label={t("gym.targetSecondsOf", { name })}
               value={draft.seconds}
+              field="seconds"
               suffix="s"
               onChange={(seconds) => set({ seconds })}
             />
@@ -140,6 +143,7 @@ function LineEditor({
             <MeasureInput
               label={t("gym.targetMetresOf", { name })}
               value={draft.distance}
+              field="distance_m"
               suffix="m"
               onChange={(distance) => set({ distance })}
             />
@@ -149,6 +153,7 @@ function LineEditor({
           <MeasureInput
             label={t("gym.targetWeightOf", { name })}
             value={draft.weight}
+            field="weight"
             decimal
             suffix={unit}
             onChange={(weight) => set({ weight })}
@@ -158,6 +163,7 @@ function LineEditor({
           <MeasureInput
             label={t("gym.restOf", { name })}
             value={draft.rest}
+            field="rest_seconds"
             suffix="s"
             onChange={(rest) => set({ rest })}
           />

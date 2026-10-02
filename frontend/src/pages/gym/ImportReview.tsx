@@ -1,6 +1,6 @@
 import type { ExerciseKind } from "../../api/types";
 import { Card, ErrorBanner } from "../../components/ui";
-import { validateLine, type DraftLine, type DraftRoutine, type LineField } from "../../gym/format";
+import { hasDroppedMeasure, validateLine, type DraftLine, type DraftRoutine, type LineField } from "../../gym/format";
 import { useT } from "../../i18n";
 import { KINDS } from "./ExerciseAdder";
 import { useGym } from "./GymContext";
@@ -236,6 +236,7 @@ export function ImportReview({
             <MeasureInput
               label={t("gym.sets")}
               value={line.sets}
+              field="sets"
               onChange={(sets) => edit({ sets })}
             />
             <FieldError line={line} field="sets" />
@@ -245,6 +246,7 @@ export function ImportReview({
               <MeasureInput
                 label={t("gym.reps")}
                 value={line.reps}
+                field="reps"
                 onChange={(reps) => edit({ reps })}
               />
               <FieldError line={line} field="reps" />
@@ -255,6 +257,7 @@ export function ImportReview({
               <MeasureInput
                 label={t("gym.seconds")}
                 value={line.seconds}
+                field="seconds"
                 suffix="s"
                 onChange={(seconds) => edit({ seconds })}
               />
@@ -266,6 +269,7 @@ export function ImportReview({
               <MeasureInput
                 label={t("gym.metres")}
                 value={line.distance_m}
+                field="distance_m"
                 suffix="m"
                 onChange={(distance_m) => edit({ distance_m })}
               />
@@ -276,6 +280,7 @@ export function ImportReview({
             <MeasureInput
               label={t("gym.weightIn", { unit })}
               value={line.weight}
+              field="weight"
               decimal
               suffix={unit}
               onChange={(weight) => edit({ weight, converted: false })}
@@ -286,6 +291,7 @@ export function ImportReview({
             <MeasureInput
               label={t("gym.restSeconds")}
               value={line.rest_seconds}
+              field="rest_seconds"
               suffix="s"
               onChange={(rest_seconds) => edit({ rest_seconds })}
             />
@@ -293,6 +299,11 @@ export function ImportReview({
           </Field>
         </div>
         {line.converted && <p className="hint">{t("gym.weightConverted", { unit })}</p>}
+        {hasDroppedMeasure(line) && (
+          <p className="hint" role="note">
+            {t("gymCore.warn.droppedMeasure")}
+          </p>
+        )}
 
         <label>
           {t("field.note")}

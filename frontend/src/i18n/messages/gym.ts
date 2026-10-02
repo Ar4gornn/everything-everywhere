@@ -131,6 +131,13 @@ export const gym = {
     en: "The session “{name}” of {date} was refused by the server and is kept on this phone.",
     fr: "La séance « {name} » du {date} a été refusée par le serveur et reste sur ce téléphone.",
   },
+  "gym.retry": { en: "Retry", fr: "Réessayer" },
+  "gym.copyData": { en: "Copy data", fr: "Copier les données" },
+  "gym.dataCopied": { en: "Session data copied", fr: "Données de la séance copiées" },
+  "gym.discardEntryConfirm": {
+    en: "Discard this session for good? Use Copy data first if you want to keep it.",
+    fr: "Abandonner définitivement cette séance ? Utilisez d’abord Copier les données pour la garder.",
+  },
   "gym.inProgress": { en: "Session in progress", fr: "Séance en cours" },
   "gym.resume": { en: "Resume", fr: "Reprendre" },
   "gym.discardConfirm": {
@@ -226,6 +233,11 @@ export const gym = {
 
   // --- the live session
   "gym.sessionTitle": { en: "Session", fr: "Séance" },
+  "gym.finishing": { en: "Saving…", fr: "Enregistrement…" },
+  "gym.tooManySets": {
+    en: "A session holds 500 sets at most. Finish it, then start another.",
+    fr: "Une séance contient 500 séries au plus. Terminez-la, puis commencez-en une autre.",
+  },
   "gym.noActive": { en: "No session in progress.", fr: "Aucune séance en cours." },
   "gym.finish": { en: "Finish", fr: "Terminer" },
   "gym.menuLabel": { en: "Session options", fr: "Options de la séance" },

@@ -4,7 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { CheckInButton } from "../../components/CheckInButton";
 import { Card, Empty, ErrorBanner } from "../../components/ui";
-import { discardOutboxEntry } from "../../gym/store";
+import { discardOutboxEntry, retryOutboxEntry } from "../../gym/store";
+import { useToast } from "../../components/Toast";
 import { useT } from "../../i18n";
 import { errorMessage } from "../../i18n/errors";
 import { useDates } from "../../useDates";
@@ -43,6 +44,7 @@ export function GymHome() {
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   const pending = outbox.filter((entry) => entry.refused === null).length;
   const refused = outbox.filter((entry) => entry.refused !== null);
@@ -94,6 +96,33 @@ export function GymHome() {
             type="button"
             className="quiet"
             onClick={() => {
+              void retryOutboxEntry(userId, entry.body.client_ref).then(() => refresh());
+            }}
+          >
+            {t("gym.retry")}
+          </button>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => {
+              // Nothing is ever lost silently: the whole body goes to the clipboard on request.
+              void (async () => {
+                try {
+                  await navigator.clipboard.writeText(JSON.stringify(entry.body, null, 2));
+                  toast.show(t("gym.dataCopied"));
+                } catch {
+                  /* no clipboard: the entry stays on the phone either way */
+                }
+              })();
+            }}
+          >
+            {t("gym.copyData")}
+          </button>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => {
+              if (!window.confirm(t("gym.discardEntryConfirm"))) return;
               discardOutboxEntry(userId, entry.body.client_ref);
               void refresh();
             }}

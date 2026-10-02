@@ -80,6 +80,9 @@ export const FIELD_RANGES = {
   rest_seconds: [0, 3_600],
 } as const;
 
+/** Most sets one workout may hold (the server's own limit). */
+export const MAX_SETS_PER_WORKOUT = 500;
+
 type NumericField = keyof typeof FIELD_RANGES;
 
 /** Fields that must be whole numbers. Weight may carry a half. */
@@ -154,8 +157,12 @@ function readNumber(raw: unknown): Read {
   if (typeof raw === "string") {
     const text = raw.trim().replace(/\s/g, "");
     if (text === "") return { value: null };
-    // Decimal comma (French keyboards, French chat answers). A thousands separator is not
-    // guessed at: "1,000" is read as 1.0, and the range check or the review catches it.
+    // Decimal comma (French keyboards, French chat answers). A comma then exactly three digits
+    // ("1,000", "1,250") is a thousands separator in English and a decimal in French: it is not
+    // guessed at, the field is flagged and left empty so the person types it again.
+    if (/^[+-]?\d{1,3},\d{3}$/.test(text)) {
+      return { value: null, error: "gymCore.field.ambiguous" };
+    }
     if (!/^[+-]?(\d+([.,]\d*)?|[.,]\d+)$/.test(text)) {
       return { value: null, error: "gymCore.field.number" };
     }
@@ -230,12 +237,24 @@ export function validateLine(line: DraftLine): DraftLine {
   // re-checking would otherwise clear the very flag that says a number went missing. It stays
   // until the field is given a value.
   for (const field of ["sets", "reps", "seconds", "distance_m", "weight", "rest_seconds"] as const) {
-    if (line.errors[field] === "gymCore.field.number" && line[field] === null) {
-      errors[field] = "gymCore.field.number";
+    const kept = line.errors[field];
+    if ((kept === "gymCore.field.number" || kept === "gymCore.field.ambiguous") && line[field] === null) {
+      errors[field] = kept;
     }
   }
   if (line.errors.kind !== undefined && line.kindInferred) errors.kind = line.errors.kind;
   return { ...line, errors };
+}
+
+/**
+ * True when the line holds a measure its kind does not count (kind reps + seconds): the
+ * request body leaves it out, so the review says so rather than dropping it silently.
+ */
+export function hasDroppedMeasure(line: DraftLine): boolean {
+  if (line.kind !== "reps" && line.reps !== null) return true;
+  if (line.kind !== "duration" && line.seconds !== null) return true;
+  if (line.kind !== "distance" && line.distance_m !== null) return true;
+  return false;
 }
 
 /** Routine-level problems the lines do not carry: a name is required, notes are bounded. */
@@ -368,6 +387,9 @@ export function parseWorkoutFile(text: string, unit: WeightUnit): ParsedImport {
 
   if (anyConverted) {
     warnings.push(fileUnit === "lb" ? "gymCore.warn.fromLb" : "gymCore.warn.fromKg");
+  }
+  if (routines.some((routine) => routine.lines.some(hasDroppedMeasure))) {
+    warnings.push("gymCore.warn.droppedMeasure");
   }
   if (emptyRoutine) warnings.push("gymCore.warn.emptyRoutine");
   if (skipped) warnings.push("gymCore.warn.skipped");

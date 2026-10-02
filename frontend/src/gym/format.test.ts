@@ -4,6 +4,7 @@ import {
   convertWeight,
   type DraftLine,
   extractJson,
+  hasDroppedMeasure,
   ImportError,
   parseWorkoutFile,
   toImportBody,
@@ -351,5 +352,35 @@ describe("the request body", () => {
     const text = JSON.stringify({ routines: [{ name: "A", note: "Hard", exercises: [{ name: "X" }] }] });
     const routine = parseWorkoutFile(text, "kg").routines[0];
     expect(toImportBody(routine as NonNullable<typeof routine>).note).toBe("Hard");
+  });
+});
+
+describe("an ambiguous thousands comma", () => {
+  it.each(["1,000", "1,250", "12,500"])("flags %s and leaves the value empty", (text) => {
+    const line = firstLine(file([{ name: "Squat", reps: text }]));
+    expect(line.reps).toBeNull();
+    expect(line.errors.reps).toBe("gymCore.field.ambiguous");
+    // the review's re-check keeps the flag until the field is given a value
+    expect(validateLine(line).errors.reps).toBe("gymCore.field.ambiguous");
+  });
+  it.each([["62,5", 62.5], ["2,25", 2.25], ["1,5", 1.5]])("still reads %s", (text, value) => {
+    const line = firstLine(file([{ name: "Squat", weight: text }]));
+    expect(line.weight).toBe(value);
+    expect(line.errors.weight).toBeUndefined();
+  });
+});
+
+describe("a measure the kind does not use", () => {
+  it("is warned about, whole-file and on the line", () => {
+    const text = file([{ name: "Plank", kind: "reps", reps: 10, seconds: 30 }]);
+    expect(parseWorkoutFile(text, "kg").warnings).toContain("gymCore.warn.droppedMeasure");
+    expect(hasDroppedMeasure(firstLine(text))).toBe(true);
+    // not a blocking error
+    expect(Object.keys(firstLine(text).errors)).toEqual([]);
+  });
+  it("is silent when every measure belongs to the kind", () => {
+    const text = file([{ name: "Squat", kind: "reps", reps: 10, weight: 20 }]);
+    expect(parseWorkoutFile(text, "kg").warnings).not.toContain("gymCore.warn.droppedMeasure");
+    expect(hasDroppedMeasure(firstLine(text))).toBe(false);
   });
 });

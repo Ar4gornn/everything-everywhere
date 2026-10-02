@@ -87,6 +87,12 @@ describe("Import: getting a workout in", () => {
     expect(shared.take).toHaveBeenCalledTimes(1);
   });
 
+  it("says the file is too large when the worker refused it", async () => {
+    renderGym("/gym/import?shared=1&refused=1");
+    expect(await screen.findByText(/too big to be a workout/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing was shared/)).not.toBeInTheDocument();
+  });
+
   it("explains when a share left nothing", async () => {
     renderGym("/gym/import?shared=1");
     expect(await screen.findByText(/Nothing was shared/)).toBeInTheDocument();

@@ -23,6 +23,7 @@ import {
   clearGymStore,
   discardOutboxEntry,
   EMPTY_CACHE,
+  FINISH_TIMEOUT_MS,
   finishActive,
   flushOutbox,
   hasUnsentGym,
@@ -30,6 +31,7 @@ import {
   readCache,
   readOutbox,
   refreshCache,
+  retryOutboxEntry,
   subscribe,
   useGymData,
   writeActive,
@@ -403,5 +405,57 @@ describe("useGymData", () => {
     expect(readActive(USER)?.client_ref).toBe("ref-9");
     act(() => result.current.setActive(null));
     expect(result.current.active).toBeNull();
+  });
+});
+
+describe("recoverable refusals", () => {
+  it.each([
+    ["a 404", new ApiError(404, "nf", null)],
+    ["a 405", new ApiError(405, "no", null)],
+    ["a 413", new ApiError(413, "big", null)],
+    ["a failed token refresh", new ApiError(400, "Request failed (400).", "refresh_failed")],
+  ])("keeps it pending on %s", async (_name, failure) => {
+    mocks.completeWorkout.mockRejectedValue(failure);
+    writeActive(USER, session("ref-1"));
+    expect(await finishActive(USER, NOW)).toEqual({ sent: 0, pending: 1, refused: 0 });
+  });
+
+  it.each([400, 409, 422])("a %i is a refusal", async (status) => {
+    mocks.completeWorkout.mockRejectedValue(new ApiError(status, "no", "bad"));
+    writeActive(USER, session("ref-1"));
+    expect((await finishActive(USER, NOW)).refused).toBe(1);
+  });
+
+  it("retryOutboxEntry clears the refusal and sends it", async () => {
+    mocks.completeWorkout.mockRejectedValueOnce(new ApiError(422, "no", "bad"));
+    writeActive(USER, session("ref-1"));
+    await finishActive(USER, NOW);
+    expect(readOutbox(USER)[0]?.refused).toBe("bad");
+    mocks.completeWorkout.mockResolvedValue(done("ref-1"));
+    expect(await retryOutboxEntry(USER, "ref-1")).toEqual({ sent: 1, pending: 0, refused: 0 });
+    expect(readOutbox(USER)).toEqual([]);
+  });
+
+  it("clearGymStore drops the import draft too", () => {
+    const key = `everything-everywhere.gym.import.${USER}`;
+    window.sessionStorage.setItem(key, "{}");
+    window.localStorage.setItem(key, "{}");
+    clearGymStore(USER);
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+    expect(window.localStorage.getItem(key)).toBeNull();
+  });
+
+  it("Finish stops waiting after the timeout and leaves the entry pending", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.completeWorkout.mockReturnValue(new Promise(() => undefined));
+      writeActive(USER, session("ref-1"));
+      const result = finishActive(USER, NOW);
+      await vi.advanceTimersByTimeAsync(FINISH_TIMEOUT_MS + 1);
+      expect(await result).toEqual({ sent: 0, pending: 1, refused: 0 });
+      expect(readOutbox(USER)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

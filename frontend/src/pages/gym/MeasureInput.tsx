@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 
 import { useT } from "../../i18n";
+import { FIELD_RANGES } from "../../gym/format";
 import { parseNumber, sanitise, toText } from "./measure";
 
 function clean(text: string): number | null {
@@ -20,6 +21,7 @@ export function MeasureInput({
   onChange,
   decimal = false,
   suffix,
+  field,
 }: {
   label: string;
   value: number | null;
@@ -27,7 +29,10 @@ export function MeasureInput({
   decimal?: boolean;
   /** A unit shown after the field ("kg", "s"). */
   suffix?: string;
+  /** Which numeric field this is: its upper bound (the server's) caps what can be typed. */
+  field?: keyof typeof FIELD_RANGES;
 }) {
+  const max = field ? FIELD_RANGES[field][1] : undefined;
   const [text, setText] = useState(toText(value));
   // Re-derive the text when the number was changed from outside; typing keeps its own text.
   if (clean(text) !== value) setText(toText(value));
@@ -41,7 +46,7 @@ export function MeasureInput({
         aria-label={label}
         value={text}
         onChange={(event) => {
-          const next = sanitise(event.target.value, decimal);
+          const next = sanitise(event.target.value, decimal, max);
           setText(next);
           onChange(clean(next));
         }}
@@ -78,6 +83,7 @@ export function Stepper({
   decimal = false,
   suffix,
   min = 0,
+  field,
 }: {
   label: string;
   value: number | null;
@@ -86,8 +92,10 @@ export function Stepper({
   decimal?: boolean;
   suffix?: string;
   min?: number;
+  field?: keyof typeof FIELD_RANGES;
 }) {
   const t = useT();
+  const max = field ? FIELD_RANGES[field][1] : Number.POSITIVE_INFINITY;
   const id = useId();
   const round = (n: number) => Math.round(n * 100) / 100;
   return (
@@ -111,12 +119,14 @@ export function Stepper({
           onChange={onChange}
           decimal={decimal}
           suffix={suffix}
+          field={field}
         />
         <button
           type="button"
           className="quiet gym-step"
           aria-label={t("gym.more", { field: label })}
-          onClick={() => onChange(round((value ?? 0) + step))}
+          disabled={value !== null && value >= max}
+          onClick={() => onChange(Math.min(max, round((value ?? 0) + step)))}
         >
           +
         </button>

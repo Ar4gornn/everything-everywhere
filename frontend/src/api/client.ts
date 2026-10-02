@@ -202,7 +202,9 @@ async function refreshAccessToken(): Promise<boolean> {
     return false;
   }
   if (!response.ok) {
-    throw new ApiError(response.status, `Request failed (${response.status}).`);
+    // Code `refresh_failed`: a caller replaying a saved request can tell this is the session
+    // machinery failing, not the server judging the request's content.
+    throw new ApiError(response.status, `Request failed (${response.status}).`, "refresh_failed");
   }
   storeTokens((await response.json()) as Token);
   return true;

@@ -248,6 +248,20 @@ describe("Live session", () => {
     expect(readActive(USER_ID)).toBeNull();
   });
 
+  it("says it is saving, not that there is no session, while Finish waits", async () => {
+    let release: (value: unknown) => void = () => undefined;
+    mocks.completeWorkout.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const session = logged(seedActive(), 0, { reps: 8, weight: "60.00" });
+    writeActive(USER_ID, skipRest(session));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderGym("/gym/session");
+    await userEvent.click(await screen.findByRole("button", { name: "Finish" }));
+    expect(await screen.findByText("Saving…")).toBeInTheDocument();
+    expect(screen.queryByText("No session in progress.")).not.toBeInTheDocument();
+    release({ id: "w9", sets: [] });
+    expect(await screen.findByText("Session complete")).toBeInTheDocument();
+  });
+
   it("does not finish when the confirmation is declined", async () => {
     const session = logged(seedActive(), 0, { reps: 8, weight: "60.00" });
     writeActive(USER_ID, skipRest(session));

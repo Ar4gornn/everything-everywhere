@@ -129,6 +129,7 @@ export function SetFields({
         <Stepper
           label={t("gym.reps")}
           value={entry.reps}
+          field="reps"
           step={measureStep(kind)}
           min={0}
           onChange={(reps) => onChange({ ...entry, reps })}
@@ -139,6 +140,7 @@ export function SetFields({
           <Stepper
             label={t("gym.seconds")}
             value={entry.seconds}
+            field="seconds"
             step={measureStep(kind)}
             suffix="s"
             onChange={(seconds) => onChange({ ...entry, seconds })}
@@ -152,6 +154,7 @@ export function SetFields({
         <Stepper
           label={t("gym.metres")}
           value={entry.distance}
+          field="distance_m"
           step={measureStep(kind)}
           suffix="m"
           onChange={(distance) => onChange({ ...entry, distance })}
@@ -160,6 +163,7 @@ export function SetFields({
       <Stepper
         label={t("gym.weightIn", { unit })}
         value={entry.weight}
+        field="weight"
         step={weightStep(unit)}
         decimal
         suffix={unit}

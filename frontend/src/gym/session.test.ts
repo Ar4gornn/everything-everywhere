@@ -284,3 +284,41 @@ describe("finishing", () => {
     expect(toCompleteBody(session, later(1)).client_ref).toBe(toCompleteBody(session, later(99)).client_ref);
   });
 });
+
+describe("the server's caps, held on the phone", () => {
+  const start = () => startSession(ROUTINE, NOW, ids());
+  const bench = (s: ActiveSession) => s.exercises.find((e) => e.kind === "reps")!.key;
+  const plank = (s: ActiveSession) => s.exercises.find((e) => e.kind === "duration")!.key;
+  const draft = (over: Partial<SetDraft>): SetDraft => ({ reps: null, weight: null, duration_seconds: null, distance_m: null, ...over });
+
+  it.each([
+    ["reps over 999", { reps: 1000 }],
+    ["reps that are not whole", { reps: 2.5 }],
+    ["a weight over 99999.99", { reps: 5, weight: "100000.00" }],
+    ["a negative weight", { reps: 5, weight: "-1.00" }],
+  ])("logSet refuses %s", (_name, over) => {
+    const s = start();
+    expect(() => logSet(s, bench(s), draft(over), NOW, ids())).toThrow("set_out_of_range");
+  });
+
+  it("refuses seconds over 86400 and accepts the bounds", () => {
+    const s = start();
+    expect(() => logSet(s, plank(s), draft({ duration_seconds: 86_401 }), NOW, ids())).toThrow("set_out_of_range");
+    expect(logSet(s, plank(s), draft({ duration_seconds: 86_400 }), NOW, ids()).sets).toHaveLength(1);
+    expect(logSet(s, bench(s), draft({ reps: 999, weight: "99999.99" }), NOW, ids()).sets).toHaveLength(1);
+  });
+
+  it("updateSet refuses an out-of-range edit", () => {
+    const s = logSet(start(), bench(start()), draft({ reps: 5 }), NOW, ids());
+    const key = s.sets[0]!.key;
+    expect(() => updateSet(s, key, draft({ reps: 1000 }))).toThrow("set_out_of_range");
+  });
+
+  it("refuses a 501st set", () => {
+    let s = start();
+    const key = bench(s);
+    for (let i = 0; i < 500; i += 1) s = logSet(s, key, draft({ reps: 5 }), NOW, ids());
+    expect(s.sets).toHaveLength(500);
+    expect(() => logSet(s, key, draft({ reps: 5 }), NOW, ids())).toThrow("too_many_sets");
+  });
+});

@@ -1,3 +1,4 @@
+import { newId } from "../gym/id";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -37,7 +38,7 @@ export function GymCard({ collapseKey }: { collapseKey: string }) {
   if (!enabled) return null;
 
   const begin = (routine: (typeof cache.routines)[number] | null) => {
-    setActive(startSession(routine, new Date(), () => crypto.randomUUID()));
+    setActive(startSession(routine, new Date(), newId));
     navigate("/gym/session");
   };
 

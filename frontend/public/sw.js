@@ -65,9 +65,25 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// A multipart body carries a little framing around the file itself.
+const SHARE_OVERHEAD_BYTES = 300 * 1024;
+
 async function receiveShare(request) {
   let text = "";
   let refused = false;
+  const headers = request.headers;
+  const header = (name) => (headers && typeof headers.get === "function" ? headers.get(name) : null);
+  // A share comes from the OS share sheet (Sec-Fetch-Site: none) or this origin. A page on
+  // another site posting here is not a share: keep nothing, say nothing.
+  const site = header("Sec-Fetch-Site");
+  if (site && site !== "same-origin" && site !== "none") {
+    return Response.redirect(new URL("/gym/import", self.location.origin).href, 303);
+  }
+  // Refuse on the declared size before a single byte is buffered into memory.
+  const declared = Number(header("Content-Length"));
+  if (Number.isFinite(declared) && declared > SHARE_MAX_BYTES + SHARE_OVERHEAD_BYTES) {
+    return Response.redirect(new URL("/gym/import?shared=1&refused=1", self.location.origin).href, 303);
+  }
   try {
     const form = await request.formData();
     const file = form.getAll("file").find((item) => typeof item !== "string");

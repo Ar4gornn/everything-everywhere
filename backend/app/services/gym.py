@@ -71,6 +71,27 @@ def check_measures(
         raise Invalid(f"a {kind} set takes only {required} (and a weight)", "set_wrong_measure")
 
 
+def reconcile_measures(
+    kind: str, *, reps: int | None, duration_seconds: int | None, distance_m: int | None
+) -> dict[str, int | None]:
+    """For a session sent whole: the person's record wins over the plan.
+
+    An exercise's kind can change between the phone starting a session and the phone sending
+    it (the kind was edited, or the routine was re-imported). Refusing the whole session for
+    that would lose a workout that really happened, so here a set that carries the kind's
+    required measure keeps only that one, and a set that lacks it is stored as it came as
+    long as it holds some measure (the table's CHECK only asks for one). A set with no
+    measure at all is still refused. The single-set endpoint stays strict.
+    """
+    given = {"reps": reps, "duration_seconds": duration_seconds, "distance_m": distance_m}
+    required = _REQUIRED_MEASURE[kind]
+    if given[required] is not None:
+        return {name: (value if name == required else None) for name, value in given.items()}
+    if all(value is None for value in given.values()):
+        check_measures(kind, reps=None, duration_seconds=None, distance_m=None)  # raises
+    return given
+
+
 def get_or_create_exercise(
     session: Session, user_id: uuid.UUID, *, name: str, kind: str = "reps"
 ) -> Exercise:
@@ -600,7 +621,7 @@ def complete_workout(
             if key not in resolved:
                 resolved[key] = get_exercise(session, user_id, item["exercise_id"])
         exercise = resolved[key]
-        check_measures(
+        measures = reconcile_measures(
             exercise.kind,
             reps=item["reps"],
             duration_seconds=item["duration_seconds"],
@@ -612,10 +633,10 @@ def complete_workout(
                 workout_id=inserted,
                 exercise_id=exercise.id,
                 position=position,
-                reps=item["reps"],
+                reps=measures["reps"],
                 weight=item["weight"],
-                duration_seconds=item["duration_seconds"],
-                distance_m=item["distance_m"],
+                duration_seconds=measures["duration_seconds"],
+                distance_m=measures["distance_m"],
             )
         )
     session.flush()

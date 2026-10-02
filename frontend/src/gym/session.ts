@@ -1,5 +1,6 @@
 import type { ExerciseKind, RoutineDetail, SetInput, WorkoutComplete } from "../api/types";
 import { todayIso } from "../months";
+import { FIELD_RANGES, MAX_SETS_PER_WORKOUT } from "./format";
 
 /**
  * The live session, as a pure model (Epic 42, AD-58).
@@ -159,6 +160,20 @@ function hasMeasure(kind: ExerciseKind, draft: SetDraft): boolean {
   return value !== null && Number.isFinite(value) && value > 0;
 }
 
+const within = (value: number, [low, high]: readonly [number, number]) =>
+  Number.isFinite(value) && value >= low && value <= high;
+
+const wholeWithin = (value: number | null, range: readonly [number, number]) =>
+  value === null || (Number.isInteger(value) && within(value, range));
+
+/** The server's bounds: whole numbers for the measures, a weight of 0 to 99 999.99. */
+function inRange(kind: ExerciseKind, draft: SetDraft): boolean {
+  if (kind === "reps" && !wholeWithin(draft.reps, FIELD_RANGES.reps)) return false;
+  if (kind === "duration" && !wholeWithin(draft.duration_seconds, FIELD_RANGES.seconds)) return false;
+  if (kind === "distance" && !wholeWithin(draft.distance_m, FIELD_RANGES.distance_m)) return false;
+  return draft.weight === null || within(Number(draft.weight), FIELD_RANGES.weight);
+}
+
 /** Prefill: the previous set of this exercise in the session, else its targets. */
 export function nextSetDraft(session: ActiveSession, exerciseKey: string): SetDraft {
   const exercise = exerciseOf(session, exerciseKey);
@@ -191,6 +206,8 @@ export function logSet(
   const exercise = exerciseOf(session, exerciseKey);
   if (!exercise) throw new Error("unknown_exercise");
   if (!hasMeasure(exercise.kind, draft)) throw new Error("set_missing_measure");
+  if (!inRange(exercise.kind, draft)) throw new Error("set_out_of_range");
+  if (session.sets.length >= MAX_SETS_PER_WORKOUT) throw new Error("too_many_sets");
   const rest = exercise.rest_seconds ?? DEFAULT_REST[exercise.kind];
   return {
     ...session,
@@ -207,6 +224,7 @@ export function updateSet(session: ActiveSession, setKey: string, draft: SetDraf
   const exercise = target ? exerciseOf(session, target.exercise) : undefined;
   if (!target || !exercise) return session;
   if (!hasMeasure(exercise.kind, draft)) throw new Error("set_missing_measure");
+  if (!inRange(exercise.kind, draft)) throw new Error("set_out_of_range");
   return {
     ...session,
     sets: session.sets.map((set) =>
