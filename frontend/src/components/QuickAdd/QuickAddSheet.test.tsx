@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,11 +97,13 @@ let calls: Call[];
 /** Replaces the answer to `quick-picks`; may be async or throw. */
 let picksAnswer: () => Promise<Response> | Response;
 let createAnswer: () => Promise<Response> | Response;
+let deleteAnswer: () => Promise<Response> | Response;
 
 function stubFetch() {
   calls = [];
   picksAnswer = () => json(PICKS);
   createAnswer = () => json({ id: "e-new" }, 201);
+  deleteAnswer = () => json(undefined, 204);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -110,7 +112,7 @@ function stubFetch() {
       calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       if (url.includes("/api/entries/quick-picks")) return picksAnswer();
       if (url.endsWith("/api/entries") && method === "POST") return createAnswer();
-      if (/\/api\/entries\/[^/]+$/.test(url) && method === "DELETE") return json(undefined, 204);
+      if (/\/api\/entries\/[^/]+$/.test(url) && method === "DELETE") return deleteAnswer();
       if (url.includes("/api/categories")) return json({ items: CATEGORIES });
       if (url.includes("/api/savings/overview")) return json({ pots: POTS });
       return json({ items: [] });
@@ -127,6 +129,9 @@ function Harness({ date }: { date?: string }) {
     <>
       <button type="button" onClick={() => open(date ? { date } : undefined)}>
         open-it
+      </button>
+      <button type="button" onClick={() => setTimeout(() => open(), 0)}>
+        open-later
       </button>
       <button type="button" onClick={close}>
         close-it
@@ -653,5 +658,148 @@ describe("a stale answer", () => {
     });
     expect(screen.queryByRole("button", { name: "StaleChip" })).toBeNull();
     expect(screen.getByRole("button", { name: "Groceries" })).toBeInTheDocument();
+  });
+});
+
+describe("Save & add another keeps Undo reachable (the toast sits under the modal dialog)", () => {
+  async function saveAnother(user: ReturnType<typeof userEvent.setup>, amount: string) {
+    await user.type(amountInput(), amount);
+    await user.click(screen.getByRole("button", { name: "Fuel" }));
+    await user.click(screen.getByRole("button", { name: "Save & add another" }));
+  }
+  const row = () => within(dialog()).getByRole("status");
+
+  it("shows an inline status row inside the dialog, not a global toast", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await saveAnother(user, "7");
+    await waitFor(() => expect(row()).toHaveTextContent("Entry saved"));
+    expect(row()).toHaveAttribute("aria-live", "polite");
+    expect(within(row()).getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(document.querySelector(".toasts")).not.toHaveTextContent("Entry saved");
+  });
+
+  it("deletes that entry on Undo, bumps, and replaces the row with the undone text", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await saveAnother(user, "7");
+    await user.click(await within(dialog()).findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    expect(deletes()[0]?.url).toMatch(/\/api\/entries\/e-new$/);
+    await waitFor(() => expect(row()).toHaveTextContent("Entry removed"));
+    expect(within(row()).queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(version()).toBe("2");
+  });
+
+  it("targets the newest entry once a newer save replaced the row", async () => {
+    let n = 0;
+    createAnswer = () => json({ id: `e-${++n}` }, 201);
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await saveAnother(user, "7");
+    await waitFor(() => expect(row()).toHaveTextContent("Entry saved"));
+    await waitFor(() => expect(amountInput()).toHaveValue(""));
+    await saveAnother(user, "8");
+    await waitFor(() => expect(posts()).toHaveLength(2));
+    await waitFor(() => expect(amountInput()).toHaveValue(""));
+    await user.click(within(dialog()).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    expect(deletes()[0]?.url).toMatch(/\/api\/entries\/e-2$/);
+  });
+
+  it("shows a failed delete inline, in the same row", async () => {
+    deleteAnswer = () => json({ detail: "nope", code: "error" }, 500);
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await saveAnother(user, "7");
+    await user.click(await within(dialog()).findByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(row()).not.toHaveTextContent("Entry saved"));
+    expect(row()).not.toHaveTextContent("Entry removed");
+    expect(row().textContent?.length).toBeGreaterThan(0);
+    expect(version()).toBe("1");
+  });
+
+  it("is gone after close and reopen", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await saveAnother(user, "7");
+    await waitFor(() => expect(row()).toHaveTextContent("Entry saved"));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await openSheet(user);
+    expect(within(dialog()).queryByRole("status")).toBeNull();
+  });
+
+  it("leaves plain Save on the global toast", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await user.type(amountInput(), "7");
+    await user.click(screen.getByRole("button", { name: "Fuel" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.querySelector(".toasts")).toHaveTextContent("Entry saved"));
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+});
+
+describe("a slow Save & add another", () => {
+  it("does not wipe the form of a sheet that was closed and reopened meanwhile", async () => {
+    let release: (r: Response) => void = () => undefined;
+    createAnswer = () => new Promise<Response>((resolve) => (release = resolve));
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await user.type(amountInput(), "7");
+    await user.click(screen.getByRole("button", { name: "Fuel" }));
+    await user.click(screen.getByRole("button", { name: "Save & add another" }));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await openSheet(user);
+    await user.type(amountInput(), "42");
+    await user.click(screen.getByRole("button", { name: "Rent" }));
+    await act(async () => release(json({ id: "e-slow" }, 201)));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(amountInput()).toHaveValue("42");
+    expect(pressed("Rent")).toBe("true");
+    expect(within(dialog()).queryByRole("status")).toBeNull();
+    // The entry was saved all the same.
+    expect(version()).toBe("1");
+  });
+});
+
+describe("a reopened sheet", () => {
+  afterEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  it("never paints the previous form: the reset lands in the same task as the open", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await user.type(amountInput(), "9");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(dialog().open).toBe(false);
+
+    // Outside act, effects keep their real timing: a passive effect from a timer-driven
+    // update runs in a later task, a layout effect is flushed with the commit. A mutation
+    // observer callback runs after the task's synchronous work and before any later task, so
+    // it sees what a paint right after the commit would show.
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
+    let seen: string | undefined;
+    const watch = new MutationObserver(() => {
+      const field = document.querySelector<HTMLInputElement>("input.qa-amount");
+      if (seen === undefined && field) seen = field.value;
+    });
+    watch.observe(dialog(), { childList: true, subtree: true });
+    screen.getByRole("button", { name: "open-later" }).click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    watch.disconnect();
+    expect(seen).toBe("");
   });
 });

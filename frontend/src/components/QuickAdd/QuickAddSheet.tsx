@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 
 import { api } from "../../api/client";
 import {
@@ -45,6 +45,15 @@ const NO_CATEGORIES: Category[] = [];
 const NO_VENDORS: Vendor[] = [];
 const NO_POTS: Pot[] = [];
 
+/**
+ * The row inside the dialog that follows "Save & add another". The global toast renders under
+ * a modal dialog's top layer and is inert there, so its Undo would be unreachable.
+ */
+type Inline =
+  | { phase: "saved"; id: string }
+  | { phase: "undone" }
+  | { phase: "error"; id: string; message: string };
+
 export function QuickAddSheet() {
   const { isOpen, options, close, bump } = useQuickAdd();
   const t = useT();
@@ -75,6 +84,7 @@ export function QuickAddSheet() {
   const [unitDismissed, setUnitDismissed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inline, setInline] = useState<Inline | null>(null);
 
   const [picks, setPicks] = useState<QuickPicks | null>(null);
   const [categories, setCategories] = useState<Category[]>(NO_CATEGORIES);
@@ -82,7 +92,8 @@ export function QuickAddSheet() {
   const [pots, setPots] = useState<Pot[]>(NO_POTS);
   const [picksFailed, setPicksFailed] = useState(false);
 
-  useEffect(() => {
+  // A layout effect, so the reset below lands before the first paint of a reopened sheet.
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!isOpen) {
       if (dialog?.open) dialog.close();
@@ -111,6 +122,7 @@ export function QuickAddSheet() {
     setUnitDismissed(false);
     setSaving(false);
     setError(null);
+    setInline(null);
     setPicks(null);
     setCategories(NO_CATEGORIES);
     setVendors(NO_VENDORS);
@@ -264,6 +276,8 @@ export function QuickAddSheet() {
     }
     setSaving(true);
     setError(null);
+    // The sheet this save started on; a close (or a reopen) before the answer lands moves it.
+    const mine = generation.current;
     try {
       const created = await api.createEntry({
         kind,
@@ -279,18 +293,24 @@ export function QuickAddSheet() {
       bump();
       // The tour's entry step waits on exactly this; a no-op when it is not running.
       tour.notify("entry-created");
-      toast.show(t("quickAdd.saved"), {
-        onUndo: async () => {
-          try {
-            await api.deleteEntry(created.id);
-            bump();
-            toast.show(t("quickAdd.undone"));
-          } catch (caught) {
-            toast.show(errorMessage(t, caught, "entries.couldNotDelete"), { tone: "error" });
-          }
-        },
-      });
+      if (!another) {
+        toast.show(t("quickAdd.saved"), {
+          onUndo: async () => {
+            try {
+              await api.deleteEntry(created.id);
+              bump();
+              toast.show(t("quickAdd.undone"));
+            } catch (caught) {
+              toast.show(errorMessage(t, caught, "entries.couldNotDelete"), { tone: "error" });
+            }
+          },
+        });
+      }
+      // The sheet was closed (and maybe reopened) while this was in flight: the entry is
+      // saved, but nothing of the old form may touch the current one.
+      if (mine !== generation.current) return;
       if (another) {
+        setInline({ phase: "saved", id: created.id });
         // Kind and date stay: the next receipt of the same trip is usually the same day.
         setAmount("");
         setCategoryName("");
@@ -307,9 +327,28 @@ export function QuickAddSheet() {
         close();
       }
     } catch (caught) {
-      setError(errorMessage(t, caught, "entries.couldNotSave"));
+      if (mine === generation.current) setError(errorMessage(t, caught, "entries.couldNotSave"));
     } finally {
-      setSaving(false);
+      if (mine === generation.current) setSaving(false);
+    }
+  }
+
+  /** Undo for the inline row: deletes exactly the entry that row was made for. */
+  async function undoInline(id: string) {
+    const mine = generation.current;
+    try {
+      await api.deleteEntry(id);
+      bump();
+      if (mine !== generation.current) return;
+      setInline((current) =>
+        current && "id" in current && current.id === id ? { phase: "undone" } : current,
+      );
+    } catch (caught) {
+      if (mine !== generation.current) return;
+      const message = errorMessage(t, caught, "entries.couldNotDelete");
+      setInline((current) =>
+        current && "id" in current && current.id === id ? { phase: "error", id, message } : current,
+      );
     }
   }
 
@@ -344,6 +383,23 @@ export function QuickAddSheet() {
               ✕
             </button>
           </div>
+
+          {inline && (
+            <div className="qa-status" role="status" aria-live="polite">
+              <span>
+                {inline.phase === "saved"
+                  ? t("quickAdd.saved")
+                  : inline.phase === "undone"
+                    ? t("quickAdd.undone")
+                    : inline.message}
+              </span>
+              {inline.phase !== "undone" && (
+                <button type="button" className="quiet" onClick={() => void undoInline(inline.id)}>
+                  {t("toast.undo")}
+                </button>
+              )}
+            </div>
+          )}
 
           <ErrorBanner message={error} />
           <ErrorBanner message={picksFailed ? t("quickAdd.picksFailed") : null} />

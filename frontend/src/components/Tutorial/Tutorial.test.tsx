@@ -9,6 +9,7 @@ import { LanguageProvider } from "../../i18n";
 import { ToastProvider } from "../Toast";
 import { ThemeProvider } from "../../theme";
 import { PRELOAD_TIMEOUT, preloadPages } from "../../test/preloadPages";
+import { onAPhone } from "../../test/phone";
 
 /**
  * The guided tour (Epic 30), driven through the real App: the real router, the real
@@ -314,5 +315,71 @@ describe("the guided tour", () => {
     await user.selectOptions(screen.getByLabelText("Account currency"), "EUR");
     await waitFor(() => expect(screen.getByLabelText("Account currency")).toHaveValue("EUR"));
     await expect(screen.findByRole("dialog", {}, { timeout: 300 })).rejects.toThrow();
+  });
+});
+
+const findPageAddButton = () =>
+  waitFor(() => {
+    const button = document.querySelector(".add-entry-button");
+    expect(button).not.toBeNull();
+    return button as HTMLElement;
+  });
+
+describe("the guided tour on a phone (Epic 44)", () => {
+  onAPhone();
+  beforeAll(preloadPages, PRELOAD_TIMEOUT);
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    delete document.body.dataset.tourStep;
+  });
+
+  // On a phone the entry step used to open the quick-add sheet itself (`/entries?add=1`):
+  // a modal dialog, so the coach panel was covered and inert and the text said to press "Add".
+  it("keeps the sheet closed on the entry step and rings the Add an entry button", async () => {
+    const user = userEvent.setup();
+    const fetchMock = renderApp(profile());
+    await screen.findByRole("dialog");
+    await user.click(within(dialog()).getByRole("button", { name: "Let’s go" }));
+    await screen.findByText("Step 2 of 5");
+    // The page's own button, not the floating +: both are named "Add an entry".
+    const add = await findPageAddButton();
+    await waitFor(() => expect(document.body.dataset.tourStep).toBe("entry"));
+    expect(add).toHaveAttribute("data-tour", "record-form");
+    expect(
+      within(dialog()).getByText(/Tap Add an entry, enter an amount and pick a category, then press Save/),
+    ).toBeInTheDocument();
+    // Given the sheet's own effects time to run: it must still not have opened.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect((document.querySelector("dialog.sheet") as HTMLDialogElement).open).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("quick-picks"))).toBe(false);
+    expect(within(dialog()).getByText("Step 2 of 5")).toBeInTheDocument();
+  });
+
+  it("moves on to the list when the entry is saved from the sheet", async () => {
+    const user = userEvent.setup();
+    renderApp(profile());
+    await screen.findByRole("dialog");
+    await user.click(within(dialog()).getByRole("button", { name: "Let’s go" }));
+    await screen.findByText("Step 2 of 5");
+    await user.click(await findPageAddButton());
+    const sheet = document.querySelector("dialog.sheet") as HTMLElement;
+    await waitFor(() => expect(sheet).toHaveAttribute("open"));
+    await user.type(within(sheet).getByLabelText(/^Amount/), "12.50");
+    await user.click(within(sheet).getByRole("button", { name: "Other…" }));
+    await user.type(within(sheet).getByLabelText("Category"), "Coffee");
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    await screen.findByText("Step 3 of 5");
+    await waitFor(() => expect(document.body.dataset.tourStep).toBe("history"));
+  });
+
+  it("says the same in French, in words of its own", async () => {
+    const user = userEvent.setup();
+    renderApp(profile({ language: "fr" }));
+    await screen.findByRole("dialog");
+    const begin = within(dialog()).getAllByRole("button")[0] as HTMLElement;
+    await user.click(begin);
+    await waitFor(() => expect(document.body.dataset.tourStep).toBe("entry"));
+    expect(within(dialog()).getByText(/Touchez Ajouter une opération/)).toBeInTheDocument();
   });
 });

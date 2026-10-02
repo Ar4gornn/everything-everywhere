@@ -15,8 +15,14 @@ vi.mock("./components/QuickAdd/QuickAddSheet", async () => {
   const { useQuickAdd } = await import("./components/QuickAdd/QuickAddContext");
   return {
     QuickAddSheet() {
-      const { isOpen, options } = useQuickAdd();
-      return isOpen ? <div data-testid="quick-add-open" data-date={options.date ?? ""} /> : null;
+      const { isOpen, options, close } = useQuickAdd();
+      return isOpen ? (
+        <div data-testid="quick-add-open" data-date={options.date ?? ""}>
+          <button type="button" onClick={close}>
+            close-sheet
+          </button>
+        </div>
+      ) : null;
     },
   };
 });
@@ -103,6 +109,25 @@ describe("quick add on a phone (Epic 44)", () => {
     expect(await screen.findByTestId("quick-add-open")).toBeInTheDocument();
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/habits$/);
     expect(plus()).toBeNull();
+  });
+
+  it("keeps the + in the document while the sheet is open and hands focus back on close", async () => {
+    const user = userEvent.setup();
+    renderAt("/habits");
+    await ready();
+    await user.click(plus() as HTMLElement);
+    await screen.findByTestId("quick-add-open");
+    const fab = document.querySelector(".fab") as HTMLElement;
+    // Out of sight and out of the way, but still the element focus can return to.
+    expect(fab).not.toBeNull();
+    expect(fab).toHaveAttribute("aria-hidden", "true");
+    expect(fab.hasAttribute("inert")).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "close-sheet" }));
+    await waitFor(() => expect(screen.queryByTestId("quick-add-open")).toBeNull());
+    await waitFor(() => expect(plus()).toHaveFocus());
+    expect(document.querySelector(".fab")).toBe(fab);
+    expect(fab.hasAttribute("inert")).toBe(false);
   });
 
   it("opens with the date of ?add=1&date=… on any route, and strips both params", async () => {

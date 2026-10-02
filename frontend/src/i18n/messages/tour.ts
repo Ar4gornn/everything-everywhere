@@ -21,6 +21,12 @@ export const tour = {
     fr: "Saisissez un montant, tapez un nom de catégorie — elle est créée au passage — puis appuyez sur {add}. La visite avance d’elle-même une fois l’opération enregistrée.",
   },
 
+  // On a phone the form is the quick-add sheet, opened from the "Add an entry" button.
+  "tour.entry.phoneBody": {
+    en: "Tap {add}, enter an amount and pick a category, then press {save}. The tour moves on by itself once it is saved.",
+    fr: "Touchez {add}, saisissez un montant et choisissez une catégorie, puis appuyez sur {save}. La visite avance d’elle-même une fois l’opération enregistrée.",
+  },
+
   "tour.history.title": { en: "It’s on the list", fr: "Elle est dans la liste" },
   "tour.history.body": {
     en: "Everything you record shows up here, filtered by month, kind or category, and any line can be edited or deleted in place.",

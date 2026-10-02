@@ -5516,3 +5516,24 @@ dialog.sheet::backdrop {
 .sheet .qa-actions button {
   min-height: 48px;
 }
+
+/* The inline "saved · Undo" row after Save & add another: the global toast sits under the
+   modal dialog and is inert there, so the sheet carries its own. */
+.sheet .qa-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text);
+}
+
+.sheet .qa-status button.quiet {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* The + stays in the document while the sheet is open, so the browser can give focus back to
+   it on close; it is only taken out of sight and out of the tab order. */
+.fab.fab-away {
+  visibility: hidden;
+}

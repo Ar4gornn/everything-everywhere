@@ -695,7 +695,9 @@ describe("on a phone (AD-53)", () => {
 
     const button = await screen.findByRole("button", { name: "Add an entry" });
     expect(screen.queryByRole("form", { name: "Record an entry" })).toBeNull();
-    expect(document.querySelector('[data-tour="record-form"]')).toBeNull();
+    // The tour's phone entry step rings this button: it is the only record-form target here.
+    expect(document.querySelectorAll('[data-tour="record-form"]')).toHaveLength(1);
+    expect(button).toHaveAttribute("data-tour", "record-form");
     expect(screen.queryByTestId("sheet-open")).toBeNull();
     await user.click(button);
     expect(screen.getByTestId("sheet-open")).toBeInTheDocument();

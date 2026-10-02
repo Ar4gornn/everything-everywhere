@@ -79,7 +79,12 @@ function AddEntryButton() {
   const t = useT();
   const { open } = useQuickAdd();
   return (
-    <button type="button" className="add-entry-button" onClick={() => open()}>
+    <button
+      type="button"
+      className="add-entry-button"
+      data-tour="record-form"
+      onClick={() => open()}
+    >
       {t("nav.addEntry")}
     </button>
   );

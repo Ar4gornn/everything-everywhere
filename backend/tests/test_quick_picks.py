@@ -436,6 +436,28 @@ def test_vendors_tie_broken_by_entry_id(client, user_a, seed_a):
     assert [v["vendor_name"] for v in fetch(client, user_a)["vendors"]] == expected
 
 
+def test_window_uses_the_accounts_local_date_not_the_utc_date(client, user_a, seed_a):
+    """UTC+14 at 12:00 UTC is already the next day: an entry dated there is "today", in the window.
+
+    Measured against ``now.date()`` the same entry would be a day in the future and fall out.
+    """
+    zone = client.patch(
+        "/api/auth/me/notification-schedule",
+        json={"timezone": "Pacific/Kiritimati", "digest_time": "19:00"},
+        headers=user_a["headers"],
+    )
+    assert zone.status_code == 200, zone.text
+    local_today = TODAY + dt.timedelta(days=1)
+    food = seed_a.category("Food")
+    edge = seed_a.category("Edge")
+    seed_a.entry(food, local_today, amount="3.00")
+    # 90 days before the *local* today is the last day in; 91 would be out.
+    seed_a.entry(edge, local_today - dt.timedelta(days=90))
+    body = fetch(client, user_a)["expense"]
+    assert {c["name"]: c["uses"] for c in body["categories"]} == {"Food": 1, "Edge": 1}
+    assert [c["amount"] for c in body["combos"]] == ["3.00", "5.00"]
+
+
 def test_combo_dated_today_is_in(client, user_a, seed_a):
     food = seed_a.category("Food")
     seed_a.entry(food, TODAY, amount="2.50")

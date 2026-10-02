@@ -12,7 +12,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { api } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
-import { useCurrentLayout } from "../../layout/useLayout";
+import { useCurrentLayout, useLayout } from "../../layout/useLayout";
 
 /**
  * The guided tour on first sign-in (Epic 30).
@@ -65,6 +65,18 @@ export const STEPS: Record<TourStep, StepSpec> = {
   progress: { path: "/", target: "budget-progress", modal: false },
   done: { modal: true },
 };
+
+/**
+ * The entry step on a phone. There the sheet is the form, and `?add=1` would open it over
+ * the coach panel (a modal dialog makes the page, panel included, inert), so the step lands
+ * on `/entries` and rings the "Add an entry" button instead; the person opens the sheet.
+ */
+export const PHONE_ENTRY: StepSpec = { path: "/entries", target: "record-form", modal: false };
+
+/** The spec of a step on this layout. Only the entry step differs. */
+export function specOf(step: TourStep, phone: boolean): StepSpec {
+  return step === "entry" && phone ? PHONE_ENTRY : STEPS[step];
+}
 
 /** The numbered ones, in order. The closing screen is not a step. */
 export const NUMBERED: readonly TourStep[] = ["welcome", "entry", "history", "budget", "progress"];
@@ -124,6 +136,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const budgetsShown =
     useCurrentLayout().cards.find((card) => card.id === "budgets")?.on ?? true;
   const numbered = useMemo(() => numberedFor(budgetsShown), [budgetsShown]);
+  const phone = useLayout() === "phone";
   // Which account has already been offered the tour this session. The guard is a ref and
   // not the server flags, because the flags in `user` are not re-read after the PATCH —
   // and a later profile refresh (changing the currency, say) must not reopen it.
@@ -144,10 +157,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   // Take the person to the step's page. Not re-run when the path changes: wandering off
   // mid-step is allowed, and the next step brings them back.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: not pathname or navigate — see above
+  // biome-ignore lint/correctness/useExhaustiveDependencies: not pathname, navigate or the layout — see above
   useEffect(() => {
     if (!step) return;
-    const path = STEPS[step].path;
+    const path = specOf(step, phone).path;
     if (!path) return;
     // The entry step always navigates, even from /entries, so `?add=1` focuses the amount.
     if (path.includes("?") || path !== pathname) navigate(path);
@@ -157,10 +170,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   // itself is CSS keyed off this attribute, so it survives the page mounting late; only
   // the scroll has to wait for the element.
   useEffect(() => {
-    const target = step ? STEPS[step].target : undefined;
+    const target = step ? specOf(step, phone).target : undefined;
     if (!step || !target) return;
     document.body.dataset.tourStep = step;
-    const inner = STEPS[step].scrollTo;
+    const inner = specOf(step, phone).scrollTo;
     let tries = 0;
     let frame = 0;
     const look = () => {
@@ -184,7 +197,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       window.cancelAnimationFrame(frame);
       delete document.body.dataset.tourStep;
     };
-  }, [step]);
+  }, [step, phone]);
 
   const start = useCallback(() => setStep("welcome"), []);
 

@@ -1,4 +1,4 @@
-import { type ComponentType, lazy, Suspense, useEffect } from "react";
+import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
 import {
   NavLink,
   Navigate,
@@ -201,6 +201,9 @@ function QuickAddHost({ pathname }: { pathname: string }) {
   const phone = useLayout() === "phone";
   const { isOpen, open, close } = useQuickAdd();
   const [searchParams, setSearchParams] = useSearchParams();
+  const plusRef = useRef<HTMLButtonElement>(null);
+  // Set when the sheet was opened from the +, so closing hands focus back to it.
+  const fromPlus = useRef(false);
 
   const arriving = phone && searchParams.get("add") === "1";
   // biome-ignore lint/correctness/useExhaustiveDependencies: `open` and the setter are stable
@@ -219,11 +222,32 @@ function QuickAddHost({ pathname }: { pathname: string }) {
     if (!phone && isOpen) close();
   }, [phone, isOpen, close]);
 
+  // Not every browser focuses a button when it is tapped, and then the dialog has no element
+  // to restore focus to on close: give it back to the + explicitly.
+  useEffect(() => {
+    if (isOpen || !fromPlus.current) return;
+    fromPlus.current = false;
+    plusRef.current?.focus();
+  }, [isOpen]);
+
   if (!phone) return null;
   return (
     <>
-      {!isOpen && !quickAddHidden(pathname) && (
-        <button type="button" className="fab" aria-label={t("nav.addEntry")} onClick={() => open()}>
+      {/* Kept mounted while the sheet is open (just out of sight and inert), so it is still
+          there for focus to return to. */}
+      {!quickAddHidden(pathname) && (
+        <button
+          ref={plusRef}
+          type="button"
+          className={isOpen ? "fab fab-away" : "fab"}
+          aria-label={t("nav.addEntry")}
+          aria-hidden={isOpen || undefined}
+          inert={isOpen}
+          onClick={() => {
+            fromPlus.current = true;
+            open();
+          }}
+        >
           +
         </button>
       )}

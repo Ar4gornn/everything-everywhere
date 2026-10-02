@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 
 import { useT } from "../../i18n";
+import { useLayout } from "../../layout/useLayout";
 import { STEPS, useTutorial, type TourStep } from "./useTutorial";
 
 /**
@@ -11,6 +12,7 @@ import { STEPS, useTutorial, type TourStep } from "./useTutorial";
 export function TutorialModal() {
   const tour = useTutorial();
   const t = useT();
+  const phone = useLayout() === "phone";
   const primary = useRef<HTMLButtonElement>(null);
   const step = tour.step;
   const modal = step !== null && STEPS[step].modal;
@@ -56,7 +58,7 @@ export function TutorialModal() {
         <h2 id="tour-title">{t(`tour.${step}.title`)}</h2>
         {/* Polite: a step change is announced after whatever the reader is on, not over it. */}
         <p id="tour-body" aria-live="polite">
-          {body(step, t)}
+          {body(step, t, phone)}
         </p>
         <div className="tour-actions">
           <button ref={primary} type="button" onClick={advance}>
@@ -73,8 +75,11 @@ export function TutorialModal() {
   );
 }
 
-function body(step: TourStep, t: ReturnType<typeof useT>): string {
+function body(step: TourStep, t: ReturnType<typeof useT>, phone: boolean): string {
   // The entry step names the form's own submit button, so the two cannot drift apart.
+  if (step === "entry" && phone) {
+    return t("tour.entry.phoneBody", { add: t("nav.addEntry"), save: t("quickAdd.save") });
+  }
   if (step === "entry") return t("tour.entry.body", { add: t("action.add") });
   return t(`tour.${step}.body`);
 }
