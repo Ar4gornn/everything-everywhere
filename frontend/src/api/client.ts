@@ -647,6 +647,10 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  /** The newest sessions with their sets (Epic 43): the AI prompt's context. */
+  listRecentWorkouts: (limit = 10) =>
+    items(request<Page<WorkoutDetail>>(`/api/gym/workouts/recent?limit=${limit}`)),
+
   readWorkout: (id: string) => request<WorkoutDetail>(`/api/gym/workouts/${id}`),
 
   deleteWorkout: (id: string) => request<void>(`/api/gym/workouts/${id}`, { method: "DELETE" }),

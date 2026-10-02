@@ -569,6 +569,8 @@ export interface LineTargets {
   target_distance_m: number | null;
   target_weight: Weight | null;
   rest_seconds: number | null;
+  /** Rest after the exercise's last set, before the next exercise (Epic 43). */
+  rest_after_seconds: number | null;
   note: string | null;
 }
 
@@ -594,6 +596,8 @@ export interface Workout {
   performed_on: string;
   started_at: string | null;
   ended_at: string | null;
+  /** A rest day: a workout with no sets, one per date (AD-59). */
+  rest_day: boolean;
   note: string | null;
   created_at: string;
 }
@@ -616,6 +620,8 @@ export interface WorkoutDetail {
   performed_on: string;
   started_at: string | null;
   ended_at: string | null;
+  /** A rest day: a workout with no sets, one per date (AD-59). */
+  rest_day: boolean;
   note: string | null;
   sets: WorkoutSet[];
 }
@@ -660,6 +666,8 @@ export interface WorkoutComplete {
   started_at?: string;
   ended_at?: string;
   note?: string;
+  /** A rest day (AD-59): sets must be empty; idempotent per date as well as per client_ref. */
+  rest_day?: boolean;
   sets: SetInput[];
 }
 
@@ -673,6 +681,7 @@ export interface RoutineImportLine {
   target_distance_m?: number;
   target_weight?: Weight;
   rest_seconds?: number;
+  rest_after_seconds?: number;
   note?: string;
 }
 

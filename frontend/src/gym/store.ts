@@ -498,3 +498,41 @@ export function useGymData(): GymData {
 
   return { cache, active, outbox, refreshing: busy, offline, refresh, setActive };
 }
+
+// ------------------------------------------------------------------ Epic 43 (AD-59)
+
+/**
+ * The newest sessions with their sets, for the AI prompt's context. Cached beside the gym cache
+ * under `gym.<userId>.recent`, refreshed by `refreshCache` (one `api.listRecentWorkouts(10)`),
+ * cleared by `clearGymStore`.
+ */
+export function readRecent(userId: string): import("../api/types").WorkoutDetail[] {
+  void userId;
+  throw new Error("TODO(F1): readRecent");
+}
+
+/** True when the cache already holds a rest day on `date` (ISO). */
+export function hasRestDay(userId: string, date: string): boolean {
+  void userId;
+  void date;
+  throw new Error("TODO(F1): hasRestDay");
+}
+
+/**
+ * Log a rest day for `date` through the outbox (works offline), add it to the cached workouts
+ * at once so the UI updates, then flush. Returns the client_ref, for an Undo that discards it
+ * while it is still pending (or deletes the workout once sent).
+ */
+export async function logRestDay(userId: string, date: string, now: Date): Promise<string> {
+  void userId;
+  void date;
+  void now;
+  throw new Error("TODO(F1): logRestDay");
+}
+
+/** Undo a rest day logged moments ago: drop it from the outbox, or delete it on the server. */
+export async function undoRestDay(userId: string, clientRef: string): Promise<void> {
+  void userId;
+  void clientRef;
+  throw new Error("TODO(F1): undoRestDay");
+}

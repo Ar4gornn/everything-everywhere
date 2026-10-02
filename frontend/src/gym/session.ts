@@ -313,3 +313,62 @@ export function toCompleteBody(session: ActiveSession, now: Date): WorkoutComple
   if (session.note.trim() !== "") body.note = session.note.trim();
   return body;
 }
+
+// ------------------------------------------------------------------ Epic 43 (AD-59)
+
+/** Start a rest of `seconds` now, whatever the person is doing — the standalone rest timer. */
+export function startRest(session: ActiveSession, seconds: number, now: Date): ActiveSession {
+  void session;
+  void seconds;
+  void now;
+  throw new Error("TODO(F1): startRest");
+}
+
+/** Add `seconds` to a running rest (the "+15 s" button). No rest running → unchanged. */
+export function extendRest(session: ActiveSession, seconds: number, now: Date): ActiveSession {
+  void session;
+  void seconds;
+  void now;
+  throw new Error("TODO(F1): extendRest");
+}
+
+/**
+ * The rest `logSet` will start for a set of this exercise: `rest_after_seconds` when this set
+ * completes the exercise's target sets and there is a next exercise, else the per-set rest,
+ * else the kind's default. Exposed so the page can label it ("Rest before {next}").
+ */
+export function restAfterSet(
+  session: ActiveSession,
+  exerciseKey: string,
+): { seconds: number; beforeNext: string | null } {
+  void session;
+  void exerciseKey;
+  throw new Error("TODO(F1): restAfterSet");
+}
+
+/** A line of the quick builder (Epic 43 §7.2), before it is a routine or a session. */
+export interface BuilderLine {
+  exercise_id: string | null;
+  name: string;
+  kind: import("../api/types").ExerciseKind;
+  sets: number;
+  reps: number | null;
+  seconds: number | null;
+  distance_m: number | null;
+  /** Two-place decimal string, or null. */
+  weight: string | null;
+}
+
+/** Start a session straight from builder lines — offline, or when not saved as a routine. */
+export function sessionFromLines(
+  name: string,
+  lines: BuilderLine[],
+  now: Date,
+  newId: () => string,
+): ActiveSession {
+  void name;
+  void lines;
+  void now;
+  void newId;
+  throw new Error("TODO(F1): sessionFromLines");
+}
