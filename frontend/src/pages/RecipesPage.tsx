@@ -6,10 +6,12 @@ import type { FoodInput } from "../api/client";
 import { FOOD_BASES, type Food, type FoodBasis, type Meal, type Recipe } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { CheckInButton } from "../components/CheckInButton";
+import { ListRow, useOpenRow } from "../components/ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useT } from "../i18n";
 import { errorMessage } from "../i18n/errors";
+import { useLayout } from "../layout/useLayout";
 import { useLoad } from "../useLoad";
 import { budgetMonth } from "../months";
 import { NUTRIENTS, basisLabel, formatNutrient, quantityLabel, trim } from "../nutrition";
@@ -32,6 +34,9 @@ export function RecipesPage() {
   const t = useT();
   const toast = useToast();
   const startDay = useOptionalAuth()?.user?.budget_start_day ?? 1;
+  // On a phone both lists are rows, not tables (AD-53); the foods table is eight columns wide.
+  const phone = useLayout() === "phone";
+  const [openFood, toggleFood] = useOpenRow();
 
   // Failures of the page's own actions. The load's failure is `failure`, from the hook.
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +168,35 @@ export function RecipesPage() {
       <Card title={t("rec.yours")}>
         {loading ? null : recipes.length === 0 ? (
           <Empty>{t("rec.none")}</Empty>
+        ) : phone ? (
+          <ul className="list-rows" aria-label={t("rec.yours")}>
+            {recipes.map((recipe) => {
+              const kcal = formatNutrient("kcal", recipe.per_serving.kcal);
+              return (
+                <ListRow
+                  key={recipe.id}
+                  title={
+                    <Link
+                      to={`/recipes/${recipe.id}`}
+                      aria-label={t("rec.open", { name: recipe.name })}
+                    >
+                      {recipe.name}
+                    </Link>
+                  }
+                  meta={`${t.n("rec.servingsCount", recipe.servings)} · ${t("rec.ingredients")} ${
+                    recipe.ingredient_count
+                  }`}
+                  amount={
+                    kcal === null ? (
+                      <span className="hint">{t("rec.notKnown")}</span>
+                    ) : (
+                      `${kcal} ${t("rec.kcalUnit")}`
+                    )
+                  }
+                />
+              );
+            })}
+          </ul>
         ) : (
           <TableWrap>
             <table>
@@ -282,6 +316,90 @@ export function RecipesPage() {
         </p>
         {loading ? null : foods.length === 0 ? (
           <Empty>{t("rec.foodsNone")}</Empty>
+        ) : phone ? (
+          <ul className="list-rows" aria-label={t("rec.foods")}>
+            {foods.map((food) => {
+              const kcal = food.kcal;
+              return (
+                <ListRow
+                  key={food.id}
+                  title={food.name}
+                  meta={basisLabel(food.basis, t)}
+                  amount={kcal === null ? <span className="hint">—</span> : `${kcal} ${t("rec.kcalUnit")}`}
+                  open={openFood === food.id || editing === food.id}
+                  onToggle={() => toggleFood(food.id)}
+                  details={
+                    editing === food.id ? (
+                      <div style={{ display: "grid", gap: 8 }}>
+                        <label>
+                          {t("rec.basis")}
+                          <select
+                            value={draftBasis}
+                            onChange={(event) => setDraftBasis(event.target.value as FoodBasis)}
+                          >
+                            {FOOD_BASES.map((option) => (
+                              <option key={option} value={option}>
+                                {basisLabel(option, t)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {NUTRIENTS.map((key) => (
+                          <label key={key}>
+                            {t(`rec.${key}` as "rec.kcal")}
+                            <input
+                              inputMode="decimal"
+                              value={draft[key] ?? ""}
+                              onChange={(event) =>
+                                setDraft((was) => ({ ...was, [key]: event.target.value }))
+                              }
+                            />
+                          </label>
+                        ))}
+                        <div className="row" style={{ gap: 8 }}>
+                          <button type="button" onClick={() => void saveFood(food)}>
+                            {t("rec.save")}
+                          </button>
+                          <button type="button" className="quiet" onClick={() => setEditing(null)}>
+                            {t("rec.cancel")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <dl className="list-row-facts">
+                          {NUTRIENTS.map((key) => (
+                            <div key={key}>
+                              <dt>{t(`rec.${key}` as "rec.kcal")}</dt>
+                              <dd>{food[key] === null ? <span className="hint">—</span> : food[key]}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <div className="row" style={{ gap: 8 }}>
+                          <button
+                            type="button"
+                            className="quiet"
+                            aria-label={t("rec.editFood", { name: food.name })}
+                            onClick={() => startEditing(food)}
+                          >
+                            ✎ {t("action.edit")}
+                          </button>
+                          <button
+                            type="button"
+                            className="quiet"
+                            aria-label={t("rec.deleteFood", { name: food.name })}
+                            onClick={() => void removeFood(food)}
+                          >
+                            × {t("action.delete")}
+                          </button>
+                        </div>
+                      </>
+                    )
+                  }
+                />
+              );
+            })}
+          </ul>
         ) : (
           <TableWrap>
             <table>

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RecipesPage } from "./RecipesPage";
 import { AuthProvider } from "../auth/AuthContext";
 import { ToastProvider } from "../components/Toast";
+import { onAPhone } from "../test/phone";
 
 /**
  * The recipe book and its foods (Epic 27, story 27.1).
@@ -220,6 +221,45 @@ describe("RecipesPage", () => {
       expect(body["protein"]).toBeNull();
       expect(body["kcal"]).toBe("130.00");
       expect(body["basis"]).toBe("per_100g");
+    });
+  });
+});
+
+describe("RecipesPage on a phone (AD-53)", () => {
+  onAPhone();
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("draws recipes and foods as rows, not tables", async () => {
+    mockApi();
+    render();
+
+    expect(await screen.findByRole("link", { name: "Open Rice and eggs" })).toBeInTheDocument();
+    expect(screen.getByText("247 kcal")).toBeInTheDocument();
+    expect(screen.getByText("not known")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getAllByRole("list").length).toBeGreaterThan(1);
+  });
+
+  it("opens a food in place, and a cleared nutrient is still an explicit null", async () => {
+    const { calls } = mockApi();
+    render();
+    await screen.findByRole("link", { name: "Open Rice and eggs" });
+
+    expect(screen.queryByRole("button", { name: "Edit Rice" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /^Rice/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit Rice" }));
+    const open = screen.getByRole("button", { name: "Save" }).closest("li") as HTMLElement;
+    await userEvent.clear(within(open).getByLabelText("Protein"));
+    await userEvent.click(within(open).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const patch = calls.find((call) => call.method === "PATCH" && call.url.includes("/api/foods/f1"));
+      const body = JSON.parse(patch?.body ?? "{}") as Record<string, unknown>;
+      expect(body["protein"]).toBeNull();
+      expect(body["kcal"]).toBe("130.00");
     });
   });
 });

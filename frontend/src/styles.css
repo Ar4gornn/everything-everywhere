@@ -1712,6 +1712,23 @@ button.list-row-head:hover:not(:disabled) {
   opacity: 0.55;
 }
 
+/* A food's nutrients in an open row: name over value, three to a line. */
+.list-row-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.list-row-facts dt {
+  color: var(--faint);
+  font-size: var(--fs-small);
+}
+
+.list-row-facts dd {
+  margin: 0;
+}
+
 /* Inputs moved into an open row: side by side, each allowed to shrink. */
 .list-row-fields {
   display: flex;
