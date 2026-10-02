@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 
-import { api } from "../../api/client";
+import { ApiError, api, type EntryInput } from "../../api/client";
 import {
   UNITS,
   type Category,
@@ -10,6 +10,15 @@ import {
   type Unit,
   type Vendor,
 } from "../../api/types";
+import { useOptionalAuth } from "../../auth/AuthContext";
+import {
+  flushEntries,
+  readPicksCache,
+  saveEntry,
+  undoEntry,
+  writePicksCache,
+  type QueueOutcome,
+} from "../../entries/outbox";
 import { errorMessage } from "../../i18n/errors";
 import { useT } from "../../i18n";
 import { isPositiveMoney, normalizeMoney } from "../../money";
@@ -50,9 +59,15 @@ const NO_POTS: Pot[] = [];
  * a modal dialog's top layer and is inert there, so its Undo would be unreachable.
  */
 type Inline =
-  | { phase: "saved"; id: string }
+  | { phase: "saved"; target: UndoTarget; queued: boolean }
   | { phase: "undone" }
-  | { phase: "error"; id: string; message: string };
+  | { phase: "error"; target: UndoTarget; message: string };
+
+/** What an Undo needs to take back one save. */
+interface UndoTarget {
+  ref: string;
+  serverId?: string;
+}
 
 export function QuickAddSheet() {
   const { isOpen, options, close, bump } = useQuickAdd();
@@ -60,7 +75,11 @@ export function QuickAddSheet() {
   const money = useMoney();
   const toast = useToast();
   const tour = useTutorial();
+  const userId = useOptionalAuth()?.user?.id ?? null;
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // The refused queue item this sheet is fixing (opened from one, or refused a moment ago):
+  // its Save replaces that item instead of queueing a second entry.
+  const replaceRef = useRef<string | undefined>(undefined);
   const amountRef = useRef<HTMLInputElement>(null);
   // Bumped on every open and every close, so an answer that lands after the sheet moved on
   // (closed, or opened again) is dropped rather than painted over the new one.
@@ -91,6 +110,7 @@ export function QuickAddSheet() {
   const [vendors, setVendors] = useState<Vendor[]>(NO_VENDORS);
   const [pots, setPots] = useState<Pot[]>(NO_POTS);
   const [picksFailed, setPicksFailed] = useState(false);
+  const [cachedNote, setCachedNote] = useState(false);
 
   // A layout effect, so the reset below lands before the first paint of a reopened sheet.
   useLayoutEffect(() => {
@@ -102,23 +122,37 @@ export function QuickAddSheet() {
     const mine = ++generation.current;
     if (dialog && !dialog.open) dialog.showModal();
 
+    const draft = options.draft;
+    const draftBody = draft?.body;
+    const draftDate = draftBody && ISO_DAY.test(draftBody.occurred_on) ? draftBody.occurred_on : null;
     const start =
-      options.date && ISO_DAY.test(options.date) ? options.date : todayIso();
-    setKind("expense");
-    setAmount("");
-    setCategoryName("");
-    setOtherOpen(false);
+      draftDate ?? (options.date && ISO_DAY.test(options.date) ? options.date : todayIso());
+    const draftCategory = draft ? (draft.category_name || draftBody?.category_name || "") : "";
+    const draftQuantity = draftBody?.quantity ?? "";
+    const draftPot = draftBody?.savings_type_id ?? "";
+    replaceRef.current = draft?.client_ref;
+    setKind(draftBody?.kind ?? "expense");
+    setAmount(draftBody?.amount ?? "");
+    setCategoryName(draftCategory);
+    // The chips are not here yet: show the typed field, and fall back to a chip if one matches.
+    setOtherOpen(draftCategory !== "");
     setDate(start);
     setDateOpen(start !== todayIso() && start !== dayBefore(todayIso()));
-    setMoreOpen(false);
-    setVendorName("");
-    setNote("");
-    setPotId("");
-    setPotChosen(false);
-    setQuantity("");
-    setUnit("");
-    setRate("");
-    setShowQuantity(false);
+    setVendorName(draftBody?.vendor_name ?? "");
+    setNote(draftBody?.note ?? "");
+    setMoreOpen(
+      Boolean(draftBody?.vendor_name || draftBody?.note || draftQuantity || draftPot),
+    );
+    setPotId(draftPot);
+    setPotChosen(draftPot !== "");
+    setQuantity(draftQuantity);
+    setUnit(draftBody?.unit ?? "");
+    setRate(
+      draftBody?.amount && draftQuantity && isPositiveMoney(draftBody.amount) && isQuantity(draftQuantity)
+        ? solveRate(normalizeMoney(draftBody.amount), draftQuantity.trim())
+        : "",
+    );
+    setShowQuantity(draftQuantity !== "");
     setUnitDismissed(false);
     setSaving(false);
     setError(null);
@@ -128,7 +162,48 @@ export function QuickAddSheet() {
     setVendors(NO_VENDORS);
     setPots(NO_POTS);
     setPicksFailed(false);
+    setCachedNote(false);
     amountRef.current?.focus();
+
+    const apply = (
+      nextPicks: QuickPicks | null | undefined,
+      nextCategories: Category[],
+      nextVendors: Vendor[],
+      nextPots: Pot[],
+    ): QuickPicks | null => {
+      // A server (or a test stub) answering with another shape leaves the plain form.
+      const valid = nextPicks?.expense && nextPicks.income ? nextPicks : null;
+      setPicks(valid);
+      setCategories(nextCategories);
+      setVendors(nextVendors);
+      setPots(nextPots);
+      const wanted = draftCategory.trim().toLowerCase();
+      if (
+        valid &&
+        wanted &&
+        valid[draftBody?.kind ?? "expense"].categories.some(
+          (chip) => chip.name.trim().toLowerCase() === wanted,
+        )
+      ) {
+        setOtherOpen(false);
+      }
+      return valid;
+    };
+
+    // The last good copy first, so the chips are there at once and offline.
+    const cached = userId ? readPicksCache(userId) : null;
+    const shownFromCache = cached?.picks ? cached : null;
+    if (shownFromCache) {
+      apply(shownFromCache.picks, shownFromCache.categories, shownFromCache.vendors, shownFromCache.pots);
+    }
+    // Anything left over from an earlier session or connection is tried now.
+    if (userId) {
+      void flushEntries(userId)
+        .then((result) => {
+          if (result.sent > 0) bump();
+        })
+        .catch(() => undefined);
+    }
 
     Promise.all([
       api.quickPicks(),
@@ -138,21 +213,28 @@ export function QuickAddSheet() {
     ]).then(
       ([nextPicks, nextCategories, nextVendors, nextPots]) => {
         if (mine !== generation.current) return;
-        // A server (or a test stub) answering with another shape leaves the plain form.
-        setPicks(nextPicks?.expense && nextPicks.income ? nextPicks : null);
-        setCategories(nextCategories);
-        setVendors(nextVendors);
-        setPots(nextPots);
+        const valid = apply(nextPicks, nextCategories, nextVendors, nextPots);
+        setCachedNote(false);
+        if (userId && valid) {
+          writePicksCache(userId, {
+            picks: valid,
+            categories: nextCategories,
+            vendors: nextVendors,
+            pots: nextPots,
+          });
+        }
       },
       () => {
         if (mine !== generation.current) return;
-        setPicksFailed(true);
+        // With a copy on screen this is the expected offline state: a quiet note, no banner.
+        if (shownFromCache) setCachedNote(true);
+        else setPicksFailed(true);
       },
     );
     return () => {
       generation.current++;
     };
-  }, [isOpen, options]);
+  }, [isOpen, options, userId, bump]);
 
   const kindPicks = picks?.[kind];
   const chips = kindPicks?.categories ?? [];
@@ -278,8 +360,9 @@ export function QuickAddSheet() {
     setError(null);
     // The sheet this save started on; a close (or a reopen) before the answer lands moves it.
     const mine = generation.current;
+    const owner = userId;
     try {
-      const created = await api.createEntry({
+      const entryBody: EntryInput = {
         kind,
         amount: normalizeMoney(amount),
         occurred_on: date,
@@ -288,16 +371,40 @@ export function QuickAddSheet() {
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(quantified && unit ? { quantity: quantity.trim(), unit } : {}),
         ...(kind === "expense" && potId ? { savings_type_id: potId } : {}),
-      });
+      };
+      // Signed in: the entry is written on the device first and sent at once (AD-61). No
+      // account to key a queue by (a bare render): sent directly, as before Epic 45.
+      const outcome: QueueOutcome = owner
+        ? await saveEntry(owner, entryBody, categoryName.trim(), replaceRef.current)
+        : await api.createEntry(entryBody).then((entry) => ({
+            status: "sent" as const,
+            entry,
+            client_ref: entry.id,
+          }));
+
+      if (outcome.status === "refused") {
+        // The server said no to this entry: it stays on the device, marked, and the next Save
+        // from this sheet replaces it rather than queueing a second one.
+        if (mine === generation.current) {
+          replaceRef.current = outcome.client_ref;
+          setError(errorMessage(t, new ApiError(422, "", outcome.code), "entries.couldNotSave"));
+        }
+        return;
+      }
+
+      const sent = outcome.status === "sent";
+      const target: UndoTarget = sent
+        ? { ref: outcome.client_ref, serverId: outcome.entry.id }
+        : { ref: outcome.client_ref };
       if (quantified && unit) rememberUnit(categoryName, unit);
-      bump();
+      if (sent) bump();
       // The tour's entry step waits on exactly this; a no-op when it is not running.
       tour.notify("entry-created");
       if (!another) {
-        toast.show(t("quickAdd.saved"), {
+        toast.show(t(sent ? "quickAdd.saved" : "offline.savedQueued"), {
           onUndo: async () => {
             try {
-              await api.deleteEntry(created.id);
+              await undo(owner, target);
               bump();
               toast.show(t("quickAdd.undone"));
             } catch (caught) {
@@ -309,8 +416,9 @@ export function QuickAddSheet() {
       // The sheet was closed (and maybe reopened) while this was in flight: the entry is
       // saved, but nothing of the old form may touch the current one.
       if (mine !== generation.current) return;
+      replaceRef.current = undefined;
       if (another) {
-        setInline({ phase: "saved", id: created.id });
+        setInline({ phase: "saved", target, queued: !sent });
         // Kind and date stay: the next receipt of the same trip is usually the same day.
         setAmount("");
         setCategoryName("");
@@ -333,21 +441,31 @@ export function QuickAddSheet() {
     }
   }
 
-  /** Undo for the inline row: deletes exactly the entry that row was made for. */
-  async function undoInline(id: string) {
+  /** Take back one save: off the queue, or off the server. */
+  async function undo(owner: string | null, target: UndoTarget) {
+    if (owner) await undoEntry(owner, target.ref, target.serverId);
+    else if (target.serverId) await api.deleteEntry(target.serverId);
+  }
+
+  /** Undo for the inline row: takes back exactly the entry that row was made for. */
+  async function undoInline(target: UndoTarget) {
     const mine = generation.current;
     try {
-      await api.deleteEntry(id);
+      await undo(userId, target);
       bump();
       if (mine !== generation.current) return;
       setInline((current) =>
-        current && "id" in current && current.id === id ? { phase: "undone" } : current,
+        current && "target" in current && current.target.ref === target.ref
+          ? { phase: "undone" }
+          : current,
       );
     } catch (caught) {
       if (mine !== generation.current) return;
       const message = errorMessage(t, caught, "entries.couldNotDelete");
       setInline((current) =>
-        current && "id" in current && current.id === id ? { phase: "error", id, message } : current,
+        current && "target" in current && current.target.ref === target.ref
+          ? { phase: "error", target, message }
+          : current,
       );
     }
   }
@@ -388,13 +506,13 @@ export function QuickAddSheet() {
             <div className="qa-status" role="status" aria-live="polite">
               <span>
                 {inline.phase === "saved"
-                  ? t("quickAdd.saved")
+                  ? t(inline.queued ? "offline.savedQueued" : "quickAdd.saved")
                   : inline.phase === "undone"
                     ? t("quickAdd.undone")
                     : inline.message}
               </span>
               {inline.phase !== "undone" && (
-                <button type="button" className="quiet" onClick={() => void undoInline(inline.id)}>
+                <button type="button" className="quiet" onClick={() => void undoInline(inline.target)}>
                   {t("toast.undo")}
                 </button>
               )}
@@ -403,6 +521,11 @@ export function QuickAddSheet() {
 
           <ErrorBanner message={error} />
           <ErrorBanner message={picksFailed ? t("quickAdd.picksFailed") : null} />
+          {cachedNote && (
+            <p className="hint" role="status">
+              {t("offline.cachedChips")}
+            </p>
+          )}
 
           <div className="chips qa-kind" role="group" aria-label={t("quickAdd.kind")}>
             {(["expense", "income"] as const).map((value) => (

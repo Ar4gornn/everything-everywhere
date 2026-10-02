@@ -2,6 +2,7 @@ import { useCallback } from "react";
 
 import { useAuth } from "../auth/AuthContext";
 import { useT } from "../i18n";
+import { countUnsent } from "../entries/outbox";
 import { hasUnsentGym } from "./store";
 
 /**
@@ -17,7 +18,14 @@ export function useSignOut(): () => void {
   const t = useT();
   const userId = user?.id;
   return useCallback(() => {
-    if (userId && hasUnsentGym(userId) && !window.confirm(t("gymCore.signOut.unsent"))) return;
+    if (userId) {
+      // One question, never two: the entries' wording when entries wait (it says what is
+      // lost), the gym's when only the gym has something.
+      const entries = countUnsent(userId) > 0;
+      if (entries || hasUnsentGym(userId)) {
+        if (!window.confirm(t(entries ? "offline.signOutUnsent" : "gymCore.signOut.unsent"))) return;
+      }
+    }
     signOut();
   }, [userId, signOut, t]);
 }

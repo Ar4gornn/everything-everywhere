@@ -20,6 +20,7 @@ import {
 } from "../api/client";
 import type { Currency, Language, PreferencesPatch, User } from "../api/types";
 import { PreferenceSaver, preferencesOf } from "../layout/preferences";
+import { clearEntriesStore } from "../entries/outbox";
 import { clearGymStore } from "../gym/store";
 import { clearAllDrafts } from "../notes/drafts";
 import { deviceZone } from "../push";
@@ -152,6 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // so signing back in sends them. The controls ask first when something would be lost
     // (`useSignOut`).
     if (userId.current) clearGymStore(userId.current);
+    // Epic 45: sheet entries not yet sent and the sheet's cached chips go the same way.
+    if (userId.current) clearEntriesStore(userId.current);
     userId.current = null;
     // Notes not yet synced are removed with the session (Epic 32): a note left in a browser
     // after its owner signed out is the leak signing out is for. See `notes/drafts.ts`.

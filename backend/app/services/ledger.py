@@ -270,6 +270,7 @@ def create_entry(
     vendor_id: uuid.UUID | None = None,
     vendor_name: str | None = None,
     savings_type_id: uuid.UUID | None = None,
+    client_ref: uuid.UUID | None = None,
 ) -> Entry:
     if savings_type_id is not None and kind is not EntryKind.expense:
         raise Invalid("only an expense can be paid from a pot", "savings_expense_only")
@@ -291,6 +292,7 @@ def create_entry(
         vendor_id=_resolve_vendor_field(
             session, user_id, vendor_id=vendor_id, vendor_name=vendor_name
         ),
+        client_ref=client_ref,
     )
     session.add(entry)
     session.flush()
@@ -317,7 +319,34 @@ def create_entry_once(
     ``entries_user_client_ref_key`` (SQLSTATE 23505, that constraint only) and answered with the
     row. Any other IntegrityError is not this function's to hide.
     """
-    raise NotImplementedError
+
+    def existing() -> Entry | None:
+        return session.execute(
+            select(Entry)
+            .where(Entry.user_id == user_id, Entry.client_ref == client_ref)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+    replay = existing()
+    if replay is not None:
+        return replay, False
+    try:
+        # A savepoint, so losing the race undoes only this insert (and anything the create
+        # path wrote before it) while the request transaction, and its tenant, survive.
+        with session.begin_nested():
+            entry = create_entry(session, user_id, client_ref=client_ref, **fields)
+    except IntegrityError as exc:
+        diag = getattr(exc.orig, "diag", None)
+        if (
+            getattr(exc.orig, "sqlstate", None) != "23505"
+            or getattr(diag, "constraint_name", None) != "entries_user_client_ref_key"
+        ):
+            raise
+        winner = existing()
+        if winner is None:  # pragma: no cover - the unique key says it must be there
+            raise
+        return winner, False
+    return entry, True
 
 
 def update_entry(

@@ -1350,6 +1350,60 @@ tr.history td {
   display: none;
 }
 
+/* Epic 45: how many entries wait on the device, drawn on the + itself. */
+.fab .fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--spend-soft);
+  color: var(--spend-ink);
+  border: 1px solid var(--spend-ink);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.waiting-list {
+  list-style: none;
+  margin: 0 0 var(--space-3, 12px);
+  padding: 0;
+}
+
+.waiting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.waiting-main {
+  flex: 1 1 140px;
+  min-width: 0;
+  display: grid;
+}
+
+.waiting-meta {
+  color: var(--muted);
+  font-size: 0.875em;
+}
+
+.waiting-refused {
+  color: var(--spend-ink);
+  font-size: 0.875em;
+}
+
+.waiting-actions {
+  display: flex;
+  gap: 8px;
+  flex-basis: 100%;
+}
+
 /* The phone's stand-in for the Entries form (Epic 44): one full-width button. */
 .add-entry-button {
   width: 100%;

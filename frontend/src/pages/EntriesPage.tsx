@@ -15,6 +15,7 @@ import {
 } from "../api/types";
 import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
+import { WaitingEntries } from "../components/WaitingEntries";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useEntriesVersion, useQuickAdd } from "../components/QuickAdd/QuickAddContext";
 import { useToast } from "../components/Toast";
@@ -562,6 +563,8 @@ export function EntriesPage() {
     <>
       <CheckInButton streak="entries" bar />
       <ErrorBanner message={error ?? failure} />
+
+      <WaitingEntries />
 
       {phone ? (
         <AddEntryButton />

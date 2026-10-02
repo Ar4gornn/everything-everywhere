@@ -23,6 +23,7 @@ import { QuoteCard } from "../components/QuoteCard";
 import { GymCard } from "../components/GymCard";
 import { StreakCard } from "../components/StreakCard";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
+import { useEntryOutbox } from "../entries/outbox";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { CARD_MODULE, useModules } from "../layout/modules";
 import { ListRow, useOpenRow } from "../components/ListRow";
@@ -101,6 +102,8 @@ function CategoryLink({ id, label }: { id: string; label: string }) {
 export function DashboardPage() {
   // A write through the quick-add sheet bumps this, so the page behind it reloads.
   const version = useEntriesVersion();
+  // Epic 45: entries still on this device are not in any total below (AD-9); say so.
+  const unsent = useEntryOutbox().length;
   const money = useMoney();
   const t = useT();
   const dates = useDates();
@@ -312,12 +315,19 @@ export function DashboardPage() {
   const CARDS: Record<CardId, () => ReactNode> = {
     stats: () =>
       summary && (
-        <div className="grid">
-          <Stat label={t("dash.income")} value={summary.income} tone="in" />
-          <Stat label={t("dash.expense")} value={summary.expense} tone="out" />
-          <Stat label={t("dash.net")} value={summary.net} />
-          <Stat label={t("dash.saved")} value={summary.saved} />
-        </div>
+        <>
+          <div className="grid">
+            <Stat label={t("dash.income")} value={summary.income} tone="in" />
+            <Stat label={t("dash.expense")} value={summary.expense} tone="out" />
+            <Stat label={t("dash.net")} value={summary.net} />
+            <Stat label={t("dash.saved")} value={summary.saved} />
+          </div>
+          {unsent > 0 && (
+            <p className="hint" style={{ margin: "8px 0 0" }}>
+              <Link to="/entries">{t.n("offline.dashLine", unsent)}</Link>
+            </p>
+          )}
+        </>
       ),
     pending: () =>
       pending &&

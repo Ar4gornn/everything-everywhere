@@ -19,6 +19,7 @@ import { TutorialProvider } from "./components/Tutorial/useTutorial";
 import { type MessageKey, useT } from "./i18n";
 import { SECTION_LABEL, useModules } from "./layout/modules";
 import { useLayout, usePreferences } from "./layout/useLayout";
+import { flushEntries, useEntryOutbox } from "./entries/outbox";
 import { flushOutbox } from "./gym/store";
 import { flushDrafts } from "./notes/drafts";
 import { SignInPage } from "./pages/SignInPage";
@@ -196,8 +197,34 @@ export function quickAddHidden(pathname: string): boolean {
  * inside the provider, so it can read it. On desktop it renders nothing and consumes nothing:
  * EntriesPage keeps its own `?add=1` handling there, and each layout has exactly one owner.
  */
+/**
+ * Epic 45 (AD-61): entries queued on the device are sent when the app opens and when the
+ * network returns, from whichever page is showing. A run that sent anything bumps the
+ * provider so the pages behind refresh. Inside the provider, so it can; renders nothing.
+ */
+function EntriesFlusher() {
+  const { user } = useAuth();
+  const { bump } = useQuickAdd();
+  const userId = user?.id;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `bump` is stable
+  useEffect(() => {
+    if (!userId) return;
+    const flush = () =>
+      void flushEntries(userId)
+        .then((result) => {
+          if (result.sent > 0) bump();
+        })
+        .catch(() => undefined);
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [userId]);
+  return null;
+}
+
 function QuickAddHost({ pathname }: { pathname: string }) {
   const t = useT();
+  const waiting = useEntryOutbox().length;
   const phone = useLayout() === "phone";
   const { isOpen, open, close } = useQuickAdd();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -240,7 +267,7 @@ function QuickAddHost({ pathname }: { pathname: string }) {
           ref={plusRef}
           type="button"
           className={isOpen ? "fab fab-away" : "fab"}
-          aria-label={t("nav.addEntry")}
+          aria-label={waiting > 0 ? t.n("offline.plusWaiting", waiting) : t("nav.addEntry")}
           aria-hidden={isOpen || undefined}
           inert={isOpen}
           onClick={() => {
@@ -249,6 +276,11 @@ function QuickAddHost({ pathname }: { pathname: string }) {
           }}
         >
           +
+          {waiting > 0 && (
+            <span className="fab-badge" aria-hidden="true">
+              {waiting}
+            </span>
+          )}
         </button>
       )}
       <QuickAddSheet />
@@ -324,6 +356,7 @@ export function App() {
     // the auth provider, and so every test that mounts <App /> gets it for free.
     <TutorialProvider>
     <QuickAddProvider>
+    <EntriesFlusher />
     <div className="shell">
       <header className="topbar">
         <h1 className="brand">{t("app.name")}</h1>
