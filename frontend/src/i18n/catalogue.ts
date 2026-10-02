@@ -42,6 +42,7 @@ import { calendarFeed } from "./messages/calendarFeed";
 import { streaks } from "./messages/streaks";
 import { quickAdd } from "./messages/quickAdd";
 import { offlineEntries } from "./messages/offlineEntries";
+import { install } from "./messages/install";
 
 export const LANGUAGES = ["en", "fr"] as const;
 export type Lang = (typeof LANGUAGES)[number];
@@ -72,6 +73,7 @@ export const messages = {
   ...streaks,
   ...quickAdd,
   ...offlineEntries,
+  ...install,
   ...errors,
 };
 
