@@ -814,16 +814,20 @@ describe("Desktop split", () => {
     vi.restoreAllMocks();
   });
 
-  it("puts repairs and chips in a side column only when there is something for it", async () => {
+  it("keeps the four weeks in the side column even with no repair and no tab shown", async () => {
+    // The account in the field: nothing to repair, no tab streak switched on. On a desktop the
+    // dots must still take the right half, or the card is one narrow column on a wide screen.
     mockApi(overall());
-    const first = render();
-    await screen.findByText("24");
-    expect(document.querySelector(".streak-card")).not.toHaveClass("streak-card-split");
-    expect(document.querySelector(".streak-card-side")).toBeNull();
-    first.unmount();
+    render();
+    const dots = await screen.findByRole("list", { name: "The last four weeks" });
+    const side = document.querySelector(".streak-card-side");
+    expect(side).toContainElement(dots);
+    expect(side).not.toContainElement(screen.getByRole("button", { name: "Check in" }));
+  });
 
-    window.localStorage.clear();
+  it("puts repairs, chips and dots in the side column, the run and balance outside it", async () => {
     mockApi(overall({ current: 0, repair: { days: 1, cost: 36 } }), {
+      shop: true,
       extra: [{ ...overall(), id: "gym" }],
       preferences: {
         ...DEFAULT_PREFERENCES,
@@ -833,15 +837,22 @@ describe("Desktop split", () => {
     render();
     const list = await screen.findByRole("list", { name: "Streaks by tab" });
     const side = document.querySelector(".streak-card-side");
-    expect(document.querySelector(".streak-card")).toHaveClass("streak-card-split");
     expect(side).toContainElement(list);
     expect(side).toContainElement(screen.getByRole("button", { name: "Repair the Overall streak" }));
-    // The run and the dots stay out of it, in the left column.
+    expect(side).toContainElement(screen.getByRole("list", { name: "The last four weeks" }));
     expect(side).not.toContainElement(screen.getByRole("button", { name: "Check in" }));
-    expect(side).not.toContainElement(screen.getByRole("list", { name: "The last four weeks" }));
+    expect(side).not.toContainElement(screen.getByRole("button", { name: "Shop" }));
+    // Phone order is DOM order: repairs, then chips, then the dots.
+    const repair = screen.getByRole("button", { name: "Repair the Overall streak" });
+    const dots = screen.getByRole("list", { name: "The last four weeks" });
+    expect(repair.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.compareDocumentPosition(dots) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("splits every streak card on a desktop, not only one with a side to show", () => {
     const css = readFileSync(join(__dirname, "..", "styles.css"), "utf-8");
-    expect(css).toMatch(
-      /@media \(min-width: 721px\)[\s\S]*?\.streak-card-split > \.card > \.streak-card-side\s*\{[^}]*grid-column:\s*2/,
-    );
+    const desktop = css.slice(css.indexOf("@media (min-width: 721px)"));
+    expect(desktop).toMatch(/\.streak-card > \.card\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    expect(desktop).toMatch(/\.streak-card > \.card > \.streak-card-side\s*\{[^}]*grid-column:\s*2/);
   });
 });

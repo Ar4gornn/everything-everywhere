@@ -4038,9 +4038,11 @@ button.bell[aria-pressed="false"] {
   transform: scale(0.3);
 }
 
-/* Desktop: the card is as wide as the dashboard, so the run, the balance and the dots keep
-   the left half and the repairs and tab chips take the right, rather than one narrow column
-   with Check in and Repair pushed to the far edge. The phone order is the DOM order, kept. */
+/* Desktop: the card is as wide as the dashboard, so the run, the balance and the shop keep
+   the left half and the side (repairs, tab chips, the four weeks) takes the right, rather
+   than one narrow column with Check in and Repair pushed to the far edge. Always split: with
+   no repair and no tab shown the dots alone fill the right. The phone order is the DOM
+   order, kept. */
 @media (min-width: 721px) {
   .streak-card .streak-dots-head,
   .streak-card .streak-dots {
@@ -4053,30 +4055,30 @@ button.bell[aria-pressed="false"] {
     height: 20px;
   }
 
-  .streak-card-split > .card {
+  .streak-card > .card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 32px;
     align-items: start;
   }
 
-  .streak-card-split > .card > * {
+  .streak-card > .card > * {
     grid-column: 1;
   }
 
-  .streak-card-split > .card > .card-head {
+  .streak-card > .card > .card-head {
     grid-column: 1 / -1;
   }
 
-  /* Rows 2-7 cover everything the left column can hold (run, an error, balance, shop,
-     dots), so the side starts level with the run and never pushes the dots down. */
-  .streak-card-split > .card > .streak-card-side {
+  /* Rows 2-7 cover everything the left column can hold (run, an error, balance, shop), so
+     the side starts level with the run. */
+  .streak-card > .card > .streak-card-side {
     grid-column: 2;
     grid-row: 2 / span 6;
     min-width: 0;
   }
 
-  .streak-card-split .streak-card-side > :first-child {
+  .streak-card .streak-card-side > :first-child {
     margin-top: 0;
   }
 }
