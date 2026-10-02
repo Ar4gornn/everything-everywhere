@@ -22,6 +22,7 @@ vi.mock("../entries/outbox", () => ({
   countUnsent: vi.fn(),
   discardEntry: vi.fn(),
   clearEntriesStore: vi.fn(),
+  useIsSending: vi.fn(() => false),
 }));
 
 const USER = {

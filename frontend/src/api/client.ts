@@ -720,10 +720,10 @@ export const api = {
     items(request<Page<Entry>>(`/api/entries${query(filters)}`)),
 
   /** `onStatus` tells a 201 from a 200 replay of the same `client_ref` (AD-61). */
-  createEntry: (input: EntryInput, onStatus?: (status: number) => void) =>
+  createEntry: (input: EntryInput, onStatus?: (status: number) => void, signal?: AbortSignal) =>
     request<Entry>(
       "/api/entries",
-      { method: "POST", body: JSON.stringify(input) },
+      { method: "POST", body: JSON.stringify(input), ...(signal ? { signal } : {}) },
       onStatus,
     ),
 

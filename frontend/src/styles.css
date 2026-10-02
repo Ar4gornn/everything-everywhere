@@ -1404,6 +1404,10 @@ tr.history td {
   flex-basis: 100%;
 }
 
+.waiting-actions button {
+  min-height: 44px;
+}
+
 /* The phone's stand-in for the Entries form (Epic 44): one full-width button. */
 .add-entry-button {
   width: 100%;

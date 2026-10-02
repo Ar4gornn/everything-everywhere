@@ -27,6 +27,10 @@ export const offlineEntries = {
     en: "Delete this entry from this device? It was never recorded.",
     fr: "Supprimer cette opération de cet appareil ? Elle n’a jamais été enregistrée.",
   },
+  "offline.discardWaitingConfirm": {
+    en: "Delete this entry from this device? It has not been confirmed as received. If an earlier attempt reached the server, it will still appear in Entries.",
+    fr: "Supprimer cette opération de cet appareil ? Sa réception n’est pas confirmée. Si une tentative précédente est arrivée au serveur, elle apparaîtra quand même dans Opérations.",
+  },
   "offline.dashLine_one": {
     en: "{count} entry not sent yet — not in these totals",
     fr: "{count} opération pas encore envoyée — absente de ces totaux",

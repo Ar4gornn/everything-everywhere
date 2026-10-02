@@ -1,7 +1,13 @@
 import { useState } from "react";
 
 import { useOptionalAuth } from "../auth/AuthContext";
-import { discardEntry, flushEntries, type QueuedEntry, useEntryOutbox } from "../entries/outbox";
+import {
+  discardEntry,
+  flushEntries,
+  type QueuedEntry,
+  useEntryOutbox,
+  useIsSending,
+} from "../entries/outbox";
 import { useT } from "../i18n";
 import { type MessageKey, messages } from "../i18n/catalogue";
 import { useLayout } from "../layout/useLayout";
@@ -44,7 +50,7 @@ function WaitingCard({ userId, queue }: { userId: string; queue: QueuedEntry[] }
 
   function reason(code: string): string {
     const key = `error.${code}`;
-    return key in messages ? t(key as MessageKey) : code;
+    return key in messages ? t(key as MessageKey) : t("entries.couldNotSave");
   }
 
   return (
@@ -74,17 +80,7 @@ function WaitingCard({ userId, queue }: { userId: string; queue: QueuedEntry[] }
                   {t("offline.edit")}
                 </button>
               )}
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  if (window.confirm(t("offline.discardConfirm"))) {
-                    discardEntry(userId, entry.client_ref);
-                  }
-                }}
-              >
-                {t("offline.discard")}
-              </button>
+              <DiscardButton userId={userId} entry={entry} />
             </div>
           </li>
         ))}
@@ -93,5 +89,25 @@ function WaitingCard({ userId, queue }: { userId: string; queue: QueuedEntry[] }
         {t("offline.sendNow")}
       </button>
     </Card>
+  );
+}
+
+/** Hidden while this entry is being posted: a discard then would race the answer. */
+function DiscardButton({ userId, entry }: { userId: string; entry: QueuedEntry }) {
+  const t = useT();
+  const sendingNow = useIsSending(userId, entry.client_ref);
+  if (sendingNow) return null;
+  return (
+    <button
+      type="button"
+      className="quiet"
+      onClick={() => {
+        const question =
+          entry.refused !== null ? t("offline.discardConfirm") : t("offline.discardWaitingConfirm");
+        if (window.confirm(question)) discardEntry(userId, entry.client_ref);
+      }}
+    >
+      {t("offline.discard")}
+    </button>
   );
 }

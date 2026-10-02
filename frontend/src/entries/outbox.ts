@@ -68,6 +68,10 @@ export const SAVE_TIMEOUT_MS = 10_000;
 const base = (userId: string) => `${PREFIX}entries.${userId}.`;
 const OUTBOX = "outbox";
 const PICKS = "picks";
+const SENT = "sent";
+
+/** How long one entry's POST may hang before it counts as a network failure (a stall). */
+export const ENTRY_SEND_TIMEOUT_MS = 20_000;
 
 function readRaw(userId: string, part: string): string | null {
   try {
@@ -167,7 +171,31 @@ export function discardEntry(userId: string, clientRef: string): void {
 const sentEntries = new Map<string, Entry>();
 const SENT_KEPT = 20;
 
-function remember(clientRef: string, entry: Entry): void {
+const SENT_STORED = 50;
+
+/** client_ref → server id for the newest sends, so another tab or a reload can still undo. */
+function readSent(userId: string): [string, string][] {
+  const raw = parse(readRaw(userId, SENT));
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (pair): pair is [string, string] =>
+      Array.isArray(pair) && typeof pair[0] === "string" && typeof pair[1] === "string",
+  );
+}
+
+function rememberStored(userId: string, clientRef: string, id: string): void {
+  const kept = readSent(userId).filter(([ref]) => ref !== clientRef);
+  kept.push([clientRef, id]);
+  writeJson(userId, SENT, kept.slice(-SENT_STORED));
+}
+
+function forgetStored(userId: string, clientRef: string): void {
+  const kept = readSent(userId).filter(([ref]) => ref !== clientRef);
+  writeJson(userId, SENT, kept.length === 0 ? null : kept);
+}
+
+function remember(userId: string, clientRef: string, entry: Entry): void {
+  rememberStored(userId, clientRef, entry.id);
   sentEntries.set(clientRef, entry);
   while (sentEntries.size > SENT_KEPT) {
     const oldest = sentEntries.keys().next().value;
@@ -233,9 +261,17 @@ export function flushEntries(userId: string): Promise<FlushResult> {
           landed = resolve;
         }),
       );
+      emit(); // "being sent" changed: the Waiting card hides Discard meanwhile
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ENTRY_SEND_TIMEOUT_MS);
       try {
-        const saved = await api.createEntry(next.body);
-        if (saved?.id) remember(ref, saved);
+        const saved: unknown = await api.createEntry(next.body, undefined, controller.signal);
+        // Only an entry counts as sent. A captive portal answers a POST with an HTML 200,
+        // which `request` turns into null: that is a stall, never a delivery.
+        if (!isRecord(saved) || typeof saved["id"] !== "string") {
+          throw new Error("The answer was not an entry");
+        }
+        remember(userId, ref, saved as unknown as Entry);
         writeOutbox(
           userId,
           readOutbox(userId).filter((entry) => entry.client_ref !== ref),
@@ -254,8 +290,10 @@ export function flushEntries(userId: string): Promise<FlushResult> {
           ),
         );
       } finally {
+        clearTimeout(timer);
         inFlight.delete(ref);
         landed();
+        emit();
       }
     }
     return tally(userId, sent);
@@ -342,10 +380,26 @@ export async function undoEntry(
     discardEntry(userId, clientRef);
     return;
   }
-  const id = serverId ?? sentEntries.get(clientRef)?.id;
-  if (!id) return; // sent elsewhere, or already gone: nothing to delete by id
+  const id =
+    serverId ??
+    sentEntries.get(clientRef)?.id ??
+    readSent(userId).find(([ref]) => ref === clientRef)?.[1];
+  // Not queued, and no server id on record: the caller must not tell the person it is undone.
+  if (!id) throw new Error("This entry can no longer be undone from here");
   await api.deleteEntry(id);
   sentEntries.delete(clientRef);
+  forgetStored(userId, clientRef);
+}
+
+/** True while a flush is posting this entry (Discard would race the POST). */
+export function isSending(_userId: string, clientRef: string): boolean {
+  return inFlight.has(clientRef);
+}
+
+/** `isSending` as a hook: a boolean snapshot, so it only re-renders when the answer changes. */
+export function useIsSending(userId: string, clientRef: string): boolean {
+  const getSnapshot = useCallback(() => isSending(userId, clientRef), [userId, clientRef]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
 // --------------------------------------------------------------------- picks cache
@@ -372,6 +426,7 @@ export function writePicksCache(userId: string, cache: Omit<PicksCache, "saved_a
 export function clearEntriesStore(userId: string): void {
   writeJson(userId, OUTBOX, null);
   writeJson(userId, PICKS, null);
+  writeJson(userId, SENT, null);
   emit();
 }
 

@@ -224,10 +224,12 @@ export function QuickAddSheet() {
           });
         }
       },
-      () => {
+      (caught: unknown) => {
         if (mine !== generation.current) return;
-        // With a copy on screen this is the expected offline state: a quiet note, no banner.
-        if (shownFromCache) setCachedNote(true);
+        // With a copy on screen and no network this is the expected offline state: a quiet
+        // note. A server that answered badly is not "offline": the banner, chips kept.
+        const unreachable = !(caught instanceof ApiError) || !navigator.onLine;
+        if (shownFromCache && unreachable) setCachedNote(true);
         else setPicksFailed(true);
       },
     );

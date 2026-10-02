@@ -7,6 +7,7 @@ import { AuthProvider } from "../auth/AuthContext";
 import * as outbox from "../entries/outbox";
 import { DashboardPage } from "../pages/DashboardPage";
 import { EntriesPage } from "../pages/EntriesPage";
+import { translator } from "../i18n/catalogue";
 import { onAPhone } from "../test/phone";
 import { QuickAddProvider, useQuickAdd } from "./QuickAdd/QuickAddContext";
 
@@ -21,6 +22,7 @@ vi.mock("../entries/outbox", () => ({
   countUnsent: vi.fn(),
   discardEntry: vi.fn(),
   clearEntriesStore: vi.fn(),
+  useIsSending: vi.fn(() => false),
 }));
 
 function json(body: unknown): Response {
@@ -111,6 +113,8 @@ function mount(ui: React.ReactElement) {
 beforeEach(() => {
   vi.mocked(outbox.flushEntries).mockReset();
   vi.mocked(outbox.discardEntry).mockReset();
+  vi.mocked(outbox.useIsSending).mockReset();
+  vi.mocked(outbox.useIsSending).mockReturnValue(false);
 });
 afterEach(() => {
   window.localStorage.clear();
@@ -151,10 +155,13 @@ describe("the Waiting card on Entries (desktop)", () => {
     expect(row.textContent).not.toBe("Not sent: network");
   });
 
-  it("falls back to the raw code when no sentence exists for it", async () => {
+  it("falls back to the translated generic sentence when no sentence exists for the code", async () => {
     setup([entry("a", { refused: "zz_unknown_code" })]);
     mount(<EntriesPage />);
-    expect(await screen.findByText("Not sent: zz_unknown_code")).toBeInTheDocument();
+    expect(
+      await screen.findByText(`Not sent: ${translator("en")("entries.couldNotSave")}`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/zz_unknown_code/)).toBeNull();
   });
 
   it("discards after a yes", async () => {
@@ -163,10 +170,26 @@ describe("the Waiting card on Entries (desktop)", () => {
     vi.stubGlobal("confirm", confirm);
     mount(<EntriesPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
-    expect(confirm).toHaveBeenCalledWith(
-      "Delete this entry from this device? It was never recorded.",
-    );
+    expect(confirm).toHaveBeenCalledWith(translator("en")("offline.discardWaitingConfirm"));
+    expect(translator("en")("offline.discardWaitingConfirm")).not.toMatch(/never recorded/);
     expect(outbox.discardEntry).toHaveBeenCalledWith("u1", "a");
+  });
+
+  it("a refused entry's confirm still says it was never recorded", async () => {
+    setup([entry("a", { refused: "validation" })]);
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    mount(<EntriesPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
+    expect(confirm).toHaveBeenCalledWith(translator("en")("offline.discardConfirm"));
+  });
+
+  it("hides Discard while that entry is being sent", async () => {
+    setup([entry("a")]);
+    vi.mocked(outbox.useIsSending).mockReturnValue(true);
+    mount(<EntriesPage />);
+    await screen.findByText("Waiting to send");
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
   });
 
   it("keeps the entry after a no", async () => {
@@ -220,6 +243,25 @@ describe("the dashboard line (Epic 45)", () => {
       name: "1 entry not sent yet — not in these totals",
     });
     expect(link).toHaveAttribute("href", "/entries");
+  });
+
+  it("is its own line: it shows even before the stats card has any data", async () => {
+    setup([entry("a")]);
+    const answer = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).includes("/api/dashboard/summary")
+          ? new Promise<Response>(() => undefined)
+          : answer(input, init),
+      ),
+    );
+    mount(<DashboardPage />);
+    const link = await screen.findByRole("link", {
+      name: "1 entry not sent yet — not in these totals",
+    });
+    expect(link.closest(".grid")).toBeNull();
+    expect(screen.queryByText("Net")).toBeNull();
   });
 
   it("says how many, in the plural", async () => {

@@ -403,3 +403,11 @@ describe("contrast, every theme × accent", () => {
     }
   });
 });
+
+describe("Epic 45 touch targets", () => {
+  it("the Waiting card's buttons are at least 44px tall", () => {
+    const rule = /\.waiting-actions button\s*\{([^}]*)\}/.exec(css);
+    const height = /min-height:\s*(\d+)px/.exec(rule?.[1] ?? "");
+    expect(Number(height?.[1])).toBeGreaterThanOrEqual(44);
+  });
+});

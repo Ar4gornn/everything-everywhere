@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntryInput } from "../api/client";
 import {
+  ENTRY_SEND_TIMEOUT_MS,
   SAVE_TIMEOUT_MS,
   clearEntriesStore,
   countUnsent,
   discardEntry,
   flushEntries,
+  isSending,
   readOutbox,
   readPicksCache,
   saveEntry,
@@ -495,5 +497,88 @@ describe("useEntryOutbox", () => {
     act(() => discardEntry(U, withOne[0]?.client_ref ?? ""));
     expect(result.current).toEqual([]);
     expect(serial).toBeGreaterThan(0);
+  });
+});
+
+describe("Epic 45 fixes", () => {
+  it("a 200 that is not an entry (captive portal HTML) is a stall: the entry stays queued", async () => {
+    answer = () =>
+      new Response("<html>Sign in to the Wi-Fi</html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      });
+    const outcome = await saveEntry(U, body("Fuel"), "Fuel");
+    expect(outcome).toMatchObject({ status: "queued" });
+    expect(readOutbox(U)).toHaveLength(1);
+    const result = await flushEntries(U);
+    expect(result).toMatchObject({ sent: 0, pending: 1 });
+  });
+
+  it("aborts a send that hangs for 20 s, stalls, and the next flush starts a new run", async () => {
+    vi.useFakeTimers();
+    seed({ name: "A" });
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        calls += 1;
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        });
+      }),
+    );
+    let result: unknown;
+    const first = flushEntries(U).then((value) => {
+      result = value;
+    });
+    await vi.advanceTimersByTimeAsync(ENTRY_SEND_TIMEOUT_MS - 1);
+    expect(result).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2);
+    await first;
+    expect(result).toMatchObject({ sent: 0, pending: 1 });
+    const second = flushEntries(U);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toBe(2);
+    await vi.advanceTimersByTimeAsync(ENTRY_SEND_TIMEOUT_MS + 1);
+    await expect(second).resolves.toMatchObject({ pending: 1 });
+  });
+
+  it("undoes after a reload: the server id comes from storage", async () => {
+    await saveEntry(U, body("Fuel"), "Fuel");
+    const ref = posts[0]?.ref ?? "";
+    expect(window.localStorage.getItem("everything-everywhere.entries.u1.sent")).toContain(ref);
+    vi.resetModules();
+    const fresh = await import("./outbox");
+    await fresh.undoEntry(U, ref);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]).toMatch(/\/api\/entries\/srv-Fuel$/);
+    expect(window.localStorage.getItem("everything-everywhere.entries.u1.sent")).toBeNull();
+  });
+
+  it("an unknown entry cannot be undone: it throws instead of pretending", async () => {
+    await expect(undoEntry(U, "never-seen")).rejects.toThrow();
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("keeps the newest 50 sent ids and clears them on sign-out", async () => {
+    for (let i = 0; i < 52; i += 1) await saveEntry(U, body(`E${i}`), `E${i}`);
+    const stored = JSON.parse(
+      window.localStorage.getItem("everything-everywhere.entries.u1.sent") ?? "[]",
+    ) as unknown[];
+    expect(stored).toHaveLength(50);
+    clearEntriesStore(U);
+    expect(window.localStorage.getItem("everything-everywhere.entries.u1.sent")).toBeNull();
+  });
+
+  it("isSending is true only while that entry is posting", async () => {
+    let release: (response: Response) => void = () => undefined;
+    answer = () => new Promise<Response>((resolve) => (release = resolve));
+    const [ref] = seed({ name: "A" }) as [string];
+    expect(isSending(U, ref)).toBe(false);
+    const flushing = flushEntries(U);
+    await vi.waitFor(() => expect(isSending(U, ref)).toBe(true));
+    release(json({ id: "srv-A" }, 201));
+    await flushing;
+    expect(isSending(U, ref)).toBe(false);
   });
 });

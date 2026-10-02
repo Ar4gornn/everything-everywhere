@@ -315,19 +315,12 @@ export function DashboardPage() {
   const CARDS: Record<CardId, () => ReactNode> = {
     stats: () =>
       summary && (
-        <>
-          <div className="grid">
-            <Stat label={t("dash.income")} value={summary.income} tone="in" />
-            <Stat label={t("dash.expense")} value={summary.expense} tone="out" />
-            <Stat label={t("dash.net")} value={summary.net} />
-            <Stat label={t("dash.saved")} value={summary.saved} />
-          </div>
-          {unsent > 0 && (
-            <p className="hint" style={{ margin: "8px 0 0" }}>
-              <Link to="/entries">{t.n("offline.dashLine", unsent)}</Link>
-            </p>
-          )}
-        </>
+        <div className="grid">
+          <Stat label={t("dash.income")} value={summary.income} tone="in" />
+          <Stat label={t("dash.expense")} value={summary.expense} tone="out" />
+          <Stat label={t("dash.net")} value={summary.net} />
+          <Stat label={t("dash.saved")} value={summary.saved} />
+        </div>
       ),
     pending: () =>
       pending &&
@@ -863,6 +856,13 @@ export function DashboardPage() {
       </div>
 
       <ErrorBanner message={error} />
+
+      {/* Its own element, not part of the stats card: hiding that card must not hide this. */}
+      {unsent > 0 && (
+        <p className="hint" style={{ margin: "0 0 12px" }}>
+          <Link to="/entries">{t.n("offline.dashLine", unsent)}</Link>
+        </p>
+      )}
 
       {loading && summary === null && trends === null && (needSummary || needTrends) ? (
         <p className="empty">{t("state.loading")}</p>

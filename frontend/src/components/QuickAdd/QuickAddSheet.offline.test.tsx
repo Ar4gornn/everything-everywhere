@@ -272,6 +272,36 @@ describe("Save goes through the device queue", () => {
     expect(version()).toBe("1");
   });
 
+  it("inline Undo of a vanished queued entry shows the failure instead of 'undone'", async () => {
+    const user = userEvent.setup();
+    await mount();
+    await openSheet(user);
+    goOffline();
+    await fillFuel(user);
+    await user.click(screen.getByRole("button", { name: "Save & add another" }));
+    const row = () => within(dialog()).getByRole("status");
+    await waitFor(() => expect(row()).toHaveTextContent(en("offline.savedQueued")));
+    // Discarded elsewhere (another tab): not queued, never sent, no id anywhere.
+    window.localStorage.removeItem(OUTBOX_KEY);
+    await user.click(within(row()).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(row()).toHaveTextContent(en("entries.couldNotDelete")));
+    expect(row()).not.toHaveTextContent(en("quickAdd.undone"));
+  });
+
+  it("toast Undo of a vanished queued entry shows the failure", async () => {
+    const user = userEvent.setup();
+    await mount();
+    await openSheet(user);
+    goOffline();
+    await fillFuel(user);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    window.localStorage.removeItem(OUTBOX_KEY);
+    await user.click(undo);
+    await screen.findByText(en("entries.couldNotDelete"));
+    expect(screen.queryByText(en("quickAdd.undone"))).toBeNull();
+  });
+
   it("shows the queued wording in the inline row of Save & add another, and Undo clears it", async () => {
     const user = userEvent.setup();
     await mount();
@@ -449,6 +479,17 @@ describe("the chips on the device", () => {
     await mount();
     await user.click(screen.getByRole("button", { name: "open-it" }));
     await screen.findByText(en("quickAdd.picksFailed"));
+    expect(screen.queryByText(en("offline.cachedChips"))).toBeNull();
+  });
+
+  it("a server error with a copy: the banner, the chips kept, and not the offline note", async () => {
+    cached();
+    picksAnswer = () => json({ detail: "boom", code: "error" }, 500);
+    const user = userEvent.setup();
+    await mount();
+    await user.click(screen.getByRole("button", { name: "open-it" }));
+    await screen.findByText(en("quickAdd.picksFailed"));
+    expect(screen.getByRole("button", { name: "Fuel" })).toBeInTheDocument();
     expect(screen.queryByText(en("offline.cachedChips"))).toBeNull();
   });
 
