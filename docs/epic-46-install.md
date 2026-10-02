@@ -60,6 +60,11 @@ share target; nagging after a "No".
    at least one entry or one habit check-in — read from data the dashboard already loads (no new
    request). It is a small dashboard card with two buttons. If the guided tour is running on a
    phone, its last numbered step is the same question (answering it there sets `consent`).
+
+   **What "has used the app" means in practice.** `hasUsedApp` is the dashboard's loaded summary
+   or trends being non-zero (any income, expense or saved figure, this month or in the trend
+   series). It is not a count of entries or check-ins. A habit-only user, and a user who hid the
+   stats and trend cards, is therefore not asked; they still have Settings and `/install`.
 5. **`/install` is public.** Rendered before the sign-in gate when the path is `/install`, inside
    the language provider (the page has the language switch the sign-in page has). Signed in, it is
    also a normal route. It shows the steps for the detected platform first, a switcher for the

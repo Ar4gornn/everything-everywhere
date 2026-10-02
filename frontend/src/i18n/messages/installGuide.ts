@@ -104,12 +104,12 @@ export const installGuide = {
     fr: "Sur Android, dans Chrome ou Edge",
   },
   "installGuide.android.a1": {
-    en: "Tap the ⋮ menu at the top right.",
-    fr: "Touchez le menu ⋮ en haut à droite.",
+    en: "On the right of the address bar, tap “More” ⋮.",
+    fr: "À droite de la barre d’adresse, touchez « Plus » ⋮.",
   },
   "installGuide.android.a2": {
-    en: "Tap “Install app” (or “Add to Home screen”).",
-    fr: "Touchez « Installer l’application » (ou « Ajouter à l’écran d’accueil »).",
+    en: "Tap “Install and create shortcut” (older versions: “Add to Home screen”).",
+    fr: "Touchez « Installer et créer un raccourci » (anciennes versions : « Ajouter à l’écran d’accueil »).",
   },
   "installGuide.android.a3": {
     en: "Tap “Install” to confirm.",
@@ -118,6 +118,10 @@ export const installGuide = {
   "installGuide.android.firefoxHeading": {
     en: "On Android, in Firefox",
     fr: "Sur Android, dans Firefox",
+  },
+  "installGuide.android.f1": {
+    en: "Tap the ⋮ menu at the top right.",
+    fr: "Touchez le menu ⋮ en haut à droite.",
   },
   "installGuide.android.f2": {
     en: "Tap “Install” (or “Add to Home screen”).",
@@ -213,12 +217,20 @@ export const installGuide = {
     fr: "Un navigateur sur iPhone avec le bouton de partage de la barre d’adresse mis en évidence",
   },
   "installGuide.dia.androidMenu": {
-    en: "A browser on Android with the ⋮ menu at the top right highlighted",
-    fr: "Un navigateur sur Android avec le menu ⋮ en haut à droite mis en évidence",
+    en: "A browser on Android with “More” ⋮ at the right of the address bar highlighted",
+    fr: "Un navigateur sur Android avec « Plus » ⋮ à droite de la barre d’adresse mis en évidence",
+  },
+  "installGuide.dia.androidFirefoxMenu": {
+    en: "Firefox on Android with the ⋮ menu at the top right highlighted",
+    fr: "Firefox sur Android avec le menu ⋮ en haut à droite mis en évidence",
+  },
+  "installGuide.dia.androidFirefoxConfirm": {
+    en: "The Firefox confirmation box with the “Add” button highlighted",
+    fr: "La fenêtre de confirmation de Firefox avec le bouton « Ajouter » mis en évidence",
   },
   "installGuide.dia.androidList": {
-    en: "The browser menu with “Install app” highlighted",
-    fr: "Le menu du navigateur avec « Installer l’application » mis en évidence",
+    en: "The browser menu with “Install and create shortcut” highlighted",
+    fr: "Le menu du navigateur avec « Installer et créer un raccourci » mis en évidence",
   },
   "installGuide.dia.androidConfirm": {
     en: "The confirmation box with the “Install” button highlighted",
@@ -249,7 +261,10 @@ export const installGuide = {
   "installGuide.lbl.addToHome": { en: "Add to Home Screen", fr: "Sur l’écran d’accueil" },
   "installGuide.lbl.openWebApp": { en: "Open as Web App", fr: "Ouvrir comme app web" },
   "installGuide.lbl.add": { en: "Add", fr: "Ajouter" },
-  "installGuide.lbl.installApp": { en: "Install app", fr: "Installer l’application" },
+  "installGuide.lbl.installApp": {
+    en: "Install and create shortcut",
+    fr: "Installer et créer un raccourci",
+  },
   "installGuide.lbl.install": { en: "Install", fr: "Installer" },
   "installGuide.lbl.addToDock": { en: "Add to Dock", fr: "Ajouter au Dock" },
   "installGuide.lbl.file": { en: "File", fr: "Fichier" },

@@ -43,6 +43,13 @@ describe("consent storage", () => {
     expect(cardDismissed(new Date(t0.getTime() + DISMISS_DAYS * day))).toBe(false);
   });
 
+  it("a dismissal from the future (clock moved back) is not in force", () => {
+    const t0 = new Date("2026-10-03T10:00:00Z");
+    dismissCard(t0);
+    expect(cardDismissed(new Date(t0.getTime() - 1))).toBe(false);
+    expect(cardDismissed(new Date(t0.getTime() - 5 * 24 * 60 * 60 * 1000))).toBe(false);
+  });
+
   it("a corrupt dismissal reads as not dismissed", () => {
     window.localStorage.setItem("everything-everywhere.install.dismissedAt", "soon");
     expect(cardDismissed()).toBe(false);

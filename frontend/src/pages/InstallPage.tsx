@@ -1,10 +1,18 @@
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { useOptionalAuth } from "../auth/AuthContext";
 import type { Language } from "../api/types";
 import { LANGUAGES, useLanguage } from "../i18n";
 import type { MessageKey } from "../i18n/catalogue";
-import { AndroidConfirm, AndroidFirefoxList, AndroidMenuButton, AndroidMenuList } from "../install/diagrams/android";
+import {
+  AndroidConfirm,
+  AndroidFirefoxConfirm,
+  AndroidFirefoxList,
+  AndroidFirefoxMenuButton,
+  AndroidMenuButton,
+  AndroidMenuList,
+} from "../install/diagrams/android";
 import { DesktopConfirm, DesktopInstallIcon, MacAdd, MacFileMenu } from "../install/diagrams/desktop";
 import {
   IosAddButton,
@@ -78,9 +86,9 @@ const ANDROID_CHROME: Step[] = [
   { text: "installGuide.android.a3", art: <AndroidConfirm /> },
 ];
 const ANDROID_FIREFOX: Step[] = [
-  { text: "installGuide.android.a1", art: <AndroidMenuButton /> },
+  { text: "installGuide.android.f1", art: <AndroidFirefoxMenuButton /> },
   { text: "installGuide.android.f2", art: <AndroidFirefoxList /> },
-  { text: "installGuide.android.f3", art: <IosAddButton /> },
+  { text: "installGuide.android.f3", art: <AndroidFirefoxConfirm /> },
 ];
 const DESKTOP_CHROME: Step[] = [
   { text: "installGuide.desktop.d1", art: <DesktopInstallIcon /> },
@@ -205,9 +213,9 @@ export default function InstallPage() {
   return (
     <main className="install-page">
       <header>
-        <a className="back" href="/">
+        <Link className="back" to="/">
           {t("installGuide.open")}
-        </a>
+        </Link>
         <h1 className="install-title">{t("installGuide.title")}</h1>
         <p className="hint">{t("installGuide.why")}</p>
         {!signedIn && (

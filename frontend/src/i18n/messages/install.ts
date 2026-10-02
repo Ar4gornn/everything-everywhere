@@ -29,6 +29,10 @@ export const install = {
     en: "Open it from your home screen from now on. Want a reminder each day for what is due?",
     fr: "Ouvrez-la désormais depuis votre écran d’accueil. Voulez-vous un rappel chaque jour de ce qui est à faire ?",
   },
+  "install.welcome.bodyNoNotify": {
+    en: "Open it from your home screen from now on.",
+    fr: "Ouvrez-la désormais depuis votre écran d’accueil, sans passer par le navigateur.",
+  },
   "install.welcome.notify": { en: "Turn on notifications", fr: "Activer les notifications" },
   "install.welcome.done": { en: "Done", fr: "Terminé" },
   "install.settings.title": { en: "Install the app", fr: "Installer l’application" },

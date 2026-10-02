@@ -91,6 +91,29 @@ describe("the installed welcome", () => {
     );
   });
 
+  it("asks about reminders only when the notifications button is there", async () => {
+    render(<InstalledWelcome />);
+    await screen.findByRole("button", { name: "Turn on notifications" });
+    expect(screen.getByText(/Want a reminder/)).toBeInTheDocument();
+  });
+
+  it("does not ask about reminders when push is unsupported", async () => {
+    push.supported = false;
+    render(<InstalledWelcome />);
+    await settle();
+    expect(screen.queryByRole("button", { name: "Turn on notifications" })).toBeNull();
+    expect(screen.queryByText(/Want a reminder/)).toBeNull();
+    expect(screen.getByText("Open it from your home screen from now on.")).toBeInTheDocument();
+  });
+
+  it("does not ask about reminders when the server does not offer push", async () => {
+    stubServer(false);
+    render(<InstalledWelcome />);
+    await settle();
+    expect(screen.queryByText(/Want a reminder/)).toBeNull();
+    expect(screen.getByText("Open it from your home screen from now on.")).toBeInTheDocument();
+  });
+
   it("says why when notifications were refused", async () => {
     push.enable.mockResolvedValue("denied");
     const user = userEvent.setup();

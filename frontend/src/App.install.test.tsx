@@ -73,6 +73,12 @@ describe("/install", () => {
     expect(screen.queryByLabelText(/password/i)).toBeNull();
   });
 
+  it("a trailing slash is the same public page", async () => {
+    renderAt("/install/", false);
+    expect(await screen.findByText(/install-guide-marker: Install EEwhere/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/password/i)).toBeNull();
+  });
+
   it("follows the stored language signed out", async () => {
     window.localStorage.setItem("everything-everywhere.language", "fr");
     renderAt("/install", false);

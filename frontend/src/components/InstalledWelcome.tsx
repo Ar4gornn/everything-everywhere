@@ -70,7 +70,9 @@ export function InstalledWelcome() {
   return (
     <div className="install-offer" data-testid="install-welcome">
       <Card title={t("install.welcome.title")}>
-        <p className="hint">{t("install.welcome.body")}</p>
+        <p className="hint">
+          {t(canNotify && !done ? "install.welcome.body" : "install.welcome.bodyNoNotify")}
+        </p>
         <ErrorBanner message={error ? t(error) : null} />
         <div className="install-offer-actions">
           {canNotify && !done && (

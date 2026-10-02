@@ -352,7 +352,7 @@ export function App() {
   // Without this the sign-in page flashes on every reload before /me answers.
   // Epic 46 (AD-62 §2.5): the install guide works signed out, so a link can be sent to
   // someone with no account. Signed in, `/install` is an ordinary route below.
-  if (pathname === "/install" && !user) {
+  if ((pathname === "/install" || pathname === "/install/") && !user) {
     return (
       <Suspense fallback={null}>
         <InstallPage />

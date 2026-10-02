@@ -3326,7 +3326,7 @@ label.cal-layer-option {
 .install-offer-link {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--primary);
   border-radius: var(--pill);
@@ -5664,8 +5664,9 @@ dialog.sheet::backdrop {
 }
 
 .install-page .install-tabs button {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
+  padding-inline: var(--space-2);
   min-height: 44px;
 }
 

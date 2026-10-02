@@ -410,4 +410,10 @@ describe("Epic 45 touch targets", () => {
     const height = /min-height:\s*(\d+)px/.exec(rule?.[1] ?? "");
     expect(Number(height?.[1])).toBeGreaterThanOrEqual(44);
   });
+
+  it("the install offer link is at least 44px tall", () => {
+    const rule = /\.install-offer-link\s*\{([^}]*)\}/.exec(css);
+    const height = /min-height:\s*(\d+)px/.exec(rule?.[1] ?? "");
+    expect(Number(height?.[1])).toBeGreaterThanOrEqual(44);
+  });
 });

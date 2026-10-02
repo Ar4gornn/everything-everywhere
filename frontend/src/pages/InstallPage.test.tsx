@@ -1,5 +1,6 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import InstallPage from "./InstallPage";
@@ -17,7 +18,12 @@ vi.mock("../pwa", () => ({ isInstalled: vi.fn() }));
 function render() {
   return rtlRender(
     <LanguageProvider>
-      <InstallPage />
+      <MemoryRouter initialEntries={["/install"]}>
+        <Routes>
+          <Route path="/install" element={<InstallPage />} />
+          <Route path="/" element={<p>home-marker</p>} />
+        </Routes>
+      </MemoryRouter>
     </LanguageProvider>,
   );
 }
@@ -226,6 +232,46 @@ describe("InstallPage", () => {
     render();
     expect(screen.getByText("Already installed on this device")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open EEwhere" }).getAttribute("href")).toBe("/");
+  });
+
+  it("the back link is a client-side navigation, not a page load", async () => {
+    setup(android("chrome"));
+    const user = userEvent.setup();
+    render();
+    await user.click(screen.getByRole("link", { name: "Open EEwhere" }));
+    expect(await screen.findByText("home-marker")).toBeInTheDocument();
+  });
+
+  it("Android Chrome names the current menu items (More, Install and create shortcut)", () => {
+    setup(android("chrome"));
+    render();
+    expect(screen.getByText("On the right of the address bar, tap “More” ⋮.")).toBeTruthy();
+    expect(
+      screen.getByText("Tap “Install and create shortcut” (older versions: “Add to Home screen”)."),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: "The browser menu with “Install and create shortcut” highlighted" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("img", { name: /“More” ⋮ at the right of the address bar/ })).toBeTruthy();
+    // The words drawn inside the menu diagram.
+    expect(screen.getByText("Install and create shortcut")).toBeTruthy();
+  });
+
+  it("Android Chrome in French names « Plus » and « Installer et créer un raccourci »", async () => {
+    setup(android("chrome"));
+    const user = userEvent.setup();
+    render();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "fr");
+    expect(await screen.findByText("À droite de la barre d’adresse, touchez « Plus » ⋮.")).toBeTruthy();
+    expect(screen.getByText(/« Installer et créer un raccourci » \(anciennes versions : « Ajouter à l’écran d’accueil »\)/)).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Installer et créer un raccourci/ })).toBeTruthy();
+  });
+
+  it("Firefox Android step 3 has its own confirm drawing, not the iPhone add dialog", () => {
+    setup(android("firefox"));
+    render();
+    expect(screen.getByRole("img", { name: "The Firefox confirmation box with the “Add” button highlighted" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "The add dialog with the “Add” button highlighted" })).toBeNull();
   });
 
   it("does not say Already installed in a browser tab", () => {

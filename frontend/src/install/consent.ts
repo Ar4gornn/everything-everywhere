@@ -64,6 +64,8 @@ export function cardDismissed(now: Date = new Date()): boolean {
   if (raw === null) return false;
   const at = Number(raw);
   if (!Number.isFinite(at)) return false;
+  // A dismissal "from the future" (the clock was moved back) is not in force.
+  if (now.getTime() < at) return false;
   return now.getTime() - at < DISMISS_DAYS * DAY_MS;
 }
 
