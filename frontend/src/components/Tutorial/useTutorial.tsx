@@ -12,7 +12,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { api } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
+import { installOffer, readConsent } from "../../install/consent";
 import { useCurrentLayout, useLayout } from "../../layout/useLayout";
+import { isInstalled } from "../../pwa";
 
 /**
  * The guided tour on first sign-in (Epic 30).
@@ -37,7 +39,7 @@ import { useCurrentLayout, useLayout } from "../../layout/useLayout";
  * focus where the page put it — the amount field, on the entry step.
  */
 
-export type TourStep = "welcome" | "entry" | "history" | "budget" | "progress" | "done";
+export type TourStep = "welcome" | "entry" | "history" | "budget" | "progress" | "install" | "done";
 
 interface StepSpec {
   /** Where the step takes place. Navigated to on entering the step, if not already there. */
@@ -63,6 +65,8 @@ export const STEPS: Record<TourStep, StepSpec> = {
   history: { path: "/entries", target: "entries-list", scrollTo: "entries-rows", modal: false },
   budget: { path: "/plan", target: "budgets", modal: false },
   progress: { path: "/", target: "budget-progress", modal: false },
+  // Epic 46: phone only, and only while this device has not answered (see `numberedFor`).
+  install: { modal: false },
   done: { modal: true },
 };
 
@@ -78,8 +82,25 @@ export function specOf(step: TourStep, phone: boolean): StepSpec {
   return step === "entry" && phone ? PHONE_ENTRY : STEPS[step];
 }
 
-/** The numbered ones, in order. The closing screen is not a step. */
+/** The numbered ones, in order. The closing screen is not a step. `install` is added per device. */
 export const NUMBERED: readonly TourStep[] = ["welcome", "entry", "history", "budget", "progress"];
+
+/**
+ * Epic 46 (AD-62 §4): the last numbered step asks the install question, on a phone that is
+ * not installed and has not answered. The dashboard's own rule decides, so the two agree.
+ */
+function asksToInstall(phone: boolean): boolean {
+  return (
+    installOffer({
+      phone,
+      installed: isInstalled(),
+      welcomed: true,
+      consent: readConsent(),
+      dismissed: false,
+      hasUsedApp: true,
+    }) === "question"
+  );
+}
 
 /**
  * The steps this account will actually see (Epic 33). The progress step points at the
@@ -87,8 +108,9 @@ export const NUMBERED: readonly TourStep[] = ["welcome", "entry", "history", "bu
  * point at, so the step is skipped — and counted out of "2 of 5", which must not promise a
  * step that will not come.
  */
-function numberedFor(budgetsShown: boolean): readonly TourStep[] {
-  return budgetsShown ? NUMBERED : NUMBERED.filter((step) => step !== "progress");
+function numberedFor(budgetsShown: boolean, install: boolean): readonly TourStep[] {
+  const steps = budgetsShown ? NUMBERED : NUMBERED.filter((step) => step !== "progress");
+  return install ? [...steps, "install"] : steps;
 }
 
 export type TourEvent = "entry-created";
@@ -135,8 +157,11 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const [step, setStep] = useState<TourStep | null>(null);
   const budgetsShown =
     useCurrentLayout().cards.find((card) => card.id === "budgets")?.on ?? true;
-  const numbered = useMemo(() => numberedFor(budgetsShown), [budgetsShown]);
   const phone = useLayout() === "phone";
+  // Decided when the layout is known, not on every render: answering the question must not
+  // pull the step out from under the person who just answered it.
+  const install = useMemo(() => asksToInstall(phone), [phone]);
+  const numbered = useMemo(() => numberedFor(budgetsShown, install), [budgetsShown, install]);
   // Which account has already been offered the tour this session. The guard is a ref and
   // not the server flags, because the flags in `user` are not re-read after the PATCH —
   // and a later profile refresh (changing the currency, say) must not reopen it.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
 import { MAX_START_DAY, budgetMonth } from "../months";
@@ -16,6 +17,7 @@ import { StreaksSettingsCard } from "../components/StreaksSettingsCard";
 import { useTutorial } from "../components/Tutorial/useTutorial";
 import { Card, ErrorBanner } from "../components/ui";
 import { useSignOut } from "../gym/useSignOut";
+import { isInstalled } from "../pwa";
 import { useMoney } from "../useMoney";
 import { ACCENTS, ACCENT_SWATCH, MODES, useTheme, type Accent, type Mode } from "../theme";
 
@@ -289,6 +291,18 @@ export function SettingsPage() {
 
       {/* AD-54: an admin only. Its own component, so a non-admin never mounts its hooks. */}
       {user?.is_admin && <InvitesCard />}
+
+      {/* Epic 46: always reachable here, whatever was answered on the dashboard. */}
+      <Card title={t("install.settings.title")}>
+        <p className="hint" style={{ margin: "0 0 10px" }}>
+          {isInstalled() ? t("install.settings.installed") : t("install.settings.body")}
+        </p>
+        {!isInstalled() && (
+          <Link to="/install" className="install-offer-link">
+            {t("install.settings.open")}
+          </Link>
+        )}
+      </Card>
 
       <Card title={t("settings.help")}>
         <p className="hint" style={{ margin: "0 0 10px" }}>

@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { LanguageProvider } from "./i18n";
+import { captureInstallPrompt } from "./install/prompt";
 import { ToastProvider } from "./components/Toast";
 import { registerServiceWorker } from "./pwa";
 import { migrateLegacyStorage } from "./storage";
@@ -18,6 +19,9 @@ import "@fontsource/lato/latin-700.css";
 import "@fontsource/lato/latin-ext-400.css";
 import "@fontsource/lato/latin-ext-700.css";
 import "./styles.css";
+
+// `beforeinstallprompt` fires once and early: listen before React renders (Epic 46, AD-62 §1).
+captureInstallPrompt();
 
 // Before anything reads a key: the providers below read the tokens and the language on mount.
 migrateLegacyStorage();

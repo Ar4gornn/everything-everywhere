@@ -58,6 +58,8 @@ const SettingsPage = page(() => import("./pages/SettingsPage"), "SettingsPage");
 const NotesPage = page(() => import("./pages/NotesPage"), "NotesPage");
 const NotePage = page(() => import("./pages/NotePage"), "NotePage");
 const InvitesPage = page(() => import("./pages/InvitesPage"), "InvitesPage");
+// Epic 46: the one page with a default export (it is also rendered before sign-in).
+const InstallPage = lazy(() => import("./pages/InstallPage"));
 
 /**
  * The navigation answer, in full, because it is the constraint two new features collided
@@ -348,6 +350,15 @@ export function App() {
   }, [userId, gymOn]);
 
   // Without this the sign-in page flashes on every reload before /me answers.
+  // Epic 46 (AD-62 §2.5): the install guide works signed out, so a link can be sent to
+  // someone with no account. Signed in, `/install` is an ordinary route below.
+  if (pathname === "/install" && !user) {
+    return (
+      <Suspense fallback={null}>
+        <InstallPage />
+      </Suspense>
+    );
+  }
   if (loading) return <main className="shell" />;
   if (!user) return <SignInPage />;
 
@@ -421,6 +432,7 @@ export function App() {
           <Route path="/recipes" element={<ModuleGate module="recipes"><RecipesPage /></ModuleGate>} />
           <Route path="/recipes/:recipeId" element={<ModuleGate module="recipes"><RecipePage /></ModuleGate>} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/install" element={<InstallPage />} />
           {/* AD-54: offered to an admin only; the server refuses anyone else regardless. */}
           <Route
             path="/invites"

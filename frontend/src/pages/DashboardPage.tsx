@@ -21,6 +21,8 @@ import { MoodCheckin } from "../components/MoodCheckin";
 import { LeftoverCard } from "../components/LeftoverCard";
 import { QuoteCard } from "../components/QuoteCard";
 import { GymCard } from "../components/GymCard";
+import { InstallOffer } from "../components/InstallOffer";
+import { InstalledWelcome } from "../components/InstalledWelcome";
 import { StreakCard } from "../components/StreakCard";
 import { Card, Empty, ErrorBanner, Stat, TableWrap } from "../components/ui";
 import { useEntryOutbox } from "../entries/outbox";
@@ -262,6 +264,15 @@ export function DashboardPage() {
       cancelled = true;
     };
   }, [readingOn]);
+
+  // Epic 46: "has used the app" from what is already loaded — no request of its own. The
+  // summary and trends carry no row count, so any recorded money in the window (or in the
+  // trend months) stands for "at least one entry". Habit check-ins are not loaded here.
+  const hasUsedApp =
+    [summary?.income, summary?.expense, summary?.saved].some((v) => v !== undefined && toCents(v) !== 0) ||
+    [...(trends?.income ?? []), ...(trends?.expense ?? []), ...(trends?.saved ?? [])].some(
+      (v) => toCents(v) !== 0,
+    );
 
   const spaceName = (id: string) => spaces.find((space) => space.id === id)?.name ?? "";
 
@@ -863,6 +874,10 @@ export function DashboardPage() {
           <Link to="/entries">{t.n("offline.dashLine", unsent)}</Link>
         </p>
       )}
+
+      {/* Epic 46: installing is offered after use and never pushed; welcome once installed. */}
+      <InstalledWelcome />
+      <InstallOffer hasUsedApp={hasUsedApp} />
 
       {loading && summary === null && trends === null && (needSummary || needTrends) ? (
         <p className="empty">{t("state.loading")}</p>

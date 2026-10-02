@@ -1,5 +1,6 @@
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "./SettingsPage";
@@ -17,7 +18,9 @@ function wrap(ui: React.ReactElement) {
     <ThemeProvider>
       <AuthProvider>
         <LanguageProvider>
-          <ToastProvider>{ui}</ToastProvider>
+          <ToastProvider>
+            <MemoryRouter>{ui}</MemoryRouter>
+          </ToastProvider>
         </LanguageProvider>
       </AuthProvider>
     </ThemeProvider>

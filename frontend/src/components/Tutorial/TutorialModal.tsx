@@ -1,6 +1,9 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 
+import { useNavigate } from "react-router-dom";
+
 import { useT } from "../../i18n";
+import { writeConsent } from "../../install/consent";
 import { useLayout } from "../../layout/useLayout";
 import { STEPS, useTutorial, type TourStep } from "./useTutorial";
 
@@ -12,6 +15,7 @@ import { STEPS, useTutorial, type TourStep } from "./useTutorial";
 export function TutorialModal() {
   const tour = useTutorial();
   const t = useT();
+  const navigate = useNavigate();
   const phone = useLayout() === "phone";
   const primary = useRef<HTMLButtonElement>(null);
   const step = tour.step;
@@ -55,15 +59,42 @@ export function TutorialModal() {
         {number > 0 && (
           <p className="tour-step">{t("tour.stepOf", { n: number, total: tour.numbered.length })}</p>
         )}
-        <h2 id="tour-title">{t(`tour.${step}.title`)}</h2>
+        <h2 id="tour-title">
+          {step === "install" ? t("install.tour.title") : t(`tour.${step}.title`)}
+        </h2>
         {/* Polite: a step change is announced after whatever the reader is on, not over it. */}
         <p id="tour-body" aria-live="polite">
           {body(step, t, phone)}
         </p>
         <div className="tour-actions">
-          <button ref={primary} type="button" onClick={advance}>
-            {step === "welcome" ? t("tour.begin") : step === "done" ? t("tour.finish") : t("tour.next")}
-          </button>
+          {step === "install" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  writeConsent("yes");
+                  tour.finish();
+                  navigate("/install");
+                }}
+              >
+                {t("install.ask.yes")}
+              </button>
+              <button
+                type="button"
+                className="quiet"
+                onClick={() => {
+                  writeConsent("no");
+                  tour.finish();
+                }}
+              >
+                {t("install.ask.no")}
+              </button>
+            </>
+          ) : (
+            <button ref={primary} type="button" onClick={advance}>
+              {step === "welcome" ? t("tour.begin") : step === "done" ? t("tour.finish") : t("tour.next")}
+            </button>
+          )}
           {step !== "done" && (
             <button type="button" className="quiet" onClick={tour.skip}>
               {t("tour.skip")}
@@ -81,5 +112,6 @@ function body(step: TourStep, t: ReturnType<typeof useT>, phone: boolean): strin
     return t("tour.entry.phoneBody", { add: t("nav.addEntry"), save: t("quickAdd.save") });
   }
   if (step === "entry") return t("tour.entry.body", { add: t("action.add") });
+  if (step === "install") return t("install.tour.body");
   return t(`tour.${step}.body`);
 }
