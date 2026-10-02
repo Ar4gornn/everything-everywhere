@@ -226,3 +226,17 @@ describe("French", () => {
     expect(buildPrompt("notes", EMPTY, "fr", "mes notes")).toContain("mes notes");
   });
 });
+
+describe("the person's unit in the format", () => {
+  it.each(["en", "fr"] as const)("%s: an lb context says lb in the example and never kg", (lang) => {
+    const context = { ...EMPTY, unit: "lb" as const };
+    for (const profile of PROFILES) {
+      const text = buildPrompt(profile.id, context, lang);
+      expect(text).toContain('"weight_unit": "lb"');
+      expect(text).toContain('"weight_unit" ');
+      expect(text).not.toContain('"kg"');
+      expect(text).not.toContain("{unit}");
+    }
+    expect(buildPrompt("quick", EMPTY, lang)).toContain('"weight_unit": "kg"');
+  });
+});

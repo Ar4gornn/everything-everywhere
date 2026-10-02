@@ -12,6 +12,7 @@ import { todayIso } from "../months";
 import { LanguageProvider } from "../i18n";
 import { DEFAULT_PREFERENCES } from "../layout/preferences";
 import { GymCard } from "./GymCard";
+import { ToastProvider } from "./Toast";
 
 /**
  * The dashboard's Gym card (Epic 42, §8). Everything it draws comes from the device's copy
@@ -171,6 +172,33 @@ describe("the Gym card", () => {
     await userEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(readOutbox("u1")).toEqual([]);
     expect(await screen.findByRole("button", { name: "Rest day" })).toBeInTheDocument();
+  });
+
+  it("says so when Undo cannot delete the rest day", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("/api/auth/me")) return json(USER);
+        if (url.includes("/workouts/complete")) return json({ id: "srv-1", sets: [] }, 201);
+        if (init?.method === "DELETE") throw new TypeError("Failed to fetch");
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LanguageProvider>
+            <ToastProvider>
+              <GymCard collapseKey="test.gym" />
+            </ToastProvider>
+          </LanguageProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Rest day" }));
+    await waitFor(() => expect(readOutbox("u1")).toEqual([]));
+    await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Could not undo the rest day. Try again in a moment.")).toBeInTheDocument();
   });
 
   it("Undo is offered for five seconds only, the logged line stays", async () => {

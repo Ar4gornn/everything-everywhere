@@ -289,6 +289,52 @@ describe("Import: getting a prompt (the AI half)", () => {
     expect(open).toHaveBeenLastCalledWith("https://chatgpt.com/", "_blank", "noopener");
   });
 
+  it("opens the tab inside the tap, without waiting for the copy, and keeps a visible link", async () => {
+    // A copy that never answers: an await before window.open would never get there.
+    giveClipboard({ writeText: vi.fn(() => new Promise<void>(() => undefined)) });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    renderGym("/gym/import");
+    await userEvent.click(await screen.findByRole("button", { name: /Build me one/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy & open ChatGPT" }));
+    expect(open).toHaveBeenCalledWith("https://chatgpt.com/", "_blank", "noopener");
+    expect(screen.queryByRole("link", { name: "Open ChatGPT" })).not.toBeInTheDocument();
+  });
+
+  it("after the copy, a link opens the AI app for a blocked popup", async () => {
+    giveClipboard({ writeText: vi.fn(async () => undefined) });
+    vi.spyOn(window, "open").mockReturnValue(null);
+    renderGym("/gym/import");
+    await userEvent.click(await screen.findByRole("button", { name: /Build me one/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy & open ChatGPT" }));
+    const link = await screen.findByRole("link", { name: "Open ChatGPT" });
+    expect(link).toHaveAttribute("href", "https://chatgpt.com/");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("writes the context labels in the app's language", async () => {
+    window.localStorage.setItem("everything-everywhere.language", "fr");
+    const writeText = vi.fn(async () => undefined);
+    giveClipboard({ writeText });
+    mocks.listRecentWorkouts.mockResolvedValue([
+      { ...pushDay, id: "a", routine_id: null, rest_day: false, performed_on: "2026-10-01", sets: [] },
+      { ...pushDay, id: "b", routine_id: null, rest_day: true, performed_on: "2026-09-30", sets: [] },
+    ]);
+    renderGym("/gym/import");
+    await screen.findByRole("list");
+    const heads = document.querySelectorAll<HTMLElement>(".gym-profile-head");
+    await userEvent.click(heads[1] as HTMLElement);
+    await userEvent.click(screen.getByRole("button", { name: "Copier seulement" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    await waitFor(() => {
+      const text = String((writeText.mock.calls.at(-1) as unknown[])[0]);
+      expect(text).toContain("séance libre");
+      expect(text).toContain("jour de repos");
+      expect(text).not.toMatch(/free session|rest day/);
+    });
+    window.localStorage.removeItem("everything-everywhere.language");
+  });
+
   it("copies the profile's prompt built from this person's own context", async () => {
     const writeText = vi.fn(async () => undefined);
     giveClipboard({ writeText });
@@ -350,7 +396,12 @@ describe("Import: getting a prompt (the AI half)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Copy & open Claude" }));
     expect(await screen.findByText(/Prompt selected/)).toBeInTheDocument();
     expect(document.querySelector(".gym-prompt-text")).not.toBeNull();
-    expect(open).not.toHaveBeenCalled();
+    // The tab opens from the tap itself, before the copy is known; the link stays on offer.
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: "Open Claude" })).toHaveAttribute(
+      "href",
+      "https://claude.ai/new",
+    );
   });
 
   it("without a Clipboard API at all, the prompt is shown for a long-press", async () => {
@@ -483,6 +534,63 @@ describe("Import: rest and the last step", () => {
     expect(mocks.importRoutine).toHaveBeenCalledTimes(1);
     expect(readActive(USER_ID)?.routine_id).toBe("r7");
     expect(window.sessionStorage.getItem(`everything-everywhere.gym.import.${USER_ID}`)).toBeNull();
+  });
+
+  it("with several routines made, asks which to start, today's first, and starts that one", async () => {
+    const TWO = JSON.stringify({
+      format: "ee-workout/1",
+      weight_unit: "kg",
+      schedule: ["Upper", "rest", "Lower"],
+      routines: [
+        { name: "Upper", exercises: [{ name: "Goblet squat", kind: "reps", sets: 3, reps: 12 }] },
+        { name: "Lower", exercises: [{ name: "Plank", kind: "duration", sets: 3, seconds: 30 }] },
+      ],
+    });
+    mocks.importRoutine.mockImplementation(async (body: { name: string }) => ({
+      ...pushDay,
+      id: `id-${body.name}`,
+      name: body.name,
+    }));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2031, 2, 5, 12, 0, 0)); // a Wednesday: the third day of the plan
+    try {
+      renderGym("/gym/import");
+      await paste(TWO);
+      await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Create and start" }));
+      const list = await screen.findByRole("list", { name: "Which one do you start?" });
+      const names = within(list).getAllByRole("button").map((b) => b.textContent);
+      expect(names).toEqual(["Lower", "Upper"]);
+      expect(readActive(USER_ID)).toBeNull();
+      await userEvent.click(within(list).getByRole("button", { name: "Upper" }));
+      await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/gym/session"));
+      expect(readActive(USER_ID)?.routine_id).toBe("id-Upper");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a draft kept by an older build, lines without rest_after_seconds, still reviews and creates", async () => {
+    mocks.importRoutine.mockResolvedValue({ ...pushDay, id: "r7", name: "Upper" });
+    const view = renderGym("/gym/import");
+    await paste(WORKOUT);
+    await screen.findByRole("heading", { name: "Exercise 1 of 3" });
+    const key = `everything-everywhere.gym.import.${USER_ID}`;
+    const draft = JSON.parse(window.sessionStorage.getItem(key) as string);
+    for (const routine of draft.routines) for (const line of routine.lines) delete line.rest_after_seconds;
+    window.sessionStorage.setItem(key, JSON.stringify(draft));
+    view.unmount();
+    renderGym("/gym/import");
+    await screen.findByRole("heading", { name: "Exercise 1 of 3" });
+    for (let i = 0; i < 3; i++) {
+      await userEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    }
+    await userEvent.click(await screen.findByRole("button", { name: "Create only" }));
+    await waitFor(() => expect(mocks.importRoutine).toHaveBeenCalledTimes(1));
+    const body = mocks.importRoutine.mock.calls[0]?.[0] as { lines: Record<string, unknown>[] };
+    expect(body.lines.every((l) => l.rest_after_seconds === undefined || typeof l.rest_after_seconds === "number")).toBe(true);
+    expect(Object.values(body.lines).some((l) => "rest_after_seconds" in l && l.rest_after_seconds === undefined)).toBe(false);
   });
 
   it("Create only stays out of the session", async () => {

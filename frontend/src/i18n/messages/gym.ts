@@ -475,6 +475,14 @@ export const gym = {
   "gym.hub.copyClaude": { en: "Copy & open Claude", fr: "Copier et ouvrir Claude" },
   "gym.hub.copyChatGpt": { en: "Copy & open ChatGPT", fr: "Copier et ouvrir ChatGPT" },
   "gym.hub.copyOnly": { en: "Copy only", fr: "Copier seulement" },
+  "gym.hub.openClaude": { en: "Open Claude", fr: "Ouvrir Claude" },
+  "gym.hub.openChatGpt": { en: "Open ChatGPT", fr: "Ouvrir ChatGPT" },
+  "gym.import.startWhich": { en: "Which one do you start?", fr: "Laquelle commencer ?" },
+  "gym.import.startWhichHint": {
+    en: "Every routine was created. Today's one in the plan comes first.",
+    fr: "Tous les programmes sont créés. Celui du jour dans le plan est en tête.",
+  },
+  "gym.import.startNone": { en: "Start none", fr: "Ne rien commencer" },
   "gym.hub.hint": {
     en: "Chat, confirm each exercise, then come back here and tap Paste.",
     fr: "Discutez, validez chaque exercice, puis revenez ici et touchez Coller.",

@@ -161,6 +161,19 @@ describe("The quick builder", () => {
     expect(await screen.findByText("Started, but the routine was not saved.")).toBeInTheDocument();
   });
 
+  it("if only the refresh after a successful save fails, it starts from the saved routine and does not say 'not saved'", async () => {
+    await openBuilder();
+    mocks.importRoutine.mockImplementation(async () => {
+      mocks.listRoutinesFull.mockRejectedValue(new TypeError("Failed to fetch"));
+      return { ...pushDay, id: "r8", name: "Saved" };
+    });
+    await userEvent.click(within(suggestions()).getByRole("button", { name: "Plank" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/gym/session"));
+    expect(readActive(USER_ID)?.routine_id).toBe("r8");
+    expect(screen.queryByText("Started, but the routine was not saved.")).not.toBeInTheDocument();
+  });
+
   it("starting with nothing added is allowed: an empty session, nothing saved", async () => {
     await openBuilder();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));

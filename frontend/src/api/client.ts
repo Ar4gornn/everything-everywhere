@@ -248,7 +248,11 @@ const NEVER_RETRIED = new Set([
   "/api/auth/refresh",
 ]);
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  onStatus?: (status: number) => void,
+): Promise<T> {
   let response = await send(path, init);
 
   // A 401 means the short-lived access token aged out. Refresh once and retry, so a
@@ -278,6 +282,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (response.status === 204) return undefined as T;
+  onStatus?.(response.status);
 
   const body = await response.json().catch(() => null);
 
@@ -641,11 +646,12 @@ export const api = {
     request<Workout>("/api/gym/workouts", { method: "POST", body: JSON.stringify(input) }),
 
   /** A whole session in one body (AD-58). A replay of the same client_ref returns the first. */
-  completeWorkout: (input: WorkoutComplete) =>
-    request<WorkoutDetail>("/api/gym/workouts/complete", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+  completeWorkout: (input: WorkoutComplete, onStatus?: (status: number) => void) =>
+    request<WorkoutDetail>(
+      "/api/gym/workouts/complete",
+      { method: "POST", body: JSON.stringify(input) },
+      onStatus,
+    ),
 
   /** The newest sessions with their sets (Epic 43): the AI prompt's context. */
   listRecentWorkouts: (limit = 10) =>

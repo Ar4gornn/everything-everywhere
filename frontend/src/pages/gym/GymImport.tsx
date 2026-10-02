@@ -32,13 +32,40 @@ function readText(file: File): Promise<string> {
   });
 }
 
+/**
+ * The routines just made, the one the file's week puts on today (Monday is the first day)
+ * leading. Without a schedule, or with no match, the order they were made in.
+ */
+function todayFirst(
+  routines: RoutineDetail[],
+  schedule: string[] | null,
+  now: Date,
+): RoutineDetail[] {
+  const label = schedule?.[(now.getDay() + 6) % 7]?.trim().toLowerCase();
+  if (!label) return routines;
+  const today = routines.find((routine) => routine.name.trim().toLowerCase() === label);
+  return today ? [today, ...routines.filter((routine) => routine !== today)] : routines;
+}
+
 const draftKey = (userId: string) => `${IMPORT_DRAFT_PREFIX}${userId}`;
 
 /** The review survives a reload (and an offline stretch) in sessionStorage — this tab only. */
 function loadDraft(userId: string): Wizard | null {
   try {
     const raw = window.sessionStorage.getItem(draftKey(userId));
-    return raw ? (JSON.parse(raw) as Wizard) : null;
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Wizard;
+    // A draft kept by an older build has no rest_after_seconds on its lines: that is "none".
+    return {
+      ...draft,
+      routines: draft.routines.map((routine) => ({
+        ...routine,
+        lines: routine.lines.map((line) => ({
+          ...line,
+          rest_after_seconds: line.rest_after_seconds ?? null,
+        })),
+      })),
+    };
   } catch {
     return null;
   }
@@ -77,8 +104,14 @@ export function GymImport() {
   const [banner, setBanner] = useState(false);
   const [pasteHint, setPasteHint] = useState(false);
   const tookShared = useRef(false);
-  /** The first routine made, kept across a retry so "start" still has something to start. */
-  const firstMade = useRef<RoutineDetail | null>(null);
+  /** Every routine made, kept across a retry so "start" still has something to start. */
+  const made = useRef<RoutineDetail[]>([]);
+  /** Several routines were made and one is to be started: which? (today's first.) */
+  const [choosing, setChoosing] = useState<RoutineDetail[] | null>(null);
+  /** The AI app the last copy was for: a visible link, since a popup may be blocked. */
+  const [openLink, setOpenLink] = useState<{ url: string; label: "claude" | "chatgpt" } | null>(
+    null,
+  );
   const pre = useRef<HTMLPreElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -93,7 +126,7 @@ export function GymImport() {
         ? ""
         : buildPrompt(
             openProfile,
-            buildPromptContext(cache, readRecent(userId), unit),
+            buildPromptContext(cache, readRecent(userId), unit, t.lang),
             t.lang,
             notes,
           ),
@@ -119,7 +152,8 @@ export function GymImport() {
         }),
       }));
       setCreated([]);
-      firstMade.current = null;
+      made.current = [];
+      setChoosing(null);
       setBanner(false);
       setWizard(wizardFor(routines, parsed.schedule));
     } catch (caught) {
@@ -174,20 +208,32 @@ export function GymImport() {
     setNeedSelect(false);
   }, [needSelect, showPrompt]);
 
-  async function copy(url: string | null) {
+  async function copy(url: string | null, label: "claude" | "chatgpt" | null) {
+    setOpenLink(null);
+    // The copy is started, not awaited, and the tab opened in the same tap: a browser only
+    // allows a new tab from the gesture itself, and an await first would get it blocked.
+    let copying: Promise<void>;
     try {
-      await navigator.clipboard.writeText(prompt);
+      copying = navigator.clipboard.writeText(prompt);
+    } catch (caught) {
+      copying = Promise.reject(caught);
+    }
+    if (url) window.open(url, "_blank", "noopener");
+    try {
+      await copying;
     } catch {
       // No Clipboard API (or refused): show the text selected, and do not leave the page
       // with nothing to paste into the chat.
       setShowPrompt(true);
       setNeedSelect(true);
       toast.show(t("gym.copySelected"));
+      if (url && label) setOpenLink({ url, label });
       return;
     }
     toast.show(t("gym.copied"));
-    // Copy first, then go: the clipboard must hold the prompt before the other app opens.
-    if (url) window.open(url, "_blank", "noopener");
+    // `noopener` makes window.open answer null whether or not a tab opened, so the link is
+    // always offered: a blocked popup is then one more tap, never a dead end.
+    if (url && label) setOpenLink({ url, label });
   }
 
   async function pasteFromClipboard() {
@@ -218,6 +264,16 @@ export function GymImport() {
     }
   }
 
+  function startRoutine(routine: RoutineDetail) {
+    // One session at a time: starting another would silently drop the sets already done.
+    if (active && !window.confirm(t("gym.replaceConfirm"))) {
+      navigate("/gym");
+      return;
+    }
+    setActive(startSession(routine, new Date(), newId));
+    navigate("/gym/session");
+  }
+
   async function create(startAfter: boolean) {
     if (!wizard) return;
     setCreating(true);
@@ -228,22 +284,19 @@ export function GymImport() {
         if (done.includes(ri)) continue;
         const lines = routine.lines.filter((_, li) => wizard.decisions[ri]?.[li] !== "skipped");
         if (lines.length === 0) continue;
-        const made = await api.importRoutine(toImportBody({ ...routine, lines }));
-        firstMade.current ??= made;
+        made.current.push(await api.importRoutine(toImportBody({ ...routine, lines })));
         done.push(ri);
         setCreated([...done]);
       }
+      const schedule = wizard.schedule ?? null;
       setWizard(null);
       await refresh();
-      const first = firstMade.current;
-      if (startAfter && first) {
-        // One session at a time: starting another would silently drop the sets already done.
-        if (active && !window.confirm(t("gym.replaceConfirm"))) {
-          navigate("/gym");
-          return;
-        }
-        setActive(startSession(first, new Date(), newId));
-        navigate("/gym/session");
+      if (startAfter && made.current.length === 1) {
+        startRoutine(made.current[0] as RoutineDetail);
+        return;
+      }
+      if (startAfter && made.current.length > 1) {
+        setChoosing(todayFirst(made.current, schedule, new Date()));
         return;
       }
       toast.show(t.n("gym.imported", done.length));
@@ -260,7 +313,23 @@ export function GymImport() {
       <p>
         <Link to="/gym">← {t("gym.title")}</Link>
       </p>
-      {wizard ? (
+      {choosing ? (
+        <Card title={t("gym.import.startWhich")}>
+          <p className="hint">{t("gym.import.startWhichHint")}</p>
+          <ul className="list-rows" aria-label={t("gym.import.startWhich")}>
+            {choosing.map((routine) => (
+              <li key={routine.id}>
+                <button type="button" onClick={() => startRoutine(routine)}>
+                  {routine.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="quiet" onClick={() => navigate("/gym")}>
+            {t("gym.import.startNone")}
+          </button>
+        </Card>
+      ) : wizard ? (
         <ImportReview
           wizard={wizard}
           onChange={setWizard}
@@ -325,16 +394,25 @@ export function GymImport() {
                           </pre>
                         )}
                         <div className="gym-copy-row">
-                          <button type="button" onClick={() => void copy(CLAUDE_URL)}>
+                          <button type="button" onClick={() => void copy(CLAUDE_URL, "claude")}>
                             {t("gym.hub.copyClaude")}
                           </button>
-                          <button type="button" onClick={() => void copy(CHATGPT_URL)}>
+                          <button type="button" onClick={() => void copy(CHATGPT_URL, "chatgpt")}>
                             {t("gym.hub.copyChatGpt")}
                           </button>
-                          <button type="button" className="quiet" onClick={() => void copy(null)}>
+                          <button type="button" className="quiet" onClick={() => void copy(null, null)}>
                             {t("gym.hub.copyOnly")}
                           </button>
                         </div>
+                        {openLink && (
+                          <p className="hint" role="status">
+                            <a href={openLink.url} target="_blank" rel="noopener noreferrer">
+                              {openLink.label === "claude"
+                                ? t("gym.hub.openClaude")
+                                : t("gym.hub.openChatGpt")}
+                            </a>
+                          </p>
+                        )}
                         <p className="hint">{t("gym.hub.hint")}</p>
                       </div>
                     )}

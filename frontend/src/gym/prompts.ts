@@ -203,7 +203,7 @@ export function buildPrompt(
     instructions,
     contextBlock(context, t),
     t(profile === "notes" ? "gymPrompt.confirmOnce" : "gymPrompt.confirm"),
-    t("gymPrompt.format"),
+    t("gymPrompt.format", { unit: context.unit }),
   ]
     .filter((part) => part.trim() !== "")
     .join("\n\n");

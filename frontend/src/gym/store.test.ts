@@ -553,3 +553,61 @@ describe("rest days (Epic 43)", () => {
     expect(window.localStorage.getItem("everything-everywhere.gym.u3.sent")).toBeNull();
   });
 });
+
+describe("rest days after the flush (QA fixes)", () => {
+  const U = "u4";
+  const DAY = "2031-03-04";
+  beforeEach(() => clearGymStore(U));
+
+  it("the server's row replaces the pending- stub once sent", async () => {
+    mocks.completeWorkout.mockResolvedValue({ id: "srv-1", rest_day: true, performed_on: DAY });
+    await logRestDay(U, DAY, NOW);
+    const workouts = readCache(U).workouts;
+    expect(workouts.map((w) => w.id)).toEqual(["srv-1"]);
+    expect(workouts[0]).toMatchObject({ rest_day: true, performed_on: DAY });
+  });
+
+  it("Undo during the send waits for it, then deletes the row the server made", async () => {
+    let answer!: (value: { id: string }) => void;
+    mocks.completeWorkout.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    mocks.deleteWorkout.mockResolvedValue(undefined);
+    const logging = logRestDay(U, DAY, NOW);
+    const ref = readOutbox(U)[0]?.body.client_ref as string;
+    const undoing = undoRestDay(U, ref);
+    answer({ id: "srv-9" });
+    await Promise.all([logging, undoing]);
+    expect(mocks.deleteWorkout).toHaveBeenCalledWith("srv-9");
+    expect(readCache(U).workouts).toEqual([]);
+    expect(readOutbox(U)).toEqual([]);
+  });
+
+  it("a rest day the server already had (200) is never deleted by this device's Undo", async () => {
+    mocks.completeWorkout.mockImplementation(async (_body: unknown, onStatus?: (s: number) => void) => {
+      onStatus?.(200);
+      return { id: "other-device" };
+    });
+    const ref = await logRestDay(U, DAY, NOW);
+    expect(window.localStorage.getItem("everything-everywhere.gym.u4.sent")).toBeNull();
+    await undoRestDay(U, ref);
+    expect(mocks.deleteWorkout).not.toHaveBeenCalled();
+  });
+
+  it("a refused rest day does not count as logged", async () => {
+    mocks.completeWorkout.mockRejectedValue(new ApiError(422, "no", "validation"));
+    await logRestDay(U, DAY, NOW);
+    expect(readOutbox(U)[0]?.refused).toBe("validation");
+    writeCache(U, EMPTY_CACHE);
+    expect(hasRestDay(U, DAY)).toBe(false);
+  });
+
+  it("finishing a session refreshes the cache once it was sent", async () => {
+    mocks.completeWorkout.mockResolvedValue(done("fresh-ref"));
+    writeActive(U, session("fresh-ref"));
+    await finishActive(U, NOW);
+    await waitFor(() => expect(mocks.listWorkouts).toHaveBeenCalled());
+  });
+});

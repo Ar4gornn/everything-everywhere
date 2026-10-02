@@ -342,7 +342,12 @@ export async function finishActive(userId: string, now: Date): Promise<FlushResu
       timer = setTimeout(() => resolve(tally(userId, 0)), FINISH_TIMEOUT_MS);
     });
     try {
-      return await Promise.race([flushOutbox(userId), timeout]);
+      const flushed = flushOutbox(userId).then((result) => {
+        // The history and "last done" come from the cache: bring them up to date, quietly.
+        if (result.sent > 0) void refreshCache(userId).catch(() => {});
+        return result;
+      });
+      return await Promise.race([flushed, timeout]);
     } finally {
       clearTimeout(timer);
     }
@@ -352,6 +357,7 @@ export async function finishActive(userId: string, now: Date): Promise<FlushResu
   try {
     await api.completeWorkout(body);
     writeActive(userId, null);
+    void refreshCache(userId).catch(() => {});
     return { sent: 1, pending: 0, refused: 0 };
   } catch {
     return { sent: 0, pending: 1, refused: 0 };
@@ -359,6 +365,9 @@ export async function finishActive(userId: string, now: Date): Promise<FlushResu
 }
 
 const flights = new Map<string, Promise<FlushResult>>();
+
+/** client_ref → the send in progress (settled once its bookkeeping is done). */
+const inFlight = new Map<string, Promise<void>>();
 
 /**
  * Send every pending entry, one at a time, oldest first. Single-flight per user: a second call
@@ -374,9 +383,22 @@ export function flushOutbox(userId: string): Promise<FlushResult> {
       const next = readOutbox(userId).find((entry) => entry.refused === null);
       if (!next) break;
       const ref = next.body.client_ref;
+      let landed!: () => void;
+      inFlight.set(
+        ref,
+        new Promise<void>((resolve) => {
+          landed = resolve;
+        }),
+      );
       try {
-        const saved = await api.completeWorkout(next.body);
-        if (next.body.rest_day && saved?.id) rememberSent(userId, ref, saved.id);
+        let status = 201;
+        const saved = await api.completeWorkout(next.body, (code) => {
+          status = code;
+        });
+        // A 200 is the server saying it already had this: not a rest day this ref created.
+        const created = status !== 200;
+        if (next.body.rest_day && saved?.id && created) rememberSent(userId, ref, saved.id);
+        if (saved?.id) swapStub(userId, ref, saved);
         writeOutbox(
           userId,
           readOutbox(userId).filter((entry) => entry.body.client_ref !== ref),
@@ -391,6 +413,9 @@ export function flushOutbox(userId: string): Promise<FlushResult> {
             entry.body.client_ref === ref ? { ...entry, refused: code } : entry,
           ),
         );
+      } finally {
+        inFlight.delete(ref);
+        landed();
       }
     }
     return tally(userId, sent);
@@ -532,7 +557,10 @@ export function readRecent(userId: string): WorkoutDetail[] {
 export function hasRestDay(userId: string, date: string): boolean {
   return (
     readCache(userId).workouts.some((workout) => workout.rest_day && workout.performed_on === date) ||
-    readOutbox(userId).some((entry) => entry.body.rest_day === true && entry.body.performed_on === date)
+    readOutbox(userId).some(
+      (entry) =>
+        entry.refused === null && entry.body.rest_day === true && entry.body.performed_on === date,
+    )
   );
 }
 
@@ -550,7 +578,36 @@ function rememberSent(userId: string, clientRef: string, workoutId: string): voi
 }
 
 /** The cached workout a rest day stands for until the server's own row replaces it. */
-const restWorkoutId = (clientRef: string) => `pending-${clientRef}`;
+const PENDING_PREFIX = "pending-";
+const restWorkoutId = (clientRef: string) => `${PENDING_PREFIX}${clientRef}`;
+
+/** The client_ref behind a cached stub id, or null for a real server id. */
+export function pendingRefOf(workoutId: string): string | null {
+  return workoutId.startsWith(PENDING_PREFIX) ? workoutId.slice(PENDING_PREFIX.length) : null;
+}
+
+/**
+ * After a send: the server's own row replaces the optimistic stub (its `pending-` id and any
+ * field), so nothing downstream holds an id the server has never heard of.
+ */
+function swapStub(
+  userId: string,
+  clientRef: string,
+  saved: Partial<Workout> & { id: string },
+): void {
+  const cache = readCache(userId);
+  const stubId = restWorkoutId(clientRef);
+  if (!cache.workouts.some((workout) => workout.id === stubId)) return;
+  const seen = new Set<string>();
+  const workouts = cache.workouts
+    .map((workout) => (workout.id === stubId ? { ...workout, ...saved } : workout))
+    .filter((workout) => {
+      const fresh = !seen.has(workout.id);
+      seen.add(workout.id);
+      return fresh;
+    });
+  writeCache(userId, { ...cache, workouts });
+}
 
 /**
  * Log a rest day for `date` through the outbox (works offline), add it to the cached workouts
@@ -590,6 +647,9 @@ export async function logRestDay(userId: string, date: string, now: Date): Promi
 
 /** Undo a rest day logged moments ago: drop it from the outbox, or delete it on the server. */
 export async function undoRestDay(userId: string, clientRef: string): Promise<void> {
+  // A send in progress must land first: it either leaves the entry pending (discard) or
+  // records the server id (delete) — deciding earlier would miss a workout about to exist.
+  await inFlight.get(clientRef);
   const pending = readOutbox(userId).some((entry) => entry.body.client_ref === clientRef);
   const dropOptimistic = (serverId?: string) => {
     const cache = readCache(userId);

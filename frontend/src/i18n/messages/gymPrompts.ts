@@ -11,7 +11,7 @@ const FORMAT_EN = `When every exercise is confirmed, reply with ONLY one JSON co
 
 {
   "format": "ee-workout/1",
-  "weight_unit": "kg",
+  "weight_unit": "{unit}",
   "schedule": ["Push day", "rest", "Pull day", "rest", "Legs", "rest", "rest"],
   "routines": [
     {
@@ -26,7 +26,7 @@ const FORMAT_EN = `When every exercise is confirmed, reply with ONLY one JSON co
   ]
 }
 
-Rules for the JSON: "kind" is one of "reps", "duration", "distance". Use "reps" for reps exercises, "seconds" for duration exercises, "distance_m" (metres) for distance exercises. "weight" is a number in my unit, or omit it for bodyweight. "rest_seconds" is the rest between sets; "rest_after_seconds" is the rest after the last set of the exercise, before the next exercise. "schedule" is optional: an array of day labels for a week, using "rest" for a rest day; include it only when you proposed a weekly plan. Whole numbers for sets, reps, seconds, rest_seconds, rest_after_seconds and distance_m. Names under 80 characters, notes under 200. No comments inside the JSON.
+Rules for the JSON: set "weight_unit" to "{unit}" and give every weight in {unit}. "kind" is one of "reps", "duration", "distance". Use "reps" for reps exercises, "seconds" for duration exercises, "distance_m" (metres) for distance exercises. "weight" is a number in my unit, or omit it for bodyweight. "rest_seconds" is the rest between sets; "rest_after_seconds" is the rest after the last set of the exercise, before the next exercise. "schedule" is optional: an array of day labels for a week, using "rest" for a rest day; include it only when you proposed a weekly plan. Whole numbers for sets, reps, seconds, rest_seconds, rest_after_seconds and distance_m. Names under 80 characters, notes under 200. No comments inside the JSON.
 
 Finally tell me: "Save this as workout.json and share it to Everything Everywhere, or copy it and paste it in Gym → New workout → Ask an AI."`;
 
@@ -34,7 +34,7 @@ const FORMAT_FR = `Quand chaque exercice est confirmé, réponds avec UNIQUEMENT
 
 {
   "format": "ee-workout/1",
-  "weight_unit": "kg",
+  "weight_unit": "{unit}",
   "schedule": ["Push day", "rest", "Pull day", "rest", "Legs", "rest", "rest"],
   "routines": [
     {
@@ -49,7 +49,7 @@ const FORMAT_FR = `Quand chaque exercice est confirmé, réponds avec UNIQUEMENT
   ]
 }
 
-Règles pour le JSON : "kind" vaut "reps", "duration" ou "distance". Utilise "reps" pour les exercices en répétitions, "seconds" pour les exercices de durée, "distance_m" (en mètres) pour les exercices de distance. "weight" est un nombre dans mon unité, ou omets-le pour le poids du corps. "rest_seconds" est le repos entre les séries ; "rest_after_seconds" est le repos après la dernière série de l'exercice, avant l'exercice suivant. "schedule" est facultatif : un tableau d'étiquettes de jours pour une semaine, avec "rest" pour un jour de repos ; ajoute-le seulement si tu as proposé un plan hebdomadaire. Des nombres entiers pour sets, reps, seconds, rest_seconds, rest_after_seconds et distance_m. Noms de moins de 80 caractères, notes de moins de 200. Pas de commentaires dans le JSON.
+Règles pour le JSON : mets "weight_unit" à "{unit}" et donne chaque poids en {unit}. "kind" vaut "reps", "duration" ou "distance". Utilise "reps" pour les exercices en répétitions, "seconds" pour les exercices de durée, "distance_m" (en mètres) pour les exercices de distance. "weight" est un nombre dans mon unité, ou omets-le pour le poids du corps. "rest_seconds" est le repos entre les séries ; "rest_after_seconds" est le repos après la dernière série de l'exercice, avant l'exercice suivant. "schedule" est facultatif : un tableau d'étiquettes de jours pour une semaine, avec "rest" pour un jour de repos ; ajoute-le seulement si tu as proposé un plan hebdomadaire. Des nombres entiers pour sets, reps, seconds, rest_seconds, rest_after_seconds et distance_m. Noms de moins de 80 caractères, notes de moins de 200. Pas de commentaires dans le JSON.
 
 Dis-moi enfin : "Save this as workout.json and share it to Everything Everywhere, or copy it and paste it in Gym → New workout → Ask an AI." (Enregistre ceci sous workout.json et partage-le à Everything Everywhere, ou copie-le et colle-le dans Sport → Nouvelle séance → Demander à une IA.)`;
 

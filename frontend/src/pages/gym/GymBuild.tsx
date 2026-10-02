@@ -2,7 +2,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api } from "../../api/client";
-import type { Exercise, ExerciseKind, RoutineImport, RoutineImportLine } from "../../api/types";
+import type {
+  Exercise,
+  ExerciseKind,
+  RoutineDetail,
+  RoutineImport,
+  RoutineImportLine,
+} from "../../api/types";
 import { Card } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 import { newId } from "../../gym/id";
@@ -158,15 +164,23 @@ export function GymBuild() {
     const title = name.trim() || t("gym.build.defaultName", { date: dates.day(todayIso(now)) });
     try {
       if (save && !isOffline && built.length > 0) {
+        let routine: RoutineDetail | null = null;
         try {
-          const routine = await api.importRoutine(toBody(title, built));
-          await refresh();
-          setActive(startSession(routine, now, newId));
-          navigate("/gym/session");
-          return;
+          routine = await api.importRoutine(toBody(title, built));
         } catch {
           // Not worth losing the workout over: start it, and say the routine did not save.
           toast.show(t("gym.build.notSaved"));
+        }
+        if (routine) {
+          // Saved: whatever fails next (the refresh), the routine exists and is what starts.
+          try {
+            await refresh();
+          } catch {
+            /* the cache catches up on the next refresh */
+          }
+          setActive(startSession(routine, now, newId));
+          navigate("/gym/session");
+          return;
         }
       }
       setActive(sessionFromLines(title, built, now, newId));

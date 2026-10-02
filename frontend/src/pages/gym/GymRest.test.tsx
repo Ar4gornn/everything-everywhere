@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RoutineDetail } from "../../api/types";
 import { addExercise, logSet, startRest } from "../../gym/session";
-import { readActive, writeActive } from "../../gym/store";
+import { logRestDay, readActive, readCache, readOutbox, writeActive } from "../../gym/store";
 import { USER_ID, mocks } from "./mockkit";
 import { ids, pushDay, renderGym, resetServer, seedActive, workout } from "./testkit";
 
@@ -164,6 +164,20 @@ describe("Rest days in the history", () => {
     await userEvent.click(within(history).getByRole("button", { name: /Rest day/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Delete session of 2026-10-01" }));
     await waitFor(() => expect(mocks.deleteWorkout).toHaveBeenCalledWith("wr"));
+  });
+
+  it("a rest day still pending is discarded from the outbox, never deleted on the server by its stub id", async () => {
+    resetServer({ workouts: [] });
+    mocks.completeWorkout.mockRejectedValue(new TypeError("Failed to fetch"));
+    const ref = await logRestDay(USER_ID, "2026-10-01", new Date());
+    mocks.listWorkouts.mockResolvedValue(readCache(USER_ID).workouts);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderGym("/gym");
+    const history = await screen.findByRole("list", { name: "History" });
+    await userEvent.click(within(history).getByRole("button", { name: /Rest day/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Delete session of 2026-10-01" }));
+    await waitFor(() => expect(readOutbox(USER_ID).some((e) => e.body.client_ref === ref)).toBe(false));
+    expect(mocks.deleteWorkout).not.toHaveBeenCalled();
   });
 
   it("is not counted as a session in the collapsed History summary", async () => {

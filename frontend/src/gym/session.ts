@@ -351,7 +351,7 @@ export function restAfterSet(
   const perSet = exercise.rest_seconds ?? DEFAULT_REST[exercise.kind];
   const completes =
     exercise.target_sets !== null && setsOf(session, exerciseKey) + 1 >= exercise.target_sets;
-  if (completes && exercise.rest_after_seconds !== null) {
+  if (completes && exercise.rest_after_seconds != null) {
     const next = session.exercises.slice(index + 1).find((other) => !isDone(session, other));
     if (next) return { seconds: exercise.rest_after_seconds, beforeNext: next.name };
   }

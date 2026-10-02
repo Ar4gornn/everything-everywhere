@@ -74,7 +74,7 @@ When every exercise is confirmed, reply with ONLY one JSON code block, nothing b
   ]
 }
 
-Rules for the JSON: "kind" is one of "reps", "duration", "distance". Use "reps" for reps exercises, "seconds" for duration exercises, "distance_m" (metres) for distance exercises. "weight" is a number in my unit, or omit it for bodyweight. "rest_seconds" is the rest between sets; "rest_after_seconds" is the rest after the last set of the exercise, before the next exercise. "schedule" is optional: an array of day labels for a week, using "rest" for a rest day; include it only when you proposed a weekly plan. Whole numbers for sets, reps, seconds, rest_seconds, rest_after_seconds and distance_m. Names under 80 characters, notes under 200. No comments inside the JSON.
+Rules for the JSON: set "weight_unit" to "kg" and give every weight in kg. "kind" is one of "reps", "duration", "distance". Use "reps" for reps exercises, "seconds" for duration exercises, "distance_m" (metres) for distance exercises. "weight" is a number in my unit, or omit it for bodyweight. "rest_seconds" is the rest between sets; "rest_after_seconds" is the rest after the last set of the exercise, before the next exercise. "schedule" is optional: an array of day labels for a week, using "rest" for a rest day; include it only when you proposed a weekly plan. Whole numbers for sets, reps, seconds, rest_seconds, rest_after_seconds and distance_m. Names under 80 characters, notes under 200. No comments inside the JSON.
 
 Finally tell me: "Save this as workout.json and share it to Everything Everywhere, or copy it and paste it in Gym → New workout → Ask an AI."
 ```

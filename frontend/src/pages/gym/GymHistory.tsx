@@ -9,6 +9,7 @@ import { errorMessage } from "../../i18n/errors";
 import { useT } from "../../i18n";
 import { useDates } from "../../useDates";
 import { KINDS } from "./ExerciseAdder";
+import { pendingRefOf, undoRestDay } from "../../gym/store";
 import { useGym } from "./GymContext";
 import { formatDistance, formatSeconds, formatSet, workoutMinutes } from "./measure";
 
@@ -29,7 +30,7 @@ function byExercise(sets: WorkoutSet[]): { name: string; sets: WorkoutSet[] }[] 
 export function HistoryCard({ tour }: { tour?: string }) {
   const t = useT();
   const dates = useDates();
-  const { cache, unit, isOffline, refresh } = useGym();
+  const { cache, unit, isOffline, refresh, userId } = useGym();
   const [openId, toggle] = useOpenRow();
   const [details, setDetails] = useState<Record<string, WorkoutDetail>>({});
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export function HistoryCard({ tour }: { tour?: string }) {
 
   async function open(id: string) {
     toggle(id);
-    if (details[id] || isOffline) return;
+    if (details[id] || isOffline || pendingRefOf(id)) return;
     try {
       const detail = await api.readWorkout(id);
       setDetails((was) => ({ ...was, [id]: detail }));
@@ -49,7 +50,10 @@ export function HistoryCard({ tour }: { tour?: string }) {
   async function remove(id: string) {
     if (!window.confirm(t("gym.deleteSessionConfirm"))) return;
     try {
-      await api.deleteWorkout(id);
+      const pendingRef = pendingRefOf(id);
+      // A stub the server has not answered for yet has no server row: discard, never delete.
+      if (pendingRef) await undoRestDay(userId, pendingRef);
+      else await api.deleteWorkout(id);
       await refresh();
     } catch (caught) {
       setError(errorMessage(t, caught, "gym.couldNotDeleteSession"));

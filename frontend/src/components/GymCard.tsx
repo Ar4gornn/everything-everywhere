@@ -9,6 +9,7 @@ import { useModules } from "../layout/modules";
 import { startSession } from "../gym/session";
 import { hasRestDay, logRestDay, undoRestDay, useGymData } from "../gym/store";
 import { todayIso } from "../months";
+import { useToast } from "./Toast";
 import { Card } from "./ui";
 
 /** Routines offered as one-tap starts, most recently used first. */
@@ -26,6 +27,7 @@ const QUICK_START = 3;
  */
 export function GymCard({ collapseKey }: { collapseKey: string }) {
   const t = useT();
+  const toast = useToast();
   const navigate = useNavigate();
   const enabled = useModules().gym;
   const userId = useOptionalAuth()?.user?.id ?? null;
@@ -113,7 +115,7 @@ export function GymCard({ collapseKey }: { collapseKey: string }) {
                 onClick={() => {
                   const ref = undoRef;
                   setUndoRef(null);
-                  void undoRestDay(userId, ref);
+                  undoRestDay(userId, ref).catch(() => toast.show(t("gymCore.card.restUndoFailed")));
                 }}
               >
                 {t("gymCore.card.restUndo")}

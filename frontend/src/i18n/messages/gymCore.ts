@@ -24,6 +24,10 @@ export const gymCore = {
   "gymCore.card.restDay": { en: "Rest day", fr: "Jour de repos" },
   "gymCore.card.restLogged": { en: "Rest day logged", fr: "Jour de repos enregistré" },
   "gymCore.card.restUndo": { en: "Undo", fr: "Annuler" },
+  "gymCore.card.restUndoFailed": {
+    en: "Could not undo the rest day. Try again in a moment.",
+    fr: "Impossible d’annuler le jour de repos. Réessayez dans un instant.",
+  },
   "gymCore.card.waiting_one": {
     en: "{count} session waiting to sync",
     fr: "{count} séance en attente de synchronisation",

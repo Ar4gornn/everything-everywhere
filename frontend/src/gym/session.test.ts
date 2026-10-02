@@ -368,6 +368,20 @@ describe("rest between exercises and the standalone timer (Epic 43)", () => {
     expect(restAfterSet(session, plank.key)).toEqual({ seconds: 60, beforeNext: null });
   });
 
+  it("a session saved before rest_after_seconds existed rests like one with none", () => {
+    const session = withRest();
+    const old = {
+      ...session,
+      exercises: session.exercises.map((e) => {
+        const { rest_after_seconds: _gone, ...rest } = e;
+        return rest as typeof e;
+      }),
+    };
+    expect(restAfterSet(old, bench(old))).toEqual({ seconds: 90, beforeNext: null });
+    const lastSet = logSet(logSet(old, bench(old), reps(8), NOW, ids()), bench(old), reps(8), NOW, ids());
+    expect(restSeconds(lastSet, NOW)).toBe(90);
+  });
+
   it("a zero rest_after_seconds ends the rest", () => {
     let session = withRest();
     session = { ...session, exercises: session.exercises.map((e, i) => (i === 0 ? { ...e, rest_after_seconds: 0 } : e)) };
