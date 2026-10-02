@@ -89,6 +89,7 @@ import type {
   Unit,
   UnitPrices,
   User,
+  QuickPicks,
   Vendor,
   VendorPrices,
   WeightUnit,
@@ -723,6 +724,9 @@ export const api = {
     request<Entry>(`/api/entries/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   deleteEntry: (id: string) => request<void>(`/api/entries/${id}`, { method: "DELETE" }),
+
+  /** Epic 44 (AD-60): the quick-add sheet's chips. */
+  quickPicks: () => request<QuickPicks>("/api/entries/quick-picks"),
 
   listSavingsTypes: () => items(request<Page<SavingsType>>("/api/savings/types")),
 

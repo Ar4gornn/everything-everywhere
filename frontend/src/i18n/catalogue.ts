@@ -40,6 +40,7 @@ import { tour } from "./messages/tour";
 import { invites } from "./messages/invites";
 import { calendarFeed } from "./messages/calendarFeed";
 import { streaks } from "./messages/streaks";
+import { quickAdd } from "./messages/quickAdd";
 
 export const LANGUAGES = ["en", "fr"] as const;
 export type Lang = (typeof LANGUAGES)[number];
@@ -68,6 +69,7 @@ export const messages = {
   ...invites,
   ...calendarFeed,
   ...streaks,
+  ...quickAdd,
   ...errors,
 };
 

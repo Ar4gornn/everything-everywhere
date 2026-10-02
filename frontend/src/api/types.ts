@@ -1224,3 +1224,41 @@ export interface CalendarFeed {
 export interface MintedFeed extends CalendarFeed {
   path: string;
 }
+
+/** Epic 44 (AD-60): `GET /api/entries/quick-picks`. Spec: docs/epic-44-quick-add.md §3. */
+export interface CategoryPick {
+  id: string;
+  name: string;
+  /** Entries in the last 90 days; 0 for a category padded in after the used ones. */
+  uses: number;
+  default_savings_type_id: string | null;
+}
+
+/** A recent distinct (category, vendor, amount); a tap fills the form with it. */
+export interface Combo {
+  category_id: string;
+  category_name: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  amount: Money;
+}
+
+export interface KindPicks {
+  categories: CategoryPick[];
+  combos: Combo[];
+}
+
+/** A vendor and the category (and kind) of its most recent entry. */
+export interface VendorPick {
+  vendor_id: string;
+  vendor_name: string;
+  kind: EntryKind;
+  category_id: string;
+  category_name: string;
+}
+
+export interface QuickPicks {
+  expense: KindPicks;
+  income: KindPicks;
+  vendors: VendorPick[];
+}

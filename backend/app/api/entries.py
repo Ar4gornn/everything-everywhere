@@ -3,11 +3,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
 
+from app.core.clock import Now
 from app.core.deps import CurrentUserId, DbSession, StartDay
 from app.models.ledger import EntryKind
 from app.schemas.common import Page
 from app.schemas.ledger import EntryCreate, EntryOut, EntryUpdate
-from app.services import ledger
+from app.schemas.quick_picks import QuickPicksOut
+from app.services import activity, ledger, quick_picks
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
 
@@ -32,6 +34,13 @@ def list_entries(
         start_day=start_day,
     )
     return Page[EntryOut](items=[EntryOut.model_validate(r) for r in rows])
+
+
+@router.get("/quick-picks", response_model=QuickPicksOut)
+def read_quick_picks(user_id: CurrentUserId, session: DbSession, now: Now) -> QuickPicksOut:
+    """Epic 44 (AD-60): the quick-add sheet's chips. The window ends on the account's own
+    date, so an entry dated "today" in a zone ahead of UTC is inside it."""
+    return quick_picks.quick_picks(session, user_id, activity.local_day(session, user_id, now))
 
 
 @router.post("", response_model=EntryOut, status_code=status.HTTP_201_CREATED)
