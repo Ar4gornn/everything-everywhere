@@ -6,12 +6,15 @@ import { Card, Empty, ErrorBanner } from "../../components/ui";
 import {
   addExercise,
   currentExercise,
+  extendRest,
   logSet,
   nextSetDraft,
   progress,
   removeExercise,
   removeSet,
+  restAfterSet,
   skipRest,
+  startRest,
   updateSet,
   type ActiveSession,
   type SessionExercise,
@@ -23,6 +26,7 @@ import { useT } from "../../i18n";
 import { vibrate, useNow, useWakeLock } from "./device";
 import { ExerciseAdder } from "./ExerciseAdder";
 import { useGym } from "./GymContext";
+import { MeasureInput } from "./MeasureInput";
 import {
   clock,
   formatDistance,
@@ -67,8 +71,23 @@ export function Elapsed({ startedAt }: { startedAt: string }) {
   return <span className="num">{clock((now - Date.parse(startedAt)) / 1000)}</span>;
 }
 
+/** Seconds a rest button adds, and the presets the header's Rest offers. */
+const EXTEND_SECONDS = 15;
+const REST_PRESETS = [30, 60, 90, 120, 180];
+
 /** The rest countdown. Reads `until - now`, so a locked phone shows the right time on waking. */
-function RestBar({ until, onSkip }: { until: string; onSkip: () => void }) {
+function RestBar({
+  until,
+  before,
+  onExtend,
+  onSkip,
+}: {
+  until: string;
+  /** The exercise the rest is before, when it is the rest between two exercises. */
+  before: string | null;
+  onExtend: () => void;
+  onSkip: () => void;
+}) {
   const t = useT();
   const now = useNow(true, 250);
   const remaining = Math.ceil((Date.parse(until) - now) / 1000);
@@ -88,12 +107,63 @@ function RestBar({ until, onSkip }: { until: string; onSkip: () => void }) {
   if (over) return null;
   return (
     <div className="gym-rest" role="timer" aria-label={t("gym.rest")}>
-      <span className="gym-rest-label">{t("gym.rest")}</span>
+      <span className="gym-rest-label">
+        {before ? t("gym.restBefore", { name: before }) : t("gym.rest")}
+      </span>
       <span className="gym-rest-clock num">{clock(remaining)}</span>
-      <button type="button" className="quiet" onClick={onSkip}>
-        {t("gym.skipRest")}
-      </button>
+      <span className="gym-rest-buttons">
+        <button type="button" className="quiet" onClick={onExtend}>
+          {t("gym.restPlus", { n: EXTEND_SECONDS })}
+        </button>
+        <button type="button" className="quiet" onClick={onSkip}>
+          {t("gym.skipRest")}
+        </button>
+      </span>
     </div>
+  );
+}
+
+/** The header's Rest: five presets and a custom number of seconds, one tap to start. */
+function RestPicker({ onStart }: { onStart: (seconds: number) => void }) {
+  const t = useT();
+  const [custom, setCustom] = useState(false);
+  const [seconds, setSeconds] = useState<number | null>(60);
+  return (
+    <Card>
+      <div className="gym-rest-picker" role="group" aria-label={t("gym.restPresets")}>
+        {REST_PRESETS.map((n) => (
+          <button key={n} type="button" className="quiet gym-chip" onClick={() => onStart(n)}>
+            {t("gym.restPreset", { n })}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="quiet gym-chip"
+          aria-expanded={custom}
+          onClick={() => setCustom((was) => !was)}
+        >
+          {t("gym.restCustom")}
+        </button>
+      </div>
+      {custom && (
+        <div className="gym-rest-custom">
+          <MeasureInput
+            label={t("gym.restSeconds")}
+            value={seconds}
+            field="rest_seconds"
+            suffix="s"
+            onChange={setSeconds}
+          />
+          <button
+            type="button"
+            disabled={seconds === null || seconds <= 0}
+            onClick={() => seconds && onStart(seconds)}
+          >
+            {t("gym.restStart")}
+          </button>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -180,12 +250,15 @@ function NextSet({
   unit,
   number,
   save,
+  onLogged,
 }: {
   exercise: SessionExercise;
   session: ActiveSession;
   unit: WeightUnit;
   number: number;
   save: (next: ActiveSession) => void;
+  /** Called with the exercise the coming rest is before, as the set is saved. */
+  onLogged: (beforeNext: string | null) => void;
 }) {
   const t = useT();
   const [entry, setEntry] = useState<SetEntry>(() =>
@@ -199,7 +272,10 @@ function NextSet({
       return;
     }
     try {
+      // Asked before the set is saved: it answers "the rest this set will start".
+      const rest = restAfterSet(session, exercise.key);
       save(logSet(session, exercise.key, draftFromEntry(exercise.kind, entry), new Date(), newId));
+      onLogged(rest.beforeNext);
       setProblem(null);
     } catch (caught) {
       setProblem(
@@ -243,8 +319,14 @@ export function GymSession() {
   const [focus, setFocus] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [resting, setResting] = useState(false);
+  const [restBefore, setRestBefore] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ stats: SessionSummary; result: FlushResult } | null>(
+  const [summary, setSummary] = useState<{
+    stats: SessionSummary;
+    result: FlushResult;
+    hadRoutine: boolean;
+  } | null>(
     null,
   );
   const [busy, setBusy] = useState(false);
@@ -300,7 +382,7 @@ export function GymSession() {
     const figures = summarise(session, cache.lastTime, now);
     try {
       const result = await finishActive(userId, now);
-      setSummary({ stats: figures, result });
+      setSummary({ stats: figures, result, hadRoutine: session.routine_id !== null });
     } catch {
       setError(t("gym.couldNotFinish"));
     } finally {
@@ -327,6 +409,14 @@ export function GymSession() {
           </p>
         </div>
         <div className="gym-session-actions">
+          <button
+            type="button"
+            className="quiet"
+            aria-expanded={resting}
+            onClick={() => setResting((was) => !was)}
+          >
+            {t("gym.rest")}
+          </button>
           <button
             type="button"
             className="quiet"
@@ -362,10 +452,28 @@ export function GymSession() {
         </Card>
       )}
 
+      {resting && (
+        <RestPicker
+          onStart={(seconds) => {
+            setRestBefore(null);
+            setResting(false);
+            setActive(startRest(session, seconds, new Date()));
+          }}
+        />
+      )}
+
       <ErrorBanner message={error} />
 
       {session.rest_until && (
-        <RestBar until={session.rest_until} onSkip={() => setActive(skipRest(session))} />
+        <RestBar
+          until={session.rest_until}
+          before={restBefore}
+          onExtend={() => setActive(extendRest(session, EXTEND_SECONDS, new Date()))}
+          onSkip={() => {
+            setRestBefore(null);
+            setActive(skipRest(session));
+          }}
+        />
       )}
 
       <div className="gym-exercises">
@@ -460,6 +568,7 @@ export function GymSession() {
                     unit={unit}
                     number={sets.length + 1}
                     save={setActive}
+                    onLogged={setRestBefore}
                   />
 
                   {sets.length === 0 && (
@@ -503,11 +612,13 @@ export function GymSession() {
 function Summary({
   stats,
   result,
+  hadRoutine,
   unit,
   onClose,
 }: {
   stats: SessionSummary;
   result: FlushResult;
+  hadRoutine: boolean;
   unit: WeightUnit;
   onClose: () => void;
 }) {
@@ -543,6 +654,11 @@ function Summary({
             ? t("gym.syncQueued")
             : t("gym.syncSaved")}
       </p>
+      {!hadRoutine && (
+        <p>
+          <Link to="/gym/import">{t("gym.summaryAskAi")}</Link>
+        </p>
+      )}
       <button type="button" onClick={onClose}>
         {t("gym.backToGym")}
       </button>

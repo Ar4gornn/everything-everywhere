@@ -384,3 +384,55 @@ describe("a measure the kind does not use", () => {
     expect(hasDroppedMeasure(firstLine(text))).toBe(false);
   });
 });
+
+describe("rest_after_seconds (Epic 43)", () => {
+  it("is read, range-checked like rest_seconds, and sent", () => {
+    const line = firstLine(file([{ name: "Squat", reps: 5, rest_seconds: 60, rest_after_seconds: "120" }]));
+    expect(line.rest_after_seconds).toBe(120);
+    expect(line.errors.rest_after_seconds).toBeUndefined();
+    const parsed = parseWorkoutFile(file([{ name: "Squat", reps: 5, rest_after_seconds: 120 }]), "kg");
+    const body = toImportBody(parsed.routines[0] as NonNullable<(typeof parsed.routines)[0]>);
+    expect(body.lines[0]?.rest_after_seconds).toBe(120);
+  });
+  it("is absent, not zero, when the file has none", () => {
+    const parsed = parseWorkoutFile(file([{ name: "Squat", reps: 5 }]), "kg");
+    expect(parsed.routines[0]?.lines[0]?.rest_after_seconds).toBeNull();
+    const body = toImportBody(parsed.routines[0] as NonNullable<(typeof parsed.routines)[0]>);
+    expect(body.lines[0]).not.toHaveProperty("rest_after_seconds");
+  });
+  it("flags 3601, a fraction and a word, and the re-check keeps the unreadable flag", () => {
+    expect(firstLine(file([{ name: "A", reps: 5, rest_after_seconds: 3601 }])).errors.rest_after_seconds).toBe("gymCore.field.range");
+    expect(firstLine(file([{ name: "A", reps: 5, rest_after_seconds: 2.5 }])).errors.rest_after_seconds).toBe("gymCore.field.whole");
+    const word = firstLine(file([{ name: "A", reps: 5, rest_after_seconds: "soon" }]));
+    expect(word.errors.rest_after_seconds).toBe("gymCore.field.number");
+    expect(validateLine(word).errors.rest_after_seconds).toBe("gymCore.field.number");
+    expect(firstLine(file([{ name: "A", reps: 5, rest_after_seconds: 3600 }])).errors.rest_after_seconds).toBeUndefined();
+  });
+});
+
+describe("schedule (Epic 43)", () => {
+  const week = ["Push day", "rest", "Pull day", "rest", "Legs", "rest", "rest"];
+  const read = (schedule: unknown) =>
+    parseWorkoutFile(file([{ name: "Squat", reps: 5 }], { schedule }), "kg").schedule;
+  it("is kept as written, trimmed", () => {
+    expect(read(week)).toEqual(week);
+    expect(read([" Push ", "rest"])).toEqual(["Push", "rest"]);
+  });
+  it("is null when absent", () => {
+    expect(parseWorkoutFile(file([{ name: "Squat", reps: 5 }]), "kg").schedule).toBeNull();
+  });
+  it.each([
+    ["a string", "Push, rest"],
+    ["an object", { mon: "Push" }],
+    ["too long (15 days)", Array.from({ length: 15 }, () => "rest")],
+    ["a non-string entry", ["Push", 3]],
+    ["a label over 80 characters", ["x".repeat(81)]],
+    ["empty", []],
+  ])("ignores %s without an error", (_name, value) => {
+    expect(read(value)).toBeNull();
+  });
+  it("accepts 14 days and an 80-character label", () => {
+    expect(read(Array.from({ length: 14 }, () => "rest"))).toHaveLength(14);
+    expect(read(["x".repeat(80)])?.[0]).toHaveLength(80);
+  });
+});

@@ -15,14 +15,51 @@ export interface Wizard {
   decisions: Decision[][];
   /** Index into the flat list of lines; equal to the line count on the final summary. */
   step: number;
+  /** The file's week plan ("Push day", "rest", …), shown read-only. Absent in an older draft. */
+  schedule?: string[] | null;
 }
 
 export function stepsOf(routines: DraftRoutine[]): [number, number][] {
   return routines.flatMap((r, ri) => r.lines.map((_, li): [number, number] => [ri, li]));
 }
 
-export function wizardFor(routines: DraftRoutine[]): Wizard {
-  return { routines, decisions: routines.map((r) => r.lines.map(() => "pending")), step: 0 };
+export function wizardFor(routines: DraftRoutine[], schedule: string[] | null = null): Wizard {
+  return {
+    routines,
+    decisions: routines.map((r) => r.lines.map(() => "pending")),
+    step: 0,
+    schedule,
+  };
+}
+
+/** The plan's week as written: "Mon Push day · Tue rest · …". Nothing here schedules anything. */
+function WeekStrip({ schedule }: { schedule: string[] }) {
+  const t = useT();
+  if (schedule.length === 0) return null;
+  // A Monday, so the first label is "Mon"; the language is the account's, not the machine's.
+  const day = (i: number) =>
+    new Intl.DateTimeFormat(t.lang, { weekday: "short" }).format(new Date(2024, 0, 1 + (i % 7)));
+  return (
+    <div className="gym-week">
+      <h3>{t("gym.schedule.title")}</h3>
+      <ol className="gym-week-strip">
+        {schedule.map((label, i) => {
+          const rest = ["rest", "repos"].includes(label.trim().toLowerCase());
+          return (
+            <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list, labels may repeat
+              key={i}
+              className={rest ? "is-rest" : undefined}
+            >
+              <span className="gym-week-day">{day(i)}</span>
+              <span className="gym-week-label">{rest ? t("gym.schedule.rest") : label}</span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="hint">{t("gym.schedule.note")}</p>
+    </div>
+  );
 }
 
 /** A draft line in the shape `formatTarget` reads. */
@@ -60,7 +97,8 @@ export function ImportReview({
 }: {
   wizard: Wizard;
   onChange: (next: Wizard) => void;
-  onCreate: () => void;
+  /** `start`: begin the first routine as soon as it exists. */
+  onCreate: (start: boolean) => void;
   creating: boolean;
   error: string | null;
   /** Routine indexes already made on the server (a retry skips them). */
@@ -83,6 +121,7 @@ export function ImportReview({
     return (
       <Card title={t("gym.reviewSummary")}>
         <ErrorBanner message={error} />
+        {wizard.schedule && <WeekStrip schedule={wizard.schedule} />}
         {wizard.routines.map((routine, ri) => (
           <section
             // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list; names may repeat
@@ -126,8 +165,21 @@ export function ImportReview({
           >
             {t("gym.back")}
           </button>
-          <button type="button" disabled={isOffline || creating || makeable === 0} onClick={onCreate}>
-            {t.n("gym.createRoutines", makeable)}
+          <button
+            type="button"
+            className="gym-create-start"
+            disabled={isOffline || creating || makeable === 0}
+            onClick={() => onCreate(true)}
+          >
+            {t("gym.createAndStart")}
+          </button>
+          <button
+            type="button"
+            className="quiet"
+            disabled={isOffline || creating || makeable === 0}
+            onClick={() => onCreate(false)}
+          >
+            {t("gym.createOnly")}
           </button>
           <button type="button" className="quiet" onClick={onStartOver}>
             {t("gym.startOver")}
@@ -176,6 +228,7 @@ export function ImportReview({
       <p className="hint gym-review-routine">
         {t("gym.inRoutine", { name: routine.name })} · {li + 1}/{routine.lines.length}
       </p>
+      {wizard.step === 0 && wizard.schedule && <WeekStrip schedule={wizard.schedule} />}
       <form
         className="gym-review"
         key={wizard.step}
@@ -296,6 +349,16 @@ export function ImportReview({
               onChange={(rest_seconds) => edit({ rest_seconds })}
             />
             <FieldError line={line} field="rest_seconds" />
+          </Field>
+          <Field label={t("gym.restAfterSeconds")}>
+            <MeasureInput
+              label={t("gym.restAfterSeconds")}
+              value={line.rest_after_seconds}
+              field="rest_seconds"
+              suffix="s"
+              onChange={(rest_after_seconds) => edit({ rest_after_seconds })}
+            />
+            <FieldError line={line} field="rest_after_seconds" />
           </Field>
         </div>
         {line.converted && <p className="hint">{t("gym.weightConverted", { unit })}</p>}

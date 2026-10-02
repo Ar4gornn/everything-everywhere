@@ -99,6 +99,7 @@ export const calendar = {
   "cal.tagWaiting": { en: "waiting", fr: "en attente" },
   "cal.tagExpected": { en: "expected", fr: "prévu" },
   "cal.workout": { en: "Workout", fr: "Séance" },
+  "cal.restDay": { en: "Rest day", fr: "Jour de repos" },
   "cal.tagMeal": { en: "meal", fr: "repas" },
   // The day's energy, summed across its meals in whole ten-thousandths the way
   // the money line is summed in whole cents — never as a float (AD-5, AD-29).

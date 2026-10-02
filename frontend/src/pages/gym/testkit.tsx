@@ -44,6 +44,7 @@ export const pushDay: RoutineDetail = {
       target_distance_m: null,
       target_weight: "60.00",
       rest_seconds: 90,
+      rest_after_seconds: null,
       note: null,
     },
     {
@@ -59,6 +60,7 @@ export const pushDay: RoutineDetail = {
       target_distance_m: null,
       target_weight: null,
       rest_seconds: 60,
+      rest_after_seconds: null,
       note: null,
     },
   ],
@@ -82,6 +84,7 @@ export const cardio: RoutineDetail = {
       target_distance_m: 2000,
       target_weight: null,
       rest_seconds: null,
+      rest_after_seconds: null,
       note: null,
     },
   ],
@@ -93,6 +96,7 @@ export const workout: Workout = {
   performed_on: "2026-09-30",
   started_at: "2026-09-30T17:00:00Z",
   ended_at: "2026-09-30T17:45:00Z",
+  rest_day: false,
   note: null,
   created_at: "",
 };
@@ -130,6 +134,7 @@ export function resetServer(data: Partial<GymCache> = {}) {
   mocks.listRoutinesFull.mockResolvedValue(cache.routines);
   mocks.listExercises.mockResolvedValue(cache.exercises);
   mocks.listWorkouts.mockResolvedValue(cache.workouts);
+  mocks.listRecentWorkouts.mockResolvedValue([]);
   mocks.exerciseHistory.mockResolvedValue({ exercise_id: "e1", exercise_name: "Bench press", points: [] });
   mocks.completeWorkout.mockResolvedValue({ id: "w9", sets: [] });
   mocks.readWorkout.mockResolvedValue({ ...workout, sets: [] });

@@ -8,8 +8,12 @@ import {
   nextSetDraft,
   progress,
   removeExercise,
+  extendRest,
   removeSet,
+  restAfterSet,
+  sessionFromLines,
   skipRest,
+  startRest,
   startSession,
   toCompleteBody,
   updateSet,
@@ -36,6 +40,7 @@ function line(over: Partial<RoutineLine> & Pick<RoutineLine, "id" | "exercise_na
     target_distance_m: null,
     target_weight: null,
     rest_seconds: null,
+    rest_after_seconds: null,
     note: null,
     ...over,
   };
@@ -320,5 +325,90 @@ describe("the server's caps, held on the phone", () => {
     for (let i = 0; i < 500; i += 1) s = logSet(s, key, draft({ reps: 5 }), NOW, ids());
     expect(s.sets).toHaveLength(500);
     expect(() => logSet(s, key, draft({ reps: 5 }), NOW, ids())).toThrow("too_many_sets");
+  });
+});
+
+describe("rest between exercises and the standalone timer (Epic 43)", () => {
+  const withRest = (): ActiveSession => {
+    const session = started();
+    // Bench: 2 sets, default rest 90, 150 after the exercise. Plank next.
+    return {
+      ...session,
+      exercises: session.exercises.map((e) => (e.name === "Bench" ? { ...e, rest_after_seconds: 150 } : e)),
+    };
+  };
+  const bench = (s: ActiveSession) => s.exercises[0]!.key;
+  const restSeconds = (s: ActiveSession, from: Date) =>
+    (new Date(s.rest_until as string).getTime() - from.getTime()) / 1000;
+
+  it("copies rest_after_seconds from the routine line", () => {
+    const routine: RoutineDetail = {
+      ...ROUTINE,
+      lines: [line({ id: "a", exercise_name: "Bench", kind: "reps", position: 1, rest_after_seconds: 120 })],
+    };
+    expect(startSession(routine, NOW, ids()).exercises[0]?.rest_after_seconds).toBe(120);
+  });
+
+  it("uses the per-set rest until the last target set, then rest_after_seconds", () => {
+    let session = withRest();
+    expect(restAfterSet(session, bench(session))).toEqual({ seconds: 90, beforeNext: null });
+    session = logSet(session, bench(session), reps(8), NOW, ids());
+    expect(restSeconds(session, NOW)).toBe(90);
+    expect(restAfterSet(session, bench(session))).toEqual({ seconds: 150, beforeNext: "Plank" });
+    session = logSet(session, bench(session), reps(8), later(100), ids());
+    expect(restSeconds(session, later(100))).toBe(150);
+  });
+
+  it("falls back to the per-set rest when there is no next exercise or no after-rest", () => {
+    const session = withRest();
+    const alone = { ...session, exercises: session.exercises.slice(0, 1), sets: [] };
+    const lastSet = logSet(alone, bench(alone), reps(8), NOW, ids());
+    expect(restAfterSet(lastSet, bench(lastSet))).toEqual({ seconds: 90, beforeNext: null });
+    const plank = session.exercises[1]!;
+    expect(restAfterSet(session, plank.key)).toEqual({ seconds: 60, beforeNext: null });
+  });
+
+  it("a zero rest_after_seconds ends the rest", () => {
+    let session = withRest();
+    session = { ...session, exercises: session.exercises.map((e, i) => (i === 0 ? { ...e, rest_after_seconds: 0 } : e)) };
+    session = logSet(session, bench(session), reps(8), NOW, ids());
+    session = logSet(session, bench(session), reps(8), NOW, ids());
+    expect(session.rest_until).toBeNull();
+  });
+
+  it("startRest sets the end from now and replaces any running rest", () => {
+    const resting = startRest(started(), 60, NOW);
+    expect(resting.rest_until).toBe(later(60).toISOString());
+    expect(startRest(resting, 30, later(10)).rest_until).toBe(later(40).toISOString());
+    expect(startRest(resting, 0, NOW).rest_until).toBeNull();
+  });
+
+  it("extendRest adds to a running rest, and leaves none or an ended one alone", () => {
+    const resting = startRest(started(), 60, NOW);
+    expect(extendRest(resting, 15, later(10)).rest_until).toBe(later(75).toISOString());
+    const none = started();
+    expect(extendRest(none, 15, NOW)).toBe(none);
+    expect(extendRest(resting, 15, later(61))).toBe(resting);
+  });
+
+  it("sessionFromLines builds a routine-less session with the lines' targets", () => {
+    const session = sessionFromLines(
+      " Quick ",
+      [
+        { exercise_id: "e1", name: "Squat", kind: "reps", sets: 3, reps: 10, seconds: null, distance_m: null, weight: "40.00" },
+        { exercise_id: null, name: "Plank", kind: "duration", sets: 3, reps: 10, seconds: 30, distance_m: null, weight: null },
+      ],
+      NOW,
+      ids(),
+    );
+    expect(session.routine_id).toBeNull();
+    expect(session.routine_name).toBe("Quick");
+    expect(session.performed_on).toBe("2031-03-04");
+    expect(session.started_at).toBe(NOW.toISOString());
+    expect(session.exercises[0]).toMatchObject({ exercise_id: "e1", target_sets: 3, target_reps: 10, target_weight: "40.00" });
+    expect(session.exercises[1]).toMatchObject({ exercise_id: null, target_reps: null, target_seconds: 30 });
+    expect(session.sets).toEqual([]);
+    expect(session.rest_until).toBeNull();
+    expect(toCompleteBody(session, later(5)).routine_id).toBeUndefined();
   });
 });

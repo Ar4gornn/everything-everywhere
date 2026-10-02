@@ -60,7 +60,7 @@ export function HistoryCard({ tour }: { tour?: string }) {
     <Card
       title={t("gym.history")}
       collapseKey="gym.history"
-      summary={`${cache.workouts.length}`}
+      summary={`${cache.workouts.filter((w) => !w.rest_day).length}`}
       tour={tour}
     >
       <ErrorBanner message={error} />
@@ -70,6 +70,37 @@ export function HistoryCard({ tour }: { tour?: string }) {
         <ul className="list-rows" aria-label={t("gym.history")}>
           {cache.workouts.map((entry) => {
             const detail = details[entry.id];
+            if (entry.rest_day) {
+              // A rest day is not a session: no routine, no minutes, no sets to load.
+              return (
+                <ListRow
+                  key={entry.id}
+                  title={
+                    <>
+                      <span aria-hidden="true">☾ </span>
+                      {t("gym.restDay")}
+                    </>
+                  }
+                  meta={dates.day(entry.performed_on)}
+                  open={openId === entry.id}
+                  onToggle={() => toggle(entry.id)}
+                  details={
+                    <div className="gym-history-detail">
+                      <p className="hint">{t("gym.restDayRow")}</p>
+                      <button
+                        type="button"
+                        className="quiet"
+                        disabled={isOffline}
+                        aria-label={t("gym.deleteSession", { date: entry.performed_on })}
+                        onClick={() => void remove(entry.id)}
+                      >
+                        {t("action.delete")}
+                      </button>
+                    </div>
+                  }
+                />
+              );
+            }
             const minutes = workoutMinutes(entry);
             const routine = entry.routine_id ? names.get(entry.routine_id) : undefined;
             const meta = [

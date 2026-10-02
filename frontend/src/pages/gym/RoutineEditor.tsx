@@ -19,6 +19,7 @@ interface LineDraft {
   distance: number | null;
   weight: number | null;
   rest: number | null;
+  restAfter: number | null;
   note: string;
 }
 
@@ -30,6 +31,7 @@ function draftOf(line: RoutineLine): LineDraft {
     distance: line.target_distance_m,
     weight: line.target_weight === null ? null : Number(line.target_weight),
     rest: line.rest_seconds,
+    restAfter: line.rest_after_seconds,
     note: line.note ?? "",
   };
 }
@@ -46,6 +48,7 @@ function patchOf(line: RoutineLine, draft: LineDraft): Partial<LineTargets> {
     patch.target_weight = draft.weight === null || draft.weight === 0 ? null : toWeight(draft.weight);
   }
   if (draft.rest !== was.rest) patch.rest_seconds = draft.rest;
+  if (draft.restAfter !== was.restAfter) patch.rest_after_seconds = draft.restAfter;
   if (draft.note.trim() !== was.note) patch.note = draft.note.trim() || null;
   return patch;
 }
@@ -166,6 +169,15 @@ function LineEditor({
             field="rest_seconds"
             suffix="s"
             onChange={(rest) => set({ rest })}
+          />
+        </Field>
+        <Field label={t("gym.restAfterSeconds")}>
+          <MeasureInput
+            label={t("gym.restAfterOf", { name })}
+            value={draft.restAfter}
+            field="rest_seconds"
+            suffix="s"
+            onChange={(restAfter) => set({ restAfter })}
           />
         </Field>
         <label className="gym-line-note">

@@ -48,6 +48,7 @@ def _line_out(line: RoutineExercise, exercise: Exercise) -> RoutineLineOut:
         target_distance_m=line.target_distance_m,
         target_weight=line.target_weight,
         rest_seconds=line.rest_seconds,
+        rest_after_seconds=line.rest_after_seconds,
         note=line.note,
     )
 
@@ -83,6 +84,7 @@ def _workout_detail(workout: Workout, sets) -> WorkoutDetailOut:
         started_at=workout.started_at,
         ended_at=workout.ended_at,
         note=workout.note,
+        rest_day=workout.rest_day,
         sets=[_set_out(row, exercise) for row, exercise in sets],
     )
 
@@ -264,6 +266,7 @@ def add_routine_line(
         target_distance_m=payload.target_distance_m,
         target_weight=payload.target_weight,
         rest_seconds=payload.rest_seconds,
+        rest_after_seconds=payload.rest_after_seconds,
         note=payload.note,
     )
     return _line_out(line, exercise)
@@ -319,10 +322,22 @@ def complete_workout(
         ended_at=payload.ended_at,
         note=payload.note,
         sets=[item.model_dump() for item in payload.sets],
+        rest_day=payload.rest_day,
     )
     if not created:
         response.status_code = status.HTTP_200_OK
     return _workout_detail(workout, gym.workout_sets(session, user_id, workout.id))
+
+
+@router.get("/workouts/recent", response_model=Page[WorkoutDetailOut])
+def recent_workouts(
+    user_id: CurrentUserId,
+    session: DbSession,
+    limit: Annotated[int, Query(ge=1, le=30)] = 10,
+) -> Page[WorkoutDetailOut]:
+    """The newest sessions with their sets (rest days included), for the AI prompt context."""
+    rows = gym.recent_workouts(session, user_id, limit=limit)
+    return Page[WorkoutDetailOut](items=[_workout_detail(w, sets) for w, sets in rows])
 
 
 @router.get("/workouts/{workout_id}", response_model=WorkoutDetailOut)

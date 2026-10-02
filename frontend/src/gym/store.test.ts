@@ -6,6 +6,8 @@ import type { HistoryPoint, RoutineDetail, Workout, WorkoutComplete } from "../a
 
 const mocks = vi.hoisted(() => ({
   completeWorkout: vi.fn(),
+  listRecentWorkouts: vi.fn(),
+  deleteWorkout: vi.fn(),
   listRoutinesFull: vi.fn(),
   listExercises: vi.fn(),
   listWorkouts: vi.fn(),
@@ -26,7 +28,11 @@ import {
   FINISH_TIMEOUT_MS,
   finishActive,
   flushOutbox,
+  hasRestDay,
   hasUnsentGym,
+  logRestDay,
+  readRecent,
+  undoRestDay,
   readActive,
   readCache,
   readOutbox,
@@ -51,7 +57,7 @@ function session(ref: string, name: string | null = "Push"): ActiveSession {
   const base = startSession(
     { id: "r1", name: name ?? "", note: null, lines: [
       { id: "l1", exercise_id: "e1", exercise_name: "Bench", kind: "reps", video_url: null, position: 1,
-        target_sets: 1, target_reps: 5, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, note: null },
+        target_sets: 1, target_reps: 5, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null },
     ] },
     NOW,
     ids(),
@@ -70,6 +76,7 @@ beforeEach(() => {
   mocks.listRoutinesFull.mockResolvedValue([]);
   mocks.listExercises.mockResolvedValue([]);
   mocks.listWorkouts.mockResolvedValue([]);
+  mocks.listRecentWorkouts.mockResolvedValue([]);
   mocks.exerciseHistory.mockResolvedValue({ exercise_id: "", exercise_name: "", points: [] });
 });
 
@@ -296,13 +303,13 @@ describe("refreshing the cache", () => {
     id: "r1", name: "Push", note: null,
     lines: [
       { id: "l1", exercise_id: "e1", exercise_name: "Bench", kind: "reps", video_url: null, position: 1,
-        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, note: null },
+        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null },
       { id: "l2", exercise_id: "e2", exercise_name: "Plank", kind: "duration", video_url: null, position: 2,
-        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, note: null },
+        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null },
     ],
   };
   const workout = (id: string, day: string, routineId: string | null = "r1"): Workout => ({
-    id, routine_id: routineId, performed_on: day, started_at: null, ended_at: null, note: null, created_at: day,
+    id, routine_id: routineId, performed_on: day, started_at: null, ended_at: null, rest_day: false, note: null, created_at: day,
   });
   const point = (day: string, top: string): HistoryPoint => ({
     performed_on: day, top_weight: top, reps: 8, sets: 3, volume: null,
@@ -457,5 +464,92 @@ describe("recoverable refusals", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+const workoutRow = (id: string, day: string, routineId: string | null): Workout => ({
+  id, routine_id: routineId, performed_on: day, started_at: null, ended_at: null, rest_day: false, note: null, created_at: day,
+});
+
+describe("rest days (Epic 43)", () => {
+  // Its own user: an earlier test leaves a never-answered flush in flight for USER.
+  const U = "u3";
+  const DAY = "2031-03-04";
+  beforeEach(() => clearGymStore(U));
+
+  it("logRestDay queues a rest_day body, shows it in the cache at once, then flushes", async () => {
+    mocks.completeWorkout.mockResolvedValue({ id: "srv-1" });
+    const ref = await logRestDay(U, DAY, NOW);
+    expect(mocks.completeWorkout).toHaveBeenCalledTimes(1);
+    expect(mocks.completeWorkout.mock.calls[0]?.[0]).toEqual({
+      client_ref: ref,
+      performed_on: DAY,
+      rest_day: true,
+      sets: [],
+    });
+    expect(readOutbox(U)).toEqual([]);
+    expect(readCache(U).workouts).toMatchObject([{ rest_day: true, performed_on: DAY }]);
+    expect(hasRestDay(U, DAY)).toBe(true);
+    expect(hasRestDay(U, "2031-03-05")).toBe(false);
+  });
+
+  it("offline: stays in the outbox, still counts, and is not logged twice", async () => {
+    mocks.completeWorkout.mockRejectedValue(new TypeError("Failed to fetch"));
+    const ref = await logRestDay(U, DAY, NOW);
+    expect(readOutbox(U)).toHaveLength(1);
+    expect(readOutbox(U)[0]?.body).toMatchObject({ client_ref: ref, rest_day: true, sets: [] });
+    expect(hasRestDay(U, DAY)).toBe(true);
+    expect(await logRestDay(U, DAY, NOW)).toBe(ref);
+    expect(readOutbox(U)).toHaveLength(1);
+    expect(readCache(U).workouts).toHaveLength(1);
+  });
+
+  it("undo while pending discards the outbox entry and the cached stub, and never calls the server", async () => {
+    mocks.completeWorkout.mockRejectedValue(new TypeError("Failed to fetch"));
+    const ref = await logRestDay(U, DAY, NOW);
+    await undoRestDay(U, ref);
+    expect(readOutbox(U)).toEqual([]);
+    expect(readCache(U).workouts).toEqual([]);
+    expect(hasRestDay(U, DAY)).toBe(false);
+    expect(mocks.deleteWorkout).not.toHaveBeenCalled();
+  });
+
+  it("undo once sent deletes the workout the server answered with", async () => {
+    mocks.completeWorkout.mockResolvedValue({ id: "srv-1" });
+    mocks.deleteWorkout.mockResolvedValue(undefined);
+    const ref = await logRestDay(U, DAY, NOW);
+    await undoRestDay(U, ref);
+    expect(mocks.deleteWorkout).toHaveBeenCalledWith("srv-1");
+    expect(readCache(U).workouts).toEqual([]);
+  });
+
+  it("a rest day is not a routine 'last done'", async () => {
+    mocks.listWorkouts.mockResolvedValue([
+      { ...workoutRow("w2", "2031-03-03", "r1"), rest_day: true },
+      workoutRow("w1", "2031-03-01", "r1"),
+    ]);
+    const cache = await refreshCache(U);
+    expect(cache.lastDone).toEqual({ r1: "2031-03-01" });
+  });
+
+  it("refresh caches the recent sessions; a failure keeps the cache refreshing", async () => {
+    const recent = [{ id: "w1", rest_day: false, performed_on: DAY, sets: [] }];
+    mocks.listRecentWorkouts.mockResolvedValue(recent);
+    await refreshCache(U);
+    expect(mocks.listRecentWorkouts).toHaveBeenCalledWith(10);
+    expect(readRecent(U)).toEqual(recent);
+    mocks.listRecentWorkouts.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(refreshCache(U)).resolves.toBeDefined();
+    expect(readRecent(U)).toEqual(recent);
+  });
+
+  it("clearGymStore clears recent and the remembered ids too", async () => {
+    mocks.listRecentWorkouts.mockResolvedValue([{ id: "w1", rest_day: false, performed_on: DAY, sets: [] }]);
+    mocks.completeWorkout.mockResolvedValue({ id: "srv-1" });
+    await refreshCache(U);
+    await logRestDay(U, DAY, NOW);
+    clearGymStore(U);
+    expect(readRecent(U)).toEqual([]);
+    expect(window.localStorage.getItem("everything-everywhere.gym.u3.sent")).toBeNull();
   });
 });

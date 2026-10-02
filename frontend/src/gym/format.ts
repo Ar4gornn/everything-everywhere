@@ -26,6 +26,7 @@ export type LineField =
   | "distance_m"
   | "weight"
   | "rest_seconds"
+  | "rest_after_seconds"
   | "note"
   | "video_url";
 
@@ -44,6 +45,8 @@ export interface DraftLine {
   /** True when the file's weight_unit differed and `weight` was converted. */
   converted: boolean;
   rest_seconds: number | null;
+  /** Rest after the exercise's last set, before the next exercise (Epic 43). */
+  rest_after_seconds: number | null;
   note: string;
   video_url: string;
   /** Per-field problems, as message keys. Empty when the line can be created as is. */
@@ -60,6 +63,8 @@ export interface ParsedImport {
   routines: DraftRoutine[];
   /** Whole-file notes, e.g. "weights converted from lb". */
   warnings: MessageKey[];
+  /** The week plan's day labels ("Push day", "rest", …), or null when the file has none. */
+  schedule: string[] | null;
 }
 
 /** Why the text could not be read at all. The review never opens for these. */
@@ -78,6 +83,7 @@ export const FIELD_RANGES = {
   distance_m: [1, 1_000_000],
   weight: [0, 99_999.99],
   rest_seconds: [0, 3_600],
+  rest_after_seconds: [0, 3_600],
 } as const;
 
 /** Most sets one workout may hold (the server's own limit). */
@@ -92,6 +98,7 @@ const WHOLE: ReadonlySet<NumericField> = new Set([
   "seconds",
   "distance_m",
   "rest_seconds",
+  "rest_after_seconds",
 ]);
 
 const NAME_MAX = 80;
@@ -219,6 +226,7 @@ function checkLine(line: DraftLine): Errors {
     ["distance_m", line.distance_m, "distance_m"],
     ["weight", line.weight, "weight"],
     ["rest_seconds", line.rest_seconds, "rest_seconds"],
+    ["rest_after_seconds", line.rest_after_seconds, "rest_after_seconds"],
   ];
   for (const [field, value, slot] of numeric) {
     const problem = rangeError(field, value);
@@ -236,7 +244,7 @@ export function validateLine(line: DraftLine): DraftLine {
   // A value the parser could not read is `null` — and a null is not a problem by itself, so
   // re-checking would otherwise clear the very flag that says a number went missing. It stays
   // until the field is given a value.
-  for (const field of ["sets", "reps", "seconds", "distance_m", "weight", "rest_seconds"] as const) {
+  for (const field of ["sets", "reps", "seconds", "distance_m", "weight", "rest_seconds", "rest_after_seconds"] as const) {
     const kept = line.errors[field];
     if ((kept === "gymCore.field.number" || kept === "gymCore.field.ambiguous") && line[field] === null) {
       errors[field] = kept;
@@ -295,6 +303,7 @@ function readLine(
   const seconds = num("seconds", "seconds");
   const distance = num("distance_m", "distance_m");
   const rest = num("rest_seconds", "rest_seconds");
+  const restAfter = num("rest_after_seconds", "rest_after_seconds");
   let weight = num("weight", "weight");
 
   const hasValue = (key: string) => {
@@ -329,12 +338,29 @@ function readLine(
     weight,
     converted,
     rest_seconds: rest,
+    rest_after_seconds: restAfter,
     note: readText(raw["note"]),
     video_url: readText(raw["video_url"]),
     errors: {},
   };
   line.errors = { ...checkLine(line), ...parseErrors };
   return line;
+}
+
+/** Most day labels a schedule may hold. */
+export const MAX_SCHEDULE = 14;
+
+/** An array of at most 14 strings, each trimmed and at most 80 long; anything else is ignored. */
+function readSchedule(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_SCHEDULE) return null;
+  const days: string[] = [];
+  for (const day of raw) {
+    if (typeof day !== "string") return null;
+    const label = day.trim();
+    if (label.length > NAME_MAX) return null;
+    days.push(label);
+  }
+  return days;
 }
 
 /**
@@ -393,7 +419,7 @@ export function parseWorkoutFile(text: string, unit: WeightUnit): ParsedImport {
   }
   if (emptyRoutine) warnings.push("gymCore.warn.emptyRoutine");
   if (skipped) warnings.push("gymCore.warn.skipped");
-  return { routines, warnings };
+  return { routines, warnings, schedule: readSchedule(root["schedule"]) };
 }
 
 /** The request body for the import-routine call. Only call on a routine whose lines have no errors. */
@@ -410,6 +436,7 @@ export function toImportBody(routine: DraftRoutine): RoutineImport {
     if (line.kind === "distance" && line.distance_m !== null) out.target_distance_m = line.distance_m;
     if (line.weight !== null) out.target_weight = line.weight.toFixed(2);
     if (line.rest_seconds !== null) out.rest_seconds = line.rest_seconds;
+    if (line.rest_after_seconds !== null) out.rest_after_seconds = line.rest_after_seconds;
     if (line.note.trim() !== "") out.note = line.note.trim();
     return out;
   });

@@ -7,7 +7,8 @@ import { storeTokens } from "../api/client";
 import type { RoutineDetail, User } from "../api/types";
 import { AuthProvider } from "../auth/AuthContext";
 import { startSession } from "../gym/session";
-import { EMPTY_CACHE, readActive, writeActive, writeCache } from "../gym/store";
+import { EMPTY_CACHE, readActive, readOutbox, writeActive, writeCache } from "../gym/store";
+import { todayIso } from "../months";
 import { LanguageProvider } from "../i18n";
 import { DEFAULT_PREFERENCES } from "../layout/preferences";
 import { GymCard } from "./GymCard";
@@ -36,7 +37,7 @@ function routine(id: string, name: string): RoutineDetail {
       {
         id: `l-${id}`, exercise_id: `e-${id}`, exercise_name: "Bench", kind: "reps", video_url: null,
         position: 1, target_sets: 3, target_reps: 8, target_seconds: null, target_distance_m: null,
-        target_weight: "60.00", rest_seconds: null, note: null,
+        target_weight: "60.00", rest_seconds: null, rest_after_seconds: null, note: null,
       },
     ],
   };
@@ -65,6 +66,8 @@ function mount() {
           <Routes>
             <Route path="/" element={<GymCard collapseKey="test.gym" />} />
             <Route path="/gym/session" element={<p>the session page</p>} />
+            <Route path="/gym/start" element={<p>the start page</p>} />
+            <Route path="/gym/import" element={<p>the import page</p>} />
           </Routes>
         </LanguageProvider>
       </AuthProvider>
@@ -83,18 +86,23 @@ describe("the Gym card", () => {
     stubOfflineGym();
     mount();
     expect(await screen.findByRole("button", { name: "Start session" })).toBeInTheDocument();
-    expect(screen.getByText(/No routines yet/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Ask an AI for a workout/ })).toHaveAttribute("href", "/gym/import");
     expect(screen.queryByText(/waiting to sync/)).not.toBeInTheDocument();
   });
 
-  it("starts an empty session on the device and opens the live page", async () => {
+  it("Start opens the chooser and starts nothing itself", async () => {
     stubOfflineGym();
     mount();
     await userEvent.click(await screen.findByRole("button", { name: "Start session" }));
-    expect(await screen.findByText("the session page")).toBeInTheDocument();
-    const active = readActive("u1");
-    expect(active).toMatchObject({ routine_id: null, exercises: [], sets: [] });
-    expect(active?.client_ref).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await screen.findByText("the start page")).toBeInTheDocument();
+    expect(readActive("u1")).toBeNull();
+  });
+
+  it("with no routine, the AI link opens the import hub", async () => {
+    stubOfflineGym();
+    mount();
+    await userEvent.click(await screen.findByRole("link", { name: /Ask an AI for a workout/ }));
+    expect(await screen.findByText("the import page")).toBeInTheDocument();
   });
 
   it("lists up to three routines, the most recently done first, and starts the one tapped", async () => {
@@ -107,13 +115,13 @@ describe("the Gym card", () => {
     mount();
     await screen.findByRole("button", { name: "Start Legs" });
     const buttons = screen.getAllByRole("button").filter((button) => !button.textContent?.includes("Gym"));
-    expect(buttons.map((button) => button.textContent)).toEqual(["Start session", "Legs", "Pull", "Push"]);
+    expect(buttons.map((button) => button.textContent)).toEqual(["Start session", "Legs", "Pull", "Push", "Rest day"]);
     await userEvent.click(screen.getByRole("button", { name: "Start Pull" }));
     expect(await screen.findByText("the session page")).toBeInTheDocument();
     const active = readActive("u1");
     expect(active).toMatchObject({ routine_id: "r2", routine_name: "Pull" });
     expect(active?.exercises).toHaveLength(1);
-    expect(screen.queryByText(/No routines yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Ask an AI/ })).not.toBeInTheDocument();
   });
 
   it("offers Resume, with the minutes elapsed, instead of starting another session", async () => {
@@ -148,6 +156,56 @@ describe("the Gym card", () => {
     mount();
     expect(await screen.findByText("2 sessions waiting to sync")).toBeInTheDocument();
     expect(screen.getByText("1 session was not accepted by the server")).toBeInTheDocument();
+  });
+
+  it("logs a rest day in one tap, offers Undo, and the button goes away", async () => {
+    stubOfflineGym();
+    mount();
+    await userEvent.click(await screen.findByRole("button", { name: "Rest day" }));
+    expect(await screen.findByText("Rest day logged")).toBeInTheDocument();
+    const queued = readOutbox("u1");
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.body).toMatchObject({ rest_day: true, sets: [] });
+    expect(screen.queryByRole("button", { name: "Rest day" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(readOutbox("u1")).toEqual([]);
+    expect(await screen.findByRole("button", { name: "Rest day" })).toBeInTheDocument();
+  });
+
+  it("Undo is offered for five seconds only, the logged line stays", async () => {
+    stubOfflineGym();
+    mount();
+    await userEvent.click(await screen.findByRole("button", { name: "Rest day" }));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument(), {
+      timeout: 6_500,
+    });
+    expect(screen.getByText("Rest day logged")).toBeInTheDocument();
+    expect(readOutbox("u1")).toHaveLength(1);
+  }, 10_000);
+
+  it("offers no Rest day button when today's is already logged, or a session is running", async () => {
+    stubOfflineGym();
+    const today = todayIso(new Date());
+    writeCache("u1", {
+      ...EMPTY_CACHE,
+      workouts: [
+        { id: "w1", routine_id: null, performed_on: today, started_at: null, ended_at: null, rest_day: true, note: null, created_at: "" },
+      ],
+    });
+    mount();
+    expect(await screen.findByRole("button", { name: "Start session" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rest day" })).not.toBeInTheDocument();
+    expect(screen.getByText("Rest day logged")).toBeInTheDocument();
+  });
+
+  it("offers no Rest day button during a session", async () => {
+    stubOfflineGym();
+    writeActive("u1", startSession(routine("r1", "Push"), new Date(), () => crypto.randomUUID()));
+    mount();
+    await screen.findByRole("button", { name: "Resume" });
+    expect(screen.queryByRole("button", { name: "Rest day" })).not.toBeInTheDocument();
   });
 
   it("draws nothing when the Gym module is off", async () => {

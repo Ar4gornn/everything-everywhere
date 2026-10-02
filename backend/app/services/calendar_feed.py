@@ -191,6 +191,8 @@ _WORDS: dict[str, dict[str, str]] = {
         "stock_added": "added",
         "workout": "Workout",
         "workout_named": "Workout: {names}",
+        "rest_day": "Rest day",
+        "rest_plus": " + rest",
         "done_one": "{count} habit done",
         "done_many": "{count} habits done",
         "done_named": "Done: {names}",
@@ -225,6 +227,8 @@ _WORDS: dict[str, dict[str, str]] = {
         "stock_added": "ajouté",
         "workout": "Séance",
         "workout_named": "Séance : {names}",
+        "rest_day": "Repos",
+        "rest_plus": " + repos",
         "done_one": "{count} habitude faite",
         "done_many": "{count} habitudes faites",
         "done_named": "Fait : {names}",
@@ -448,13 +452,20 @@ def _gym_events(session, user_id, window, words, detailed) -> list[ical.Event]:
             by_day[workout.performed_on].append(workout)
     events = []
     for day, workouts in by_day.items():
-        routines = [names[w.routine_id] for w in workouts if w.routine_id in names]
-        if detailed and routines:
+        sessions = [w for w in workouts if not w.rest_day]
+        rested = len(sessions) < len(workouts)
+        routines = [names[w.routine_id] for w in sessions if w.routine_id in names]
+        if not sessions:
+            # AD-59: a day with only a rest day says so, whatever the detail level.
+            summary, description = words("rest_day"), None
+        elif detailed and routines:
             summary = words("workout_named", names=_names(routines))
-            notes = [w.note for w in workouts if w.note]
+            notes = [w.note for w in sessions if w.note]
             description = "\n".join(notes) or None
         else:
             summary, description = words("workout"), None
+        if rested and sessions:
+            summary += words("rest_plus")
         events.append(ical.Event(_day_uid("gym", day), day, summary, description))
     return events
 

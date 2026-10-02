@@ -26,6 +26,7 @@ import { entries } from "./messages/entries";
 import { errors } from "./messages/errors";
 import { gym } from "./messages/gym";
 import { gymCore } from "./messages/gymCore";
+import { gymPrompts } from "./messages/gymPrompts";
 import { habits } from "./messages/habits";
 import { inventory } from "./messages/inventory";
 import { dates } from "./messages/dates";
@@ -55,6 +56,7 @@ export const messages = {
   ...inventory,
   ...gym,
   ...gymCore,
+  ...gymPrompts,
   ...habits,
   ...calendar,
   ...recipes,

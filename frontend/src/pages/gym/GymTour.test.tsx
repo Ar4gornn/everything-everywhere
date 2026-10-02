@@ -2,11 +2,12 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../../api/client";
+import { buildPrompt, buildPromptContext } from "../../gym/prompts";
 import { logSet } from "../../gym/session";
 import { finishActive, readActive, readOutbox, writeActive } from "../../gym/store";
 import { translator } from "../../i18n";
 import { USER_ID, mocks } from "./mockkit";
-import { ids, renderGym, resetServer, seedActive } from "./testkit";
+import { cacheWith, ids, renderGym, resetServer, seedActive } from "./testkit";
 
 const h = vi.hoisted(() => ({ installed: false, tutorialStep: null as string | null }));
 
@@ -24,6 +25,8 @@ vi.mock("../../components/Tutorial/useTutorial", async (orig) => ({
 
 const en = translator("en");
 const SEEN = `everything-everywhere.gym.${USER_ID}.tourSeen`;
+/** The prompt the import step offers: the real "Build me one" prompt with this person's context. */
+const tourPrompt = () => buildPrompt("build", buildPromptContext(cacheWith(), [], "kg"), "en");
 
 beforeEach(() => {
   resetServer();
@@ -156,14 +159,14 @@ describe("Moving through it", () => {
     expect(toggle()).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("the last step starts an empty session", () => {
+  it("the last step opens the start chooser", () => {
     renderGym("/gym");
     fireEvent.click(screen.getByRole("button", { name: en("gym.tour.open") }));
     goTo(9);
     expect(inDialog().getByText("Step 9 of 9")).toBeInTheDocument();
     click(en("gym.startSession"));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByTestId("where")).toHaveTextContent("/gym/session");
+    expect(screen.getByTestId("where")).toHaveTextContent("/gym/start");
   });
 });
 
@@ -262,7 +265,7 @@ describe("The import demo", () => {
     await act(async () => {
       click(en("gym.copyPrompt"));
     });
-    expect(writeText).toHaveBeenCalledWith(en("gym.prompt"));
+    expect(writeText).toHaveBeenCalledWith(tourPrompt());
     expect(inDialog().getByRole("button", { name: "Copied" })).toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(2100);
@@ -280,7 +283,7 @@ describe("The import demo", () => {
       click(en("gym.copyPrompt"));
     });
     const field = inDialog().getByRole("textbox", { name: en("gym.tour.import.promptField") });
-    expect(field).toHaveValue(en("gym.prompt"));
+    expect(field).toHaveValue(tourPrompt());
   });
 
   it("spotlights the real import link", () => {

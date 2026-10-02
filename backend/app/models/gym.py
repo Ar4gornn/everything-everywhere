@@ -4,6 +4,7 @@ import enum
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -106,6 +107,8 @@ class RoutineExercise(Base):
     target_distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     target_weight: Mapped[decimal.Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
     rest_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Rest after the exercise's last set, before the next one (Epic 43; CHECK in 0036).
+    rest_after_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
@@ -136,6 +139,8 @@ class Workout(Base):
     ended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Coined by the phone (AD-58); UNIQUE (user_id, client_ref) lives in migration 0035.
     client_ref: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    # AD-59: a rest day is a workout with no sets; one per (user, date) via a partial index (0036).
+    rest_day: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
 
 class WorkoutSet(Base):

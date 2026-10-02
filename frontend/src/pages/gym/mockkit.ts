@@ -10,6 +10,7 @@ export const mocks = {
   listRoutinesFull: vi.fn(),
   listExercises: vi.fn(),
   listWorkouts: vi.fn(),
+  listRecentWorkouts: vi.fn(),
   exerciseHistory: vi.fn(),
   createRoutine: vi.fn(),
   updateRoutine: vi.fn(),

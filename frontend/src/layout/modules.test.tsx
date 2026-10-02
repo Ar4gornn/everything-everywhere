@@ -267,8 +267,8 @@ describe("the module table is complete", () => {
     gym: [
       "gym/store.ts",
       "pages/CalendarPage.tsx",
+      "pages/gym/GymBuild.tsx",
       "pages/gym/GymHistory.tsx",
-      "pages/gym/GymHome.tsx",
       "pages/gym/GymImport.tsx",
       "pages/gym/RoutineEditor.tsx",
     ],

@@ -1,14 +1,16 @@
 import { Route, Routes } from "react-router-dom";
 
 import { GymProvider } from "./gym/GymContext";
+import { GymBuild } from "./gym/GymBuild";
 import { GymHome } from "./gym/GymHome";
 import { GymImport } from "./gym/GymImport";
 import { GymSession } from "./gym/GymSession";
+import { GymStart } from "./gym/GymStart";
 import { RoutineEditor } from "./gym/RoutineEditor";
 
 /**
- * The gym (Epic 42, AD-58). Four views under `/gym/*`, all in this one chunk — the live
- * session and the import review must be on the device before the gym has no network, so
+ * The gym (Epic 42, AD-58). Six views under `/gym/*` (Epic 43 added the start chooser and the
+ * quick builder), all in this one chunk — the live session and the import review must be on the device before the gym has no network, so
  * none of them is a lazy chunk of its own.
  *
  * The data comes from one `useGymData()` (cache first, refreshed when the server answers) and
@@ -20,6 +22,8 @@ export function GymPage() {
       <div className="gym">
         <Routes>
           <Route index element={<GymHome />} />
+          <Route path="start" element={<GymStart />} />
+          <Route path="build" element={<GymBuild />} />
           <Route path="session" element={<GymSession />} />
           <Route path="import" element={<GymImport />} />
           <Route path="routines/:id" element={<RoutineEditor />} />

@@ -17,10 +17,13 @@ export const gymCore = {
     fr: "Séance en cours · {minutes} min",
   },
   "gymCore.card.startRoutine": { en: "Start {name}", fr: "Démarrer {name}" },
-  "gymCore.card.empty": {
-    en: "No routines yet. Start an empty session, or import a program from Gym.",
-    fr: "Aucun programme pour l’instant. Démarrez une séance vide, ou importez-en un depuis Sport.",
+  "gymCore.card.askAi": {
+    en: "No routine yet. Ask an AI for a workout",
+    fr: "Pas encore de programme. Demander une séance à une IA",
   },
+  "gymCore.card.restDay": { en: "Rest day", fr: "Jour de repos" },
+  "gymCore.card.restLogged": { en: "Rest day logged", fr: "Jour de repos enregistré" },
+  "gymCore.card.restUndo": { en: "Undo", fr: "Annuler" },
   "gymCore.card.waiting_one": {
     en: "{count} session waiting to sync",
     fr: "{count} séance en attente de synchronisation",

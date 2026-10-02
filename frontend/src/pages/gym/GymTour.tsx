@@ -8,9 +8,11 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 
 import { useTutorial } from "../../components/Tutorial/useTutorial";
-import { readOutbox } from "../../gym/store";
+import { buildPrompt, buildPromptContext } from "../../gym/prompts";
+import { readOutbox, readRecent } from "../../gym/store";
 import { useT } from "../../i18n";
 import type { MessageKey } from "../../i18n/catalogue";
 import { useLayout } from "../../layout/useLayout";
@@ -237,10 +239,16 @@ function TimerDemo() {
   );
 }
 
-/** Step 6: the four stages of an import, and the real prompt to copy. */
+/** Step 6: the four stages of getting a workout from an AI, and the real prompt to copy. */
 function ImportDemo() {
   const t = useT();
-  const prompt = t("gym.prompt");
+  const { cache, userId, unit } = useGym();
+  // The real thing a person would copy: the "Build me one" prompt with their own context.
+  const prompt = buildPrompt(
+    "build",
+    buildPromptContext(cache, readRecent(userId), unit),
+    t.lang,
+  );
   const [copied, setCopied] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -349,7 +357,8 @@ const FOCUSABLE = 'button:not([disabled]), a[href], input, textarea, select, [ta
 /** The `?` button and the tour it opens. Rendered once, in the gym home's title row. */
 export function GymTour() {
   const t = useT();
-  const { userId, active, start } = useGym();
+  const { userId, active } = useGym();
+  const navigate = useNavigate();
   const tutorial = useTutorial();
   const phone = useLayout() === "phone";
   const titleId = useId();
@@ -664,7 +673,7 @@ export function GymTour() {
                       onClick={() => {
                         markSeen(userId);
                         setOpen(false);
-                        start(null);
+                        navigate("/gym/start");
                       }}
                     >
                       {t("gym.startSession")}

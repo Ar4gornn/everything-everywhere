@@ -4351,16 +4351,6 @@ button.streak-checkin {
   min-width: 0;
 }
 
-.gym .gym-new-routine {
-  display: grid;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.gym .gym-import-row {
-  margin-top: 12px;
-}
-
 .gym .gym-history-detail {
   display: grid;
   gap: 8px;
@@ -4794,11 +4784,6 @@ button.streak-checkin {
   padding-left: 18px;
 }
 
-.gym .gym-prompt {
-  display: grid;
-  gap: 8px;
-}
-
 .gym .gym-prompt-text {
   margin: 0;
   padding: 10px 12px;
@@ -4823,6 +4808,323 @@ button.streak-checkin {
   .gym .gym-review-numbers {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* --- Epic 43: start chooser, quick builder, AI hub, rest. Same rule as above: `.gym-…` only,
+   text in checked text tokens, 44px+ targets, and nothing may overflow at 320px in French. */
+
+.gym .gym-choices {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: 12px;
+}
+
+.gym :is(button, a).gym-choice {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 14px 16px;
+  text-align: left;
+  text-decoration: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.gym :is(button, a).gym-choice:first-child {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.gym :is(button, a).gym-choice:hover {
+  border-color: var(--primary);
+}
+
+.gym .gym-choice-title {
+  font-size: var(--fs-h3);
+  font-weight: 700;
+}
+
+.gym .gym-choice-desc {
+  font-size: var(--fs-small);
+}
+
+.gym .gym-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.gym .gym-chips-label {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.gym .gym-chip-list,
+.gym .gym-build-suggest {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym button.gym-chip {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 14px;
+  border-radius: var(--pill);
+  overflow-wrap: anywhere;
+}
+
+.gym button.gym-chip.is-on {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.gym .gym-rest-day {
+  margin-top: 16px;
+}
+
+.gym .gym-rest-day-button {
+  width: 100%;
+}
+
+.gym .gym-rest-logged {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+}
+
+.gym .gym-build-add {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gym .gym-build-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .gym .gym-build-footer {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
+
+.gym label.gym-build-save {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.gym .gym-build-start {
+  min-width: 120px;
+  min-height: 52px;
+  font-size: var(--fs-h3);
+}
+
+.gym .gym-profiles {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-profile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.gym .gym-profile.is-open {
+  border-color: var(--primary);
+}
+
+.gym button.gym-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.gym .gym-profile-glyph {
+  flex: 0 0 auto;
+  font-size: 22px;
+  width: 28px;
+  text-align: center;
+}
+
+.gym .gym-profile-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gym .gym-profile-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-profile-desc {
+  font-size: var(--fs-small);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-profile-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.gym .gym-copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym .gym-copy-row button {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.gym button.gym-paste {
+  width: 100%;
+  min-height: 64px;
+  font-size: var(--fs-h3);
+  margin-bottom: 12px;
+}
+
+.gym .gym-banner {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  color: var(--text);
+}
+
+.gym .gym-week h3 {
+  margin: 0 0 8px;
+}
+
+.gym .gym-week-strip {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gym .gym-week-strip li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-week-strip li.is-rest {
+  background: var(--field-disabled-bg);
+  color: var(--muted);
+}
+
+.gym .gym-week-day {
+  font-size: var(--fs-small);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.gym .gym-rest-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym .gym-rest-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym .gym-rest-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gym .gym-new-workout {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gym .gym-new-workout-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-no-routine {
+  margin: 12px 0 0;
+}
+
+.gym a.gym-link-button.gym-start-empty {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  font-size: var(--fs-h3);
+  text-align: center;
+}
+
+.gym .gym-create-start {
+  min-height: 52px;
 }
 
 /* Gym tour (Epic 42, §12). A spotlight coach-mark over the gym home. Every class is

@@ -26,6 +26,8 @@ export interface SessionExercise {
   /** Two-place decimal string, in the account's unit, or null. */
   target_weight: string | null;
   rest_seconds: number | null;
+  /** Rest after the last target set, before the next exercise (Epic 43). */
+  rest_after_seconds: number | null;
   note: string | null;
 }
 
@@ -99,6 +101,7 @@ export function startSession(
       target_distance_m: line.target_distance_m,
       target_weight: line.target_weight,
       rest_seconds: line.rest_seconds,
+      rest_after_seconds: line.rest_after_seconds ?? null,
       note: line.note,
     })),
     sets: [],
@@ -128,6 +131,7 @@ export function addExercise(
     target_distance_m: null,
     target_weight: null,
     rest_seconds: null,
+    rest_after_seconds: null,
     note: null,
   };
   return { ...session, exercises: [...session.exercises, added] };
@@ -208,7 +212,7 @@ export function logSet(
   if (!hasMeasure(exercise.kind, draft)) throw new Error("set_missing_measure");
   if (!inRange(exercise.kind, draft)) throw new Error("set_out_of_range");
   if (session.sets.length >= MAX_SETS_PER_WORKOUT) throw new Error("too_many_sets");
-  const rest = exercise.rest_seconds ?? DEFAULT_REST[exercise.kind];
+  const { seconds: rest } = restAfterSet(session, exerciseKey);
   return {
     ...session,
     sets: [
@@ -318,32 +322,40 @@ export function toCompleteBody(session: ActiveSession, now: Date): WorkoutComple
 
 /** Start a rest of `seconds` now, whatever the person is doing — the standalone rest timer. */
 export function startRest(session: ActiveSession, seconds: number, now: Date): ActiveSession {
-  void session;
-  void seconds;
-  void now;
-  throw new Error("TODO(F1): startRest");
+  if (!Number.isFinite(seconds) || seconds <= 0) return { ...session, rest_until: null };
+  const capped = Math.min(Math.floor(seconds), FIELD_RANGES.rest_seconds[1]);
+  return { ...session, rest_until: new Date(now.getTime() + capped * 1000).toISOString() };
 }
 
 /** Add `seconds` to a running rest (the "+15 s" button). No rest running → unchanged. */
 export function extendRest(session: ActiveSession, seconds: number, now: Date): ActiveSession {
-  void session;
-  void seconds;
-  void now;
-  throw new Error("TODO(F1): extendRest");
+  if (session.rest_until === null) return session;
+  const end = new Date(session.rest_until).getTime();
+  // A rest that already ran out is not "running": extending it counts from now.
+  if (!Number.isFinite(end) || end <= now.getTime()) return session;
+  return { ...session, rest_until: new Date(end + seconds * 1000).toISOString() };
 }
 
 /**
- * The rest `logSet` will start for a set of this exercise: `rest_after_seconds` when this set
- * completes the exercise's target sets and there is a next exercise, else the per-set rest,
- * else the kind's default. Exposed so the page can label it ("Rest before {next}").
+ * The rest `logSet` will start for the next set of this exercise: `rest_after_seconds` when
+ * that set completes the exercise's target sets and there is a next exercise, else the per-set
+ * rest, else the kind's default. Exposed so the page can label it ("Rest before {next}").
  */
 export function restAfterSet(
   session: ActiveSession,
   exerciseKey: string,
 ): { seconds: number; beforeNext: string | null } {
-  void session;
-  void exerciseKey;
-  throw new Error("TODO(F1): restAfterSet");
+  const index = session.exercises.findIndex((exercise) => exercise.key === exerciseKey);
+  const exercise = session.exercises[index];
+  if (!exercise) return { seconds: 0, beforeNext: null };
+  const perSet = exercise.rest_seconds ?? DEFAULT_REST[exercise.kind];
+  const completes =
+    exercise.target_sets !== null && setsOf(session, exerciseKey) + 1 >= exercise.target_sets;
+  if (completes && exercise.rest_after_seconds !== null) {
+    const next = session.exercises.slice(index + 1).find((other) => !isDone(session, other));
+    if (next) return { seconds: exercise.rest_after_seconds, beforeNext: next.name };
+  }
+  return { seconds: perSet, beforeNext: null };
 }
 
 /** A line of the quick builder (Epic 43 §7.2), before it is a routine or a session. */
@@ -366,9 +378,29 @@ export function sessionFromLines(
   now: Date,
   newId: () => string,
 ): ActiveSession {
-  void name;
-  void lines;
-  void now;
-  void newId;
-  throw new Error("TODO(F1): sessionFromLines");
+  return {
+    client_ref: newId(),
+    routine_id: null,
+    routine_name: name.trim() === "" ? null : name.trim(),
+    performed_on: todayIso(now),
+    started_at: now.toISOString(),
+    note: "",
+    exercises: lines.map((line) => ({
+      key: newId(),
+      exercise_id: line.exercise_id,
+      name: line.name,
+      kind: line.kind,
+      video_url: null,
+      target_sets: line.sets,
+      target_reps: line.kind === "reps" ? line.reps : null,
+      target_seconds: line.kind === "duration" ? line.seconds : null,
+      target_distance_m: line.kind === "distance" ? line.distance_m : null,
+      target_weight: line.weight,
+      rest_seconds: null,
+      rest_after_seconds: null,
+      note: null,
+    })),
+    sets: [],
+    rest_until: null,
+  };
 }

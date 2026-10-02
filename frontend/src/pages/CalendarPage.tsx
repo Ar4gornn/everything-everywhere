@@ -663,7 +663,10 @@ export function CalendarPage() {
       })),
     );
     add("stock", bucket.stock.map((row) => ({ text: row.item_name })));
-    add("gym", bucket.workouts.map(() => ({ text: t("cal.workout") })));
+    add(
+      "gym",
+      bucket.workouts.map((row) => ({ text: t(row.rest_day ? "cal.restDay" : "cal.workout") })),
+    );
     add("habits", bucket.checkins.map((row) => ({ text: row.habit_name })));
     add(
       "mood",
@@ -1191,7 +1194,7 @@ function DayDetail({
       rows.push(
         <li key={`w-${row.id}`}>
           <span className="tag">{t("cal.tagGym")}</span>{" "}
-          <Link to="/gym">{t("cal.workout")}</Link>
+          <Link to="/gym">{t(row.rest_day ? "cal.restDay" : "cal.workout")}</Link>
           {row.note ? <span className="hint"> — {row.note}</span> : null}
         </li>,
       );

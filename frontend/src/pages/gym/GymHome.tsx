@@ -1,13 +1,11 @@
-import { useState, type FormEvent, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
-import { api } from "../../api/client";
 import { CheckInButton } from "../../components/CheckInButton";
-import { Card, Empty, ErrorBanner } from "../../components/ui";
+import { Card, Empty } from "../../components/ui";
 import { discardOutboxEntry, retryOutboxEntry } from "../../gym/store";
 import { useToast } from "../../components/Toast";
 import { useT } from "../../i18n";
-import { errorMessage } from "../../i18n/errors";
 import { useDates } from "../../useDates";
 import { ExercisesCard, HistoryCard } from "./GymHistory";
 import { GymTour } from "./GymTour";
@@ -43,33 +41,13 @@ function OnlineLink({
 export function GymHome() {
   const t = useT();
   const dates = useDates();
-  const navigate = useNavigate();
   const { cache, active, outbox, isOffline, refresh, setActive, start, userId } = useGym();
-  const [error, setError] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState(false);
   const toast = useToast();
 
   const pending = outbox.filter((entry) => entry.refused === null).length;
   const refused = outbox.filter((entry) => entry.refused !== null);
   const routines = byLastDone(cache.routines, cache.lastDone);
-
-  async function createRoutine(event: FormEvent) {
-    event.preventDefault();
-    if (!newName.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const created = await api.createRoutine(newName.trim());
-      setNewName("");
-      await refresh();
-      navigate(`/gym/routines/${created.id}`);
-    } catch (caught) {
-      setError(errorMessage(t, caught, "gym.couldNotCreateRoutine"));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <>
@@ -136,7 +114,6 @@ export function GymHome() {
           </button>
         </div>
       ))}
-      <ErrorBanner message={error} />
 
       {active && (
         <Card title={t("gym.inProgress")}>
@@ -162,10 +139,10 @@ export function GymHome() {
         </Card>
       )}
 
-      <Card title={t("gym.startSession")} tour="gym-start">
-        <button type="button" className="gym-start-empty" onClick={() => start(null)}>
+      <Card title={t("gym.today")} tour="gym-start">
+        <Link to="/gym/start" className="gym-link-button gym-start-empty">
           {t("gym.startEmpty")}
-        </button>
+        </Link>
         {routines.length > 0 && (
           <ul className="gym-routine-cards" aria-label={t("gym.routines")}>
             {routines.map((routine) => {
@@ -193,7 +170,11 @@ export function GymHome() {
             })}
           </ul>
         )}
-        {routines.length === 0 && <p className="hint">{t("gym.noRoutinesHint")}</p>}
+        {routines.length === 0 && (
+          <p className="gym-no-routine">
+            <Link to="/gym/import">{t("gym.noRoutinesHint")}</Link>
+          </p>
+        )}
       </Card>
 
       <Card
@@ -215,25 +196,34 @@ export function GymHome() {
           </ul>
         )}
         {routines.length === 0 && <Empty>{t("gym.noRoutines")}</Empty>}
-        <form className="gym-new-routine" onSubmit={(event) => void createRoutine(event)}>
-          <label>
-            {t("gym.newRoutine")}
-            <input
-              value={newName}
-              maxLength={80}
-              placeholder={t("gym.routinePlaceholder")}
-              disabled={isOffline}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={isOffline || busy || !newName.trim()}>
-            {t("gym.createRoutine")}
+        <div className="gym-new-workout" data-tour="gym-import">
+          <button
+            type="button"
+            className="gym-new-workout-button"
+            aria-expanded={menu}
+            onClick={() => setMenu((was) => !was)}
+          >
+            {t("gym.newWorkout")}
           </button>
-        </form>
-        <div className="row gym-import-row">
-          <OnlineLink to="/gym/import" disabled={isOffline} tour="gym-import">
-            {t("gym.importFromFile")}
-          </OnlineLink>
+          {menu && (
+            <ul className="gym-new-workout-menu" aria-label={t("gym.newWorkoutMenu")}>
+              <li>
+                <Link to="/gym/import" className="gym-link-button quiet">
+                  {t("gym.start.ai")}
+                </Link>
+              </li>
+              <li>
+                <Link to="/gym/build" className="gym-link-button quiet">
+                  {t("gym.start.build")}
+                </Link>
+              </li>
+              <li>
+                <Link to="/gym/import" className="gym-link-button quiet">
+                  {t("gym.importFromFile")}
+                </Link>
+              </li>
+            </ul>
+          )}
         </div>
         {isOffline && <p className="hint">{t("gym.needsConnection")}</p>}
       </Card>

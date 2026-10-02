@@ -122,6 +122,8 @@ interface Options {
   savings?: boolean;
   /** Entries answered per requested month, as the server does, not all of them every time. */
   windowed?: boolean;
+  /** One rest day, and nothing else of gym's, on 2026-09-02 (Epic 43). */
+  restDay?: boolean;
 }
 
 function mockApi(options: Options = {}) {
@@ -179,7 +181,24 @@ function mockApi(options: Options = {}) {
         ],
       });
     }
-    if (url.includes("/api/gym/workouts")) return json({ items: [] });
+    if (url.includes("/api/gym/workouts")) {
+      return json({
+        items: options.restDay
+          ? [
+              {
+                id: "w1",
+                routine_id: null,
+                performed_on: "2026-09-02",
+                started_at: null,
+                ended_at: null,
+                rest_day: true,
+                note: null,
+                created_at: "",
+              },
+            ]
+          : [],
+      });
+    }
     if (url.includes("/api/habits/checkins")) {
       return json({
         items: [
@@ -355,6 +374,16 @@ describe("CalendarPage", () => {
         .queryAllByRole("button")
         .map((button) => button.getAttribute("aria-label")),
     ).toEqual(["Add Rent to calendar"]);
+  });
+
+  it("calls a rest day a rest day, not a workout", async () => {
+    mockApi({ startDay: 26, restDay: true });
+    render(<CalendarPage />);
+    await setMonth("2026-09");
+    await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
+    const card = (await screen.findByText("Wed 2 September")).closest("section") as HTMLElement;
+    expect(within(card).getByRole("link", { name: "Rest day" })).toBeInTheDocument();
+    expect(within(card).queryByText("Workout")).not.toBeInTheDocument();
   });
 
   it("says a withdrawal is money out, not money saved", async () => {

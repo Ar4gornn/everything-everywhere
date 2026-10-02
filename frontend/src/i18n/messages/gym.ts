@@ -2,88 +2,9 @@ import type { Entry } from "../catalogue";
 
 /**
  * The gym page (Epic 42): home, the live session, the routine editor and the import review.
- * The dashboard card, the offline store and the file parser's errors are in `gymCore.ts`.
+ * The dashboard card, the offline store and the file parser's errors are in `gymCore.ts`; the
+ * prompts for Claude or ChatGPT (Epic 43) are in `gymPrompts.ts`.
  */
-
-// The prompt a person gives Claude or ChatGPT to write a workout file (spec §10, also
-// `docs/gym-import.md` — a test keeps the two identical). The JSON keys stay English in French:
-// they are the file format, not words.
-const PROMPT_EN = `You are helping me build a gym workout that I will import into my app "Everything Everywhere".
-
-1. First ask me, in one message: my goal, my level, how many days a week, how long a session can
-   be, what equipment I have, any injuries, and whether I count weight in kg or lb.
-2. Propose the routine(s) as a short list (name, exercises with sets × reps or time or distance).
-3. Then go through the exercises ONE AT A TIME. For each, show: name, kind (reps, duration or
-   distance), sets, reps or seconds or metres, weight, rest in seconds, and a short note. Ask me
-   to confirm or correct it. Apply my corrections and show it again until I say it is right.
-   Do not move to the next exercise before I confirm the current one.
-4. When every exercise is confirmed, reply with ONLY one JSON code block, nothing before or after
-   it, in exactly this format:
-
-{
-  "format": "ee-workout/1",
-  "weight_unit": "kg",
-  "routines": [
-    {
-      "name": "Routine name",
-      "note": "optional",
-      "exercises": [
-        { "name": "Bench press", "kind": "reps", "sets": 4, "reps": 8, "weight": 60, "rest_seconds": 90, "note": "optional" },
-        { "name": "Plank", "kind": "duration", "sets": 3, "seconds": 45, "rest_seconds": 60 },
-        { "name": "Rowing", "kind": "distance", "sets": 1, "distance_m": 2000 }
-      ]
-    }
-  ]
-}
-
-Rules for the JSON: "kind" is one of "reps", "duration", "distance". Use "reps" for reps
-exercises, "seconds" for duration exercises, "distance_m" (metres) for distance exercises.
-"weight" is a number in my unit, or omit it for bodyweight. Whole numbers for sets, reps,
-seconds, rest_seconds and distance_m. Names under 80 characters, notes under 200. No comments
-inside the JSON.
-
-5. Finally tell me: "Save this as workout.json and share it to Everything Everywhere, or copy it
-   and paste it in Gym → Import."`;
-
-const PROMPT_FR = `Tu m’aides à construire une séance de sport que j’importerai dans mon application « Everything Everywhere ».
-
-1. Commence par me poser, en un seul message, ces questions : mon objectif, mon niveau, combien de
-   jours par semaine, la durée maximale d’une séance, le matériel dont je dispose, mes éventuelles
-   blessures, et si je compte les poids en kg ou en lb.
-2. Propose-moi le ou les programmes sous forme de courte liste (nom, exercices avec séries × répétitions,
-   ou durée, ou distance).
-3. Passe ensuite en revue les exercices UN PAR UN. Pour chacun, indique : le nom, le type (reps,
-   duration ou distance), les séries, les répétitions ou les secondes ou les mètres, le poids, le repos
-   en secondes et une courte note. Demande-moi de confirmer ou de corriger. Applique mes corrections et
-   montre-le de nouveau jusqu’à ce que je dise que c’est bon. Ne passe pas à l’exercice suivant avant
-   que j’aie confirmé l’exercice en cours.
-4. Quand tous les exercices sont confirmés, réponds avec UNIQUEMENT un bloc de code JSON, rien avant
-   ni après, exactement dans ce format :
-
-{
-  "format": "ee-workout/1",
-  "weight_unit": "kg",
-  "routines": [
-    {
-      "name": "Routine name",
-      "note": "optional",
-      "exercises": [
-        { "name": "Bench press", "kind": "reps", "sets": 4, "reps": 8, "weight": 60, "rest_seconds": 90, "note": "optional" },
-        { "name": "Plank", "kind": "duration", "sets": 3, "seconds": 45, "rest_seconds": 60 },
-        { "name": "Rowing", "kind": "distance", "sets": 1, "distance_m": 2000 }
-      ]
-    }
-  ]
-}
-
-Règles pour le JSON : "kind" vaut "reps", "duration" ou "distance". Utilise "reps" pour les exercices
-en répétitions, "seconds" pour les exercices de durée, "distance_m" (en mètres) pour les exercices de
-distance. "weight" est un nombre dans mon unité, ou omets-le pour le poids du corps. Des nombres
-entiers pour sets, reps, seconds, rest_seconds et distance_m. Des noms de moins de 80 caractères, des
-notes de moins de 200. Aucun commentaire dans le JSON.
-
-5. Pour finir, dis-moi : « Enregistre ceci sous workout.json et partage-le vers Everything Everywhere,
-   ou copie-le et colle-le dans Sport → Importer. »`;
 
 export const gym = {
   "gym.title": { en: "Gym", fr: "Sport" },
@@ -149,29 +70,16 @@ export const gym = {
     fr: "Une séance est déjà en cours. La remplacer par une nouvelle ? Ses séries seront perdues.",
   },
   "gym.startSession": { en: "Start a session", fr: "Commencer une séance" },
-  "gym.startEmpty": { en: "Start empty session", fr: "Commencer une séance vide" },
   "gym.startNamed": { en: "Start {name}", fr: "Commencer {name}" },
-  "gym.noRoutinesHint": {
-    en: "No routines yet. A routine is a named list of exercises you start a session from; you can also just start empty.",
-    fr: "Aucun programme pour l’instant. Un programme est une liste d’exercices nommée par laquelle commencer une séance ; vous pouvez aussi commencer à vide.",
-  },
   "gym.about": { en: "about {n} min", fr: "environ {n} min" },
   "gym.lastDone": { en: "Last done {date}", fr: "Dernière séance : {date}" },
   "gym.neverDone": { en: "Not done yet", fr: "Pas encore faite" },
   "gym.routines": { en: "Routines", fr: "Programmes" },
   "gym.noRoutines": { en: "No routines yet.", fr: "Aucun programme pour l’instant." },
-  "gym.newRoutine": { en: "New routine", fr: "Nouveau programme" },
   "gym.routineName": { en: "Routine name", fr: "Nom du programme" },
-  "gym.routinePlaceholder": { en: "Push day", fr: "Jour poussée" },
-  "gym.createRoutine": { en: "Create routine", fr: "Créer le programme" },
-  "gym.importFromFile": { en: "Import from file", fr: "Importer depuis un fichier" },
   "gym.needsConnection": {
     en: "Editing routines needs a connection. Your sessions still work offline.",
     fr: "Modifier les programmes demande une connexion. Vos séances fonctionnent toujours hors ligne.",
-  },
-  "gym.couldNotCreateRoutine": {
-    en: "Could not create that routine.",
-    fr: "Impossible de créer ce programme.",
   },
 
   // --- history and exercises
@@ -322,7 +230,6 @@ export const gym = {
   "gym.targetSecondsOf": { en: "Target seconds of {name}", fr: "Secondes visées de {name}" },
   "gym.targetMetresOf": { en: "Target metres of {name}", fr: "Mètres visés de {name}" },
   "gym.targetWeightOf": { en: "Target weight of {name}", fr: "Poids visé de {name}" },
-  "gym.restOf": { en: "Rest after {name}", fr: "Repos après {name}" },
   "gym.noteOf": { en: "Note for {name}", fr: "Note pour {name}" },
   "gym.saveLine": { en: "Save {name}", fr: "Enregistrer {name}" },
   "gym.removeLine": { en: "Remove {name} from the routine", fr: "Retirer {name} du programme" },
@@ -350,10 +257,6 @@ export const gym = {
 
   // --- import
   "gym.importTitle": { en: "Import a workout", fr: "Importer une séance" },
-  "gym.importIntro": {
-    en: "Pick a .json file, paste the text, or share the file to this app. You check every exercise before anything is created.",
-    fr: "Choisissez un fichier .json, collez le texte, ou partagez le fichier vers cette application. Vous vérifiez chaque exercice avant que quoi que ce soit soit créé.",
-  },
   "gym.chooseFile": { en: "Choose a file", fr: "Choisir un fichier" },
   "gym.pasteLabel": { en: "Or paste the workout", fr: "Ou collez la séance" },
   "gym.pastePlaceholder": { en: "{ \"format\": \"ee-workout/1\", … }", fr: "{ \"format\": \"ee-workout/1\", … }" },
@@ -374,12 +277,6 @@ export const gym = {
     en: "That file is too big to be a workout (256 KB at most).",
     fr: "Ce fichier est trop gros pour être une séance (256 Ko au plus).",
   },
-  "gym.promptTitle": { en: "Prompt for Claude / ChatGPT", fr: "Prompt pour Claude / ChatGPT" },
-  "gym.promptHint": {
-    en: "Give this to Claude or ChatGPT. It asks about your goals, walks you through each exercise, and ends with the file to import.",
-    fr: "Donnez ceci à Claude ou à ChatGPT. Il vous interroge sur vos objectifs, passe chaque exercice en revue et termine par le fichier à importer.",
-  },
-  "gym.prompt": { en: PROMPT_EN, fr: PROMPT_FR },
   "gym.copyPrompt": { en: "Copy prompt", fr: "Copier le prompt" },
   "gym.copied": { en: "Prompt copied", fr: "Prompt copié" },
   "gym.copySelected": {
@@ -410,8 +307,6 @@ export const gym = {
     en: "Creating needs a connection. Your review is kept in this tab until you are back online.",
     fr: "La création demande une connexion. Votre relecture est conservée dans cet onglet jusqu’au retour en ligne.",
   },
-  "gym.createRoutines_one": { en: "Create {count} routine", fr: "Créer {count} programme" },
-  "gym.createRoutines_other": { en: "Create {count} routines", fr: "Créer {count} programmes" },
   "gym.startOver": { en: "Start over", fr: "Recommencer" },
   "gym.imported_one": { en: "{count} routine created", fr: "{count} programme créé" },
   "gym.imported_other": { en: "{count} routines created", fr: "{count} programmes créés" },
@@ -452,10 +347,6 @@ export const gym = {
     fr: "Découvrez l’onglet Sport en une minute. Rien dans cette visite ne modifie vos données.",
   },
   "gym.tour.start.title": { en: "Start a session", fr: "Commencer une séance" },
-  "gym.tour.start.body": {
-    en: "Tap a routine to follow it, or start empty. The dashboard Gym card does the same.",
-    fr: "Touchez un programme pour le suivre, ou commencez à vide. La carte Sport du tableau de bord fait pareil.",
-  },
   "gym.tour.log.title": { en: "Log a set", fr: "Noter une série" },
   "gym.tour.log.body": {
     en: "Set reps and weight, tap Done, and the rest timer starts. Try it below.",
@@ -478,31 +369,6 @@ export const gym = {
   "gym.tour.timer.label": { en: "Plank · target {n} s", fr: "Planche · objectif {n} s" },
   "gym.tour.timer.held": { en: "Held {n} s", fr: "Tenu {n} s" },
   "gym.tour.routines.title": { en: "Your routines", fr: "Vos programmes" },
-  "gym.tour.routines.body": {
-    en: "Edit targets, reorder exercises with ↑ ↓, or create a new routine.",
-    fr: "Modifiez les objectifs, réordonnez avec ↑ ↓, ou créez un programme.",
-  },
-  "gym.tour.import.title": { en: "Import from a file", fr: "Importer un fichier" },
-  "gym.tour.import.body": {
-    en: "Let an AI chat build your routines. Copy the prompt, then follow four steps.",
-    fr: "Laissez un chat IA bâtir vos programmes : copiez le prompt, puis suivez quatre étapes.",
-  },
-  "gym.tour.import.step1": {
-    en: "Copy the prompt and give it to Claude or ChatGPT.",
-    fr: "Copiez le prompt et donnez-le à Claude ou ChatGPT.",
-  },
-  "gym.tour.import.step2": {
-    en: "The chat confirms each exercise with you.",
-    fr: "Le chat valide chaque exercice avec vous.",
-  },
-  "gym.tour.import.step3": {
-    en: "Paste the file, pick it, or share it to the app on Android.",
-    fr: "Collez le fichier, choisissez-le, ou partagez-le vers l’appli sur Android.",
-  },
-  "gym.tour.import.step4": {
-    en: "Check each exercise here, then Create.",
-    fr: "Vérifiez chaque exercice ici, puis créez.",
-  },
   "gym.tour.import.steps": { en: "How an import goes", fr: "Déroulement d’un import" },
   "gym.tour.import.copied": { en: "Copied", fr: "Copié" },
   "gym.tour.import.copyFailed": {
@@ -538,5 +404,148 @@ export const gym = {
   "gym.tour.done.body": {
     en: "Replay this tour any time from the ? button.",
     fr: "Rejouez cette visite à tout moment avec le bouton ?.",
+  },
+
+  // --- Epic 43: start chooser, quick builder, AI hub, rest
+  "gym.startEmpty": { en: "Start a session", fr: "Commencer une séance" },
+  "gym.today": { en: "Today", fr: "Aujourd’hui" },
+  "gym.noRoutinesHint": {
+    en: "No routine yet — let an AI write one",
+    fr: "Pas encore de programme : laissez une IA en écrire un",
+  },
+  "gym.restDay": { en: "Rest day", fr: "Jour de repos" },
+  "gym.restDayRow": { en: "Logged as a rest day.", fr: "Noté comme jour de repos." },
+
+  "gym.start.title": { en: "How do you want to start?", fr: "Comment voulez-vous commencer ?" },
+  "gym.start.justStart": { en: "Just start", fr: "Juste commencer" },
+  "gym.start.justStartDesc": {
+    en: "Timer on, add exercises as you go.",
+    fr: "Le chrono tourne, ajoutez les exercices en route.",
+  },
+  "gym.start.build": { en: "Build it now", fr: "La composer maintenant" },
+  "gym.start.buildDesc": {
+    en: "Pick exercises, then go.",
+    fr: "Choisissez les exercices, puis c’est parti.",
+  },
+  "gym.start.ai": { en: "Ask an AI", fr: "Demander à une IA" },
+  "gym.start.aiDesc": {
+    en: "Claude or ChatGPT writes it with you.",
+    fr: "Claude ou ChatGPT l’écrit avec vous.",
+  },
+  "gym.start.follow": { en: "Or follow a routine:", fr: "Ou suivez un programme :" },
+  "gym.start.restDay": { en: "Rest day today", fr: "Repos aujourd’hui" },
+  "gym.start.restAlready": { en: "Already logged", fr: "Déjà noté" },
+  "gym.start.restLogged": { en: "Logged — enjoy it.", fr: "C’est noté, profitez-en." },
+  "gym.start.undo": { en: "Undo", fr: "Annuler" },
+  "gym.start.couldNotLogRest": {
+    en: "Could not log the rest day.",
+    fr: "Impossible de noter le jour de repos.",
+  },
+
+  "gym.build.title": { en: "Build a workout", fr: "Composer une séance" },
+  "gym.build.defaultName": { en: "Workout · {date}", fr: "Séance · {date}" },
+  "gym.build.add": { en: "Add an exercise", fr: "Ajouter un exercice" },
+  "gym.build.yours": { en: "Your exercises", fr: "Vos exercices" },
+  "gym.build.addNew": { en: "Add “{name}”", fr: "Ajouter « {name} »" },
+  "gym.build.kindFor": { en: "New exercise counts in", fr: "Le nouvel exercice se compte en" },
+  "gym.build.empty": {
+    en: "Nothing yet. Tap an exercise above.",
+    fr: "Rien pour l’instant. Touchez un exercice ci-dessus.",
+  },
+  "gym.build.lines": { en: "Exercises in this workout", fr: "Exercices de cette séance" },
+  "gym.build.save": { en: "Save as a routine", fr: "Enregistrer comme programme" },
+  "gym.build.removeLine": { en: "Remove {name}", fr: "Retirer {name}" },
+  "gym.build.start": { en: "Start", fr: "Démarrer" },
+  "gym.build.askAi": { en: "Rather ask an AI?", fr: "Plutôt demander à une IA ?" },
+  "gym.build.notSaved": {
+    en: "Started, but the routine was not saved.",
+    fr: "Séance lancée, mais le programme n’a pas été enregistré.",
+  },
+
+  "gym.hub.get": { en: "Get a workout from an AI", fr: "Obtenir une séance d’une IA" },
+  "gym.hub.back": { en: "Bring it back", fr: "Le rapporter ici" },
+  "gym.hub.profiles": { en: "Kinds of workout", fr: "Types de séance" },
+  "gym.hub.showPrompt": { en: "Show prompt", fr: "Voir le prompt" },
+  "gym.hub.hidePrompt": { en: "Hide prompt", fr: "Masquer le prompt" },
+  "gym.hub.notes": { en: "Your notes", fr: "Vos notes" },
+  "gym.hub.notesPlaceholder": {
+    en: "Bench 4×8, plank 3×45 s, rowing 2 km…",
+    fr: "Développé couché 4×8, planche 3×45 s, rameur 2 km…",
+  },
+  "gym.hub.copyClaude": { en: "Copy & open Claude", fr: "Copier et ouvrir Claude" },
+  "gym.hub.copyChatGpt": { en: "Copy & open ChatGPT", fr: "Copier et ouvrir ChatGPT" },
+  "gym.hub.copyOnly": { en: "Copy only", fr: "Copier seulement" },
+  "gym.hub.hint": {
+    en: "Chat, confirm each exercise, then come back here and tap Paste.",
+    fr: "Discutez, validez chaque exercice, puis revenez ici et touchez Coller.",
+  },
+  "gym.hub.paste": { en: "Paste from clipboard", fr: "Coller depuis le presse-papiers" },
+  "gym.hub.pasteDenied": {
+    en: "Long-press and paste here.",
+    fr: "Appui long, puis collez ici.",
+  },
+  "gym.hub.banner": {
+    en: "Got your workout? Paste it here.",
+    fr: "Vous avez votre séance ? Collez-la ici.",
+  },
+  "gym.hub.getHint": {
+    en: "Pick the kind of workout you want. The prompt already knows your exercises and last sessions.",
+    fr: "Choisissez le type de séance. Le prompt connaît déjà vos exercices et vos dernières séances.",
+  },
+
+  "gym.restAfterSeconds": { en: "Rest after (s)", fr: "Repos après l’exercice (s)" },
+  "gym.restOf": { en: "Rest between sets of {name}", fr: "Repos entre les séries de {name}" },
+  "gym.restAfterOf": { en: "Rest after {name}", fr: "Repos après {name}" },
+  "gym.createAndStart": { en: "Create and start", fr: "Créer et commencer" },
+  "gym.createOnly": { en: "Create only", fr: "Créer seulement" },
+  "gym.importFromFile": { en: "Import a file", fr: "Importer un fichier" },
+  "gym.newWorkout": { en: "New workout", fr: "Nouvelle séance" },
+  "gym.newWorkoutMenu": { en: "Ways to make a workout", fr: "Façons de créer une séance" },
+  "gym.schedule.title": { en: "The week in this plan", fr: "La semaine de ce plan" },
+  "gym.schedule.rest": { en: "rest", fr: "repos" },
+  "gym.schedule.note": {
+    en: "Shown for reference. Nothing is scheduled by the app.",
+    fr: "Affiché pour mémoire. L’appli ne planifie rien.",
+  },
+
+  "gym.restBefore": { en: "Rest before {name}", fr: "Repos avant {name}" },
+  "gym.restPresets": { en: "Rest for", fr: "Se reposer" },
+  "gym.restPreset": { en: "{n} s", fr: "{n} s" },
+  "gym.restCustom": { en: "Custom", fr: "Autre" },
+  "gym.restStart": { en: "Start rest", fr: "Lancer le repos" },
+  "gym.restPlus": { en: "+{n} s", fr: "+{n} s" },
+  "gym.summaryAskAi": {
+    en: "Want a new one next time? Ask an AI",
+    fr: "Envie d’une nouvelle séance la prochaine fois ? Demandez à une IA",
+  },
+
+  "gym.tour.start.body": {
+    en: "Tap a routine to follow it, or tap Start a session to just go, build one, or ask an AI.",
+    fr: "Touchez un programme pour le suivre, ou Commencer une séance pour y aller, en composer une ou demander à une IA.",
+  },
+  "gym.tour.routines.body": {
+    en: "Edit targets and rests, reorder exercises with ↑ ↓, or make a new workout.",
+    fr: "Modifiez objectifs et repos, réordonnez avec ↑ ↓, ou créez une nouvelle séance.",
+  },
+  "gym.tour.import.title": { en: "Let an AI write it", fr: "Laissez une IA l’écrire" },
+  "gym.tour.import.body": {
+    en: "Pick a kind of workout, copy the prompt, chat, then bring the result back.",
+    fr: "Choisissez un type de séance, copiez le prompt, discutez, puis rapportez le résultat.",
+  },
+  "gym.tour.import.step1": {
+    en: "Pick a kind of workout and copy the prompt into Claude or ChatGPT.",
+    fr: "Choisissez un type de séance et copiez le prompt dans Claude ou ChatGPT.",
+  },
+  "gym.tour.import.step2": {
+    en: "The chat confirms each exercise with you.",
+    fr: "Le chat valide chaque exercice avec vous.",
+  },
+  "gym.tour.import.step3": {
+    en: "Come back and tap Paste, pick the file, or share it to the app on Android.",
+    fr: "Revenez et touchez Coller, choisissez le fichier, ou partagez-le vers l’appli sur Android.",
+  },
+  "gym.tour.import.step4": {
+    en: "Check each exercise here, then Create and start.",
+    fr: "Vérifiez chaque exercice ici, puis Créer et commencer.",
   },
 } satisfies Record<string, Entry>;

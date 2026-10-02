@@ -36,7 +36,7 @@ describe("Routine editor", () => {
     await userEvent.clear(box("Target reps of Bench press"));
     await userEvent.type(box("Target reps of Bench press"), "10");
     await userEvent.clear(box("Target weight of Bench press"));
-    await userEvent.type(box("Rest after Bench press"), "0");
+    await userEvent.type(box("Rest between sets of Bench press"), "0");
     expect(save).toBeEnabled();
     await userEvent.click(save);
     await waitFor(() =>
@@ -150,5 +150,17 @@ describe("Routine editor", () => {
   it("says so for a routine that does not exist", async () => {
     renderGym("/gym/routines/nope");
     expect(await screen.findByText("That routine does not exist.")).toBeInTheDocument();
+  });
+});
+
+describe("Routine editor: rest after an exercise", () => {
+  it("patches rest_after_seconds alone", async () => {
+    renderGym("/gym/routines/r1");
+    const save = await screen.findByRole("button", { name: "Save Bench press" });
+    await userEvent.type(box("Rest after Bench press"), "120");
+    await userEvent.click(save);
+    await waitFor(() =>
+      expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l1", { rest_after_seconds: 120 }),
+    );
   });
 });

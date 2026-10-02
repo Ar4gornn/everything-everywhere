@@ -7,9 +7,11 @@ import type {
   RoutineDetail,
   Workout,
   WorkoutComplete,
+  WorkoutDetail,
 } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { PREFIX } from "../storage";
+import { newId } from "./id";
 import { type ActiveSession, toCompleteBody } from "./session";
 
 /**
@@ -70,6 +72,8 @@ const base = (userId: string) => `${PREFIX}gym.${userId}.`;
 const CACHE = "cache";
 const ACTIVE = "active";
 const OUTBOX = "outbox";
+const RECENT = "recent";
+const SENT = "sent";
 
 function readJson(userId: string, part: string): unknown {
   try {
@@ -184,14 +188,23 @@ export function refreshCache(userId: string): Promise<GymCache> {
   const started = generationOf(userId);
   const run = (async () => {
     const previous = readCache(userId);
-    const [routines, exercises, workouts] = await Promise.all([
+    const [routines, exercises, workouts, recent] = await Promise.all([
       api.listRoutinesFull(),
       api.listExercises(),
       api.listWorkouts({ limit: 20 }),
+      // The AI prompt's context; a failure is a prompt without recent sessions, not an error.
+      (async () => {
+        try {
+          return await api.listRecentWorkouts(10);
+        } catch {
+          return null;
+        }
+      })(),
     ]);
 
     const lastDone: Record<string, string> = { ...previous.lastDone };
     for (const workout of workouts) {
+      if (workout.rest_day) continue; // a rest day is not a routine done
       const day = workout.routine_id ? lastDone[workout.routine_id] : undefined;
       if (workout.routine_id && (!day || workout.performed_on > day)) {
         lastDone[workout.routine_id] = workout.performed_on;
@@ -224,7 +237,10 @@ export function refreshCache(userId: string): Promise<GymCache> {
       lastDone,
       refreshedAt: new Date().toISOString(),
     };
-    if (generationOf(userId) === started) writeCache(userId, cache);
+    if (generationOf(userId) === started) {
+      if (recent) writeJson(userId, RECENT, recent);
+      writeCache(userId, cache);
+    }
     return cache;
   })().finally(() => {
     refreshing.delete(userId);
@@ -359,7 +375,8 @@ export function flushOutbox(userId: string): Promise<FlushResult> {
       if (!next) break;
       const ref = next.body.client_ref;
       try {
-        await api.completeWorkout(next.body);
+        const saved = await api.completeWorkout(next.body);
+        if (next.body.rest_day && saved?.id) rememberSent(userId, ref, saved.id);
         writeOutbox(
           userId,
           readOutbox(userId).filter((entry) => entry.body.client_ref !== ref),
@@ -413,7 +430,7 @@ export function hasUnsentGym(userId: string): boolean {
 /** Remove cache, active session and outbox for this user (explicit sign-out). */
 export function clearGymStore(userId: string): void {
   generation.set(userId, generationOf(userId) + 1);
-  for (const part of [CACHE, ACTIVE, OUTBOX]) writeJson(userId, part, null);
+  for (const part of [CACHE, ACTIVE, OUTBOX, RECENT, SENT]) writeJson(userId, part, null);
   // The import review's draft is a person's file content: it does not outlive the sign-out.
   for (const area of ["sessionStorage", "localStorage"] as const) {
     try {
@@ -506,17 +523,34 @@ export function useGymData(): GymData {
  * under `gym.<userId>.recent`, refreshed by `refreshCache` (one `api.listRecentWorkouts(10)`),
  * cleared by `clearGymStore`.
  */
-export function readRecent(userId: string): import("../api/types").WorkoutDetail[] {
-  void userId;
-  throw new Error("TODO(F1): readRecent");
+export function readRecent(userId: string): WorkoutDetail[] {
+  const raw = readJson(userId, RECENT);
+  return Array.isArray(raw) ? raw.filter((entry): entry is WorkoutDetail => isRecord(entry)) : [];
 }
 
 /** True when the cache already holds a rest day on `date` (ISO). */
 export function hasRestDay(userId: string, date: string): boolean {
-  void userId;
-  void date;
-  throw new Error("TODO(F1): hasRestDay");
+  return (
+    readCache(userId).workouts.some((workout) => workout.rest_day && workout.performed_on === date) ||
+    readOutbox(userId).some((entry) => entry.body.rest_day === true && entry.body.performed_on === date)
+  );
 }
+
+/** client_ref → the workout id the server answered, kept so an Undo can delete a sent rest day. */
+function readSent(userId: string): Record<string, string> {
+  const raw = readJson(userId, SENT);
+  return isRecord(raw) ? (raw as Record<string, string>) : {};
+}
+
+function rememberSent(userId: string, clientRef: string, workoutId: string): void {
+  const sent = readSent(userId);
+  // A handful at most: only the newest few matter to an Undo that lasts seconds.
+  const kept = Object.entries(sent).slice(-9);
+  writeJson(userId, SENT, Object.fromEntries([...kept, [clientRef, workoutId]]));
+}
+
+/** The cached workout a rest day stands for until the server's own row replaces it. */
+const restWorkoutId = (clientRef: string) => `pending-${clientRef}`;
 
 /**
  * Log a rest day for `date` through the outbox (works offline), add it to the cached workouts
@@ -524,15 +558,59 @@ export function hasRestDay(userId: string, date: string): boolean {
  * while it is still pending (or deletes the workout once sent).
  */
 export async function logRestDay(userId: string, date: string, now: Date): Promise<string> {
-  void userId;
-  void date;
-  void now;
-  throw new Error("TODO(F1): logRestDay");
+  const existing = readOutbox(userId).find(
+    (entry) => entry.body.rest_day === true && entry.body.performed_on === date,
+  );
+  if (existing) return existing.body.client_ref;
+  const clientRef = newId();
+  const entry: OutboxEntry = {
+    body: { client_ref: clientRef, performed_on: date, rest_day: true, sets: [] },
+    routine_name: null,
+    queuedAt: now.toISOString(),
+    refused: null,
+  };
+  writeOutbox(userId, [...readOutbox(userId), entry]);
+  const cache = readCache(userId);
+  if (!cache.workouts.some((workout) => workout.rest_day && workout.performed_on === date)) {
+    const optimistic: Workout = {
+      id: restWorkoutId(clientRef),
+      routine_id: null,
+      performed_on: date,
+      started_at: null,
+      ended_at: null,
+      rest_day: true,
+      note: null,
+      created_at: now.toISOString(),
+    };
+    writeCache(userId, { ...cache, workouts: [optimistic, ...cache.workouts] });
+  }
+  await flushOutbox(userId);
+  return clientRef;
 }
 
 /** Undo a rest day logged moments ago: drop it from the outbox, or delete it on the server. */
 export async function undoRestDay(userId: string, clientRef: string): Promise<void> {
-  void userId;
-  void clientRef;
-  throw new Error("TODO(F1): undoRestDay");
+  const pending = readOutbox(userId).some((entry) => entry.body.client_ref === clientRef);
+  const dropOptimistic = (serverId?: string) => {
+    const cache = readCache(userId);
+    writeCache(userId, {
+      ...cache,
+      workouts: cache.workouts.filter(
+        (workout) => workout.id !== restWorkoutId(clientRef) && workout.id !== serverId,
+      ),
+    });
+  };
+  if (pending) {
+    discardOutboxEntry(userId, clientRef);
+    dropOptimistic();
+    return;
+  }
+  const serverId = readSent(userId)[clientRef];
+  if (!serverId) {
+    // Sent in another tab or before this version: nothing to delete by id; drop the stub only.
+    dropOptimistic();
+    return;
+  }
+  await api.deleteWorkout(serverId);
+  dropOptimistic(serverId);
 }

@@ -3,7 +3,15 @@ import uuid
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    StrictBool,
+    model_validator,
+)
 
 from app.schemas.common import quantise, to_decimal
 
@@ -103,6 +111,7 @@ class RoutineLineCreate(BaseModel):
     target_distance_m: _Metres | None = None
     target_weight: Weight | None = None
     rest_seconds: _Rest | None = None
+    rest_after_seconds: _Rest | None = None
     note: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
@@ -123,6 +132,7 @@ class RoutineLineUpdate(BaseModel):
     target_distance_m: _Metres | None = None
     target_weight: Weight | None = None
     rest_seconds: _Rest | None = None
+    rest_after_seconds: _Rest | None = None
     note: str | None = Field(default=None, max_length=200)
 
 
@@ -139,6 +149,7 @@ class RoutineLineOut(BaseModel):
     target_distance_m: int | None
     target_weight: Weight | None
     rest_seconds: int | None
+    rest_after_seconds: int | None
     note: str | None
 
 
@@ -163,6 +174,7 @@ class RoutineImportLine(BaseModel):
     target_distance_m: _Metres | None = None
     target_weight: Weight | None = None
     rest_seconds: _Rest | None = None
+    rest_after_seconds: _Rest | None = None
     note: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
@@ -197,6 +209,7 @@ class WorkoutOut(BaseModel):
     started_at: dt.datetime | None
     ended_at: dt.datetime | None
     note: str | None
+    rest_day: bool
     created_at: dt.datetime
 
 
@@ -240,6 +253,7 @@ class WorkoutDetailOut(BaseModel):
     started_at: dt.datetime | None
     ended_at: dt.datetime | None
     note: str | None
+    rest_day: bool
     sets: list[SetOut]
 
 
@@ -252,6 +266,8 @@ class WorkoutComplete(BaseModel):
     ended_at: dt.datetime | None = None
     note: str | None = Field(default=None, max_length=500)
     sets: list[SetCreate] = Field(max_length=500)
+    # AD-59: a rest day has no sets and no routine; one per date (idempotent).
+    rest_day: StrictBool = False
 
     @model_validator(mode="after")
     def _ordered(self) -> "WorkoutComplete":

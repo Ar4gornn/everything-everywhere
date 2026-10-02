@@ -16,11 +16,17 @@ beforeEach(() => resetServer());
 afterEach(() => vi.restoreAllMocks());
 
 describe("Gym home", () => {
-  it("offers an empty session and explains routines when there are none", async () => {
+  it("offers the start chooser, and an AI link when there are no routines", async () => {
     resetServer({ routines: [], workouts: [], exercises: [], lastDone: {}, lastTime: {} });
     renderGym();
-    expect(await screen.findByRole("button", { name: "Start empty session" })).toBeInTheDocument();
-    expect(screen.getByText(/No routines yet\. A routine is a named list/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Start a session" })).toHaveAttribute(
+      "href",
+      "/gym/start",
+    );
+    expect(screen.getByRole("link", { name: /No routine yet/ })).toHaveAttribute(
+      "href",
+      "/gym/import",
+    );
     expect(screen.queryByText("Session in progress")).not.toBeInTheDocument();
   });
 
@@ -75,8 +81,8 @@ describe("Gym home", () => {
     expect(await screen.findByText("Offline. Sessions are saved on this phone.")).toBeInTheDocument();
     // Starting a session needs no network.
     expect(screen.getByRole("button", { name: "Start Push day" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Create routine" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Import from file" })).toBeDisabled();
+    // Making a workout works offline: the builder starts a session with no network.
+    expect(screen.getByRole("button", { name: "New workout" })).toBeEnabled();
     expect(screen.getAllByRole("button", { name: "Edit" }).every((b) => b.hasAttribute("disabled"))).toBe(
       true,
     );
@@ -87,18 +93,22 @@ describe("Gym home", () => {
     renderGym();
     const edit = await screen.findAllByRole("link", { name: "Edit" });
     expect(edit[0]).toHaveAttribute("href", "/gym/routines/r1");
-    expect(screen.getByRole("link", { name: "Import from file" })).toHaveAttribute(
-      "href",
-      "/gym/import",
-    );
   });
 
-  it("creates a routine and opens its editor", async () => {
+  it("offers three ways to make a workout from New workout, and no inline name form", async () => {
     renderGym();
-    await userEvent.type(await screen.findByLabelText("New routine"), "Pull day");
-    await userEvent.click(screen.getByRole("button", { name: "Create routine" }));
-    await waitFor(() => expect(mocks.createRoutine).toHaveBeenCalledWith("Pull day"));
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/gym/routines/r9"));
+    await userEvent.click(await screen.findByRole("button", { name: "New workout" }));
+    const menu = screen.getByRole("list", { name: "Ways to make a workout" });
+    const links = within(menu).getAllByRole("link");
+    expect(links.map((l) => l.textContent)).toEqual(["Ask an AI", "Build it now", "Import a file"]);
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/gym/import",
+      "/gym/build",
+      "/gym/import",
+    ]);
+    expect(screen.queryByLabelText("New routine")).not.toBeInTheDocument();
+    await userEvent.click(links[1] as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "Build a workout" })).toBeInTheDocument();
   });
 
   it("counts sessions waiting to sync, and lists a refused one with Discard", async () => {
@@ -127,6 +137,7 @@ describe("Gym home", () => {
       performed_on: "2026-09-30",
       started_at: null,
       ended_at: null,
+      rest_day: false,
       note: null,
       sets: [
         { id: "s1", exercise_id: "e1", exercise_name: "Bench press", kind: "reps", position: 0, reps: 8, weight: "60.00", duration_seconds: null, distance_m: null },

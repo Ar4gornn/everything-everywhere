@@ -282,6 +282,7 @@ _LINE_FIELDS = (
     "target_distance_m",
     "target_weight",
     "rest_seconds",
+    "rest_after_seconds",
     "note",
 )
 
@@ -309,6 +310,7 @@ def add_routine_line(
     target_distance_m: int | None = None,
     target_weight: Decimal | None = None,
     rest_seconds: int | None = None,
+    rest_after_seconds: int | None = None,
     note: str | None = None,
 ) -> tuple[RoutineExercise, Exercise]:
     get_routine(session, user_id, routine_id)
@@ -332,6 +334,7 @@ def add_routine_line(
         target_distance_m=target_distance_m,
         target_weight=target_weight,
         rest_seconds=rest_seconds,
+        rest_after_seconds=rest_after_seconds,
         note=note,
     )
     session.add(line)
@@ -472,6 +475,34 @@ def get_workout(session: Session, user_id: uuid.UUID, workout_id: uuid.UUID) -> 
     return workout
 
 
+def recent_workouts(
+    session: Session, user_id: uuid.UUID, *, limit: int
+) -> list[tuple[Workout, list[tuple[WorkoutSet, Exercise]]]]:
+    """The newest sessions with their sets, in two queries (feeds the AI prompt context)."""
+    workouts = list(
+        session.execute(
+            select(Workout)
+            .where(Workout.user_id == user_id)
+            .order_by(Workout.performed_on.desc(), Workout.created_at.desc(), Workout.id)
+            .limit(limit)
+        ).scalars()
+    )
+    grouped: dict[uuid.UUID, list[tuple[WorkoutSet, Exercise]]] = {w.id: [] for w in workouts}
+    if workouts:
+        rows = session.execute(
+            select(WorkoutSet, Exercise)
+            .join(
+                Exercise,
+                (Exercise.user_id == WorkoutSet.user_id) & (Exercise.id == WorkoutSet.exercise_id),
+            )
+            .where(WorkoutSet.user_id == user_id, WorkoutSet.workout_id.in_(list(grouped)))
+            .order_by(WorkoutSet.workout_id, WorkoutSet.position, WorkoutSet.id)
+        ).all()
+        for row, exercise in rows:
+            grouped[row.workout_id].append((row, exercise))
+    return [(w, grouped[w.id]) for w in workouts]
+
+
 def start_workout(
     session: Session,
     user_id: uuid.UUID,
@@ -560,6 +591,23 @@ def log_set(
     return row
 
 
+def _existing_rest_day(
+    session: Session, user_id: uuid.UUID, client_ref: uuid.UUID, performed_on: dt.date
+) -> Workout | None:
+    """The workout this ref already wrote, else that date's rest day (AD-59)."""
+    return session.execute(
+        select(Workout)
+        .where(
+            Workout.user_id == user_id,
+            (Workout.client_ref == client_ref)
+            | ((Workout.rest_day.is_(True)) & (Workout.performed_on == performed_on)),
+        )
+        .order_by((Workout.client_ref == client_ref).desc())
+        .limit(1)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
 def complete_workout(
     session: Session,
     user_id: uuid.UUID,
@@ -571,12 +619,21 @@ def complete_workout(
     ended_at: dt.datetime | None,
     note: str | None,
     sets: list[dict],
+    rest_day: bool = False,
 ) -> tuple[Workout, bool]:
     """A whole session in one write (AD-58). Returns ``(workout, created)``.
 
     Idempotent on ``(user_id, client_ref)``: a replay returns the row already written and
     writes nothing. The conflict target includes ``user_id``, so it never meets a row RLS hides.
     """
+    if rest_day:
+        if sets:
+            raise Invalid("a rest day cannot carry sets", "rest_day_has_sets")
+        routine_id = None
+        replay = _existing_rest_day(session, user_id, client_ref, performed_on)
+        if replay is not None:
+            return replay, False
+
     if routine_id is not None:
         # Unknown or foreign: stored null, not a 404 - the routine may be long gone.
         routine_id = session.execute(
@@ -593,10 +650,22 @@ def complete_workout(
             started_at=started_at,
             ended_at=ended_at,
             note=note,
+            rest_day=rest_day,
         )
-        .on_conflict_do_nothing(index_elements=[Workout.user_id, Workout.client_ref])
+        # Bare DO NOTHING for a rest day: either unique key (client_ref, or the one-per-day
+        # partial index) may be the one hit. Both keys lead with user_id, so neither can
+        # meet a row RLS hides.
+        .on_conflict_do_nothing(
+            **({} if rest_day else {"index_elements": [Workout.user_id, Workout.client_ref]})
+        )
         .returning(Workout.id)
     ).scalar_one_or_none()
+
+    if inserted is None and rest_day:
+        existing = _existing_rest_day(session, user_id, client_ref, performed_on)
+        if existing is None:  # pragma: no cover - a unique key says it must be there
+            raise Conflict("workout could not be created or found", "workout_unwritable")
+        return existing, False
 
     if inserted is None:
         existing = session.execute(
