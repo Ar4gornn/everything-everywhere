@@ -221,6 +221,40 @@ describe("transparent refresh", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it("does not sign the user out when the refresh cannot reach the server (Epic 42)", async () => {
+    storeTokens(tokens("one"));
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/api/auth/refresh")) throw new TypeError("Failed to fetch");
+        return respond({ detail: "expired" }, 401);
+      }),
+    );
+
+    await expect(api.listCategories()).rejects.toBeInstanceOf(TypeError);
+    expect(handler).not.toHaveBeenCalled();
+    expect(readToken()).toBe("access-one");
+    expect(readRefreshToken()).toBe("refresh-one");
+  });
+
+  it("does not sign the user out when the refresh answers with a 5xx", async () => {
+    storeTokens(tokens("one"));
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.includes("/api/auth/refresh") ? respond({ detail: "restarting" }, 502) : respond({ detail: "expired" }, 401),
+      ),
+    );
+
+    await expect(api.listCategories()).rejects.toMatchObject({ status: 502 });
+    expect(handler).not.toHaveBeenCalled();
+    expect(readRefreshToken()).toBe("refresh-one");
+  });
+
   it("refreshes for the profile endpoints too, rather than signing the session out", async () => {
     // The guard used to exclude every path under `/api/auth/`, which swept up `/api/auth/me`
     // and every `me/*` setting with it. The effect was the exact thing the refresh flow

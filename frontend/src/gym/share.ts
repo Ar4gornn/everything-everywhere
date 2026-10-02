@@ -12,5 +12,17 @@ export const SHARE_CACHE = "share-inbox";
 export const SHARE_KEY = "/__share/gym";
 
 export async function takeSharedWorkout(): Promise<string | null> {
-  throw new Error("TODO(F1): takeSharedWorkout");
+  try {
+    if (typeof caches === "undefined") return null;
+    const cache = await caches.open(SHARE_CACHE);
+    const hit = await cache.match(SHARE_KEY);
+    if (!hit) return null;
+    const text = await hit.text();
+    // Deleted in the same call: a reload of the import page must never import twice.
+    await cache.delete(SHARE_KEY);
+    return text === "" ? null : text;
+  } catch {
+    // No Cache API (insecure context, private window) or a storage failure: nothing shared.
+    return null;
+  }
 }

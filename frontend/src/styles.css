@@ -4212,3 +4212,615 @@ button.streak-checkin {
   margin-top: 16px;
   min-width: 0;
 }
+
+/* ------------------------------------------------------------- Gym (Epic 42) */
+
+/* Every selector is `.gym-…` or sits under `.gym`: class names are global here. Targets are
+   44px or more; nothing is wider than its card at 320px in French. */
+.gym {
+  min-width: 0;
+}
+
+.gym-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.gym-title-row h1,
+.gym .gym-session-title h1 {
+  font-size: 18px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gym-pill {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  border-radius: var(--pill);
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+
+.gym-refused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gym a.gym-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--primary);
+  border-radius: var(--pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.gym a.gym-link-button.quiet {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--link);
+  font-weight: 400;
+}
+
+.gym a.gym-link-button.quiet:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+/* Every button on the page is a 44px target. `:is()` takes its most specific argument, which
+   keeps this rule from sorting below the earlier `.x button` rules. */
+.gym :is(button, button.quiet) {
+  min-height: 44px;
+}
+
+.gym textarea.gym-textarea {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--field-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 12px;
+  color: var(--text);
+}
+
+/* --- home */
+
+.gym .gym-resume-line {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-start-empty {
+  width: 100%;
+  min-height: 52px;
+  font-size: var(--fs-h3);
+}
+
+.gym .gym-routine-cards,
+.gym .gym-routine-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-routine-start {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.gym .gym-routine-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-routine-meta {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.gym .gym-routine-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gym .gym-new-routine {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.gym .gym-import-row {
+  margin-top: 12px;
+}
+
+.gym .gym-history-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-history-exercise {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.gym .gym-exercise-edit {
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-chart {
+  margin-top: 12px;
+}
+
+.gym .gym-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.gym .gym-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 5.5em) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-small);
+}
+
+.gym .gym-bar-track {
+  display: block;
+  height: 10px;
+  border-radius: var(--pill);
+  background: var(--border);
+  overflow: hidden;
+}
+
+.gym .gym-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent-2);
+}
+
+/* --- measure fields and steppers */
+
+.gym .gym-measure {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gym .gym-measure-input {
+  width: 5.5em;
+  min-width: 0;
+  min-height: 44px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.gym .gym-measure-suffix {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.gym .gym-stepper {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gym .gym-stepper-label,
+.gym .gym-field-label {
+  font-size: var(--fs-small);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gym .gym-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gym .gym-step {
+  flex: 0 0 auto;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.gym .gym-fields {
+  display: grid;
+  gap: 12px;
+}
+
+/* --- the live session */
+
+.gym-session-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 8px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.gym .gym-session-title {
+  min-width: 0;
+  flex: 1 1 12em;
+}
+
+.gym .gym-session-meta {
+  margin: 2px 0 0;
+  font-size: var(--fs-small);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gym .gym-rest {
+  position: sticky;
+  top: 64px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+  color: var(--text);
+}
+
+.gym .gym-rest-clock {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.gym .gym-exercises {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.gym .gym-exercise {
+  padding: 0;
+}
+
+.gym .gym-exercise-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.gym .gym-exercise-head:hover:not(:disabled) {
+  background: var(--primary-soft);
+}
+
+.gym .gym-exercise-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-exercise.complete .gym-exercise-name {
+  color: var(--accent-ink);
+}
+
+.gym .gym-exercise-sub {
+  font-size: var(--fs-small);
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.gym .gym-exercise-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.gym .gym-exercise-info {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-sets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.gym .gym-set {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.gym .gym-set.editing {
+  display: grid;
+  gap: 10px;
+}
+
+.gym .gym-set-n {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+
+.gym .gym-set-value {
+  flex: 1 1 6em;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym .gym-next {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.gym .gym-next-title {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.gym .gym-done {
+  width: 100%;
+  min-height: 60px;
+  font-size: var(--fs-h3);
+}
+
+.gym .gym-timer,
+.gym .gym-timer-start {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gym .gym-timer-start {
+  justify-content: center;
+}
+
+.gym .gym-timer-clock {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.gym .gym-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0 0 12px;
+}
+
+.gym .gym-summary dt {
+  font-size: var(--fs-small);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gym .gym-summary dd {
+  margin: 0;
+  font-size: var(--fs-h3);
+  font-weight: 700;
+}
+
+.gym .gym-bests {
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+/* --- adding an exercise, the routine editor, the import */
+
+.gym .gym-adder,
+.gym .gym-routine-edit,
+.gym .gym-review {
+  display: grid;
+  gap: 12px;
+}
+
+.gym .gym-adder-note {
+  margin: 0;
+}
+
+.gym .gym-routine-actions {
+  margin-top: 12px;
+}
+
+.gym .gym-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.gym .gym-line {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gym .gym-line-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gym .gym-line-head > div:first-child {
+  min-width: 0;
+}
+
+.gym .gym-line-name {
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-line-kind {
+  margin-left: 8px;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.gym .gym-line-target {
+  margin: 2px 0 0;
+}
+
+.gym .gym-line-move {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.gym .gym-field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.gym .gym-line-fields,
+.gym .gym-review-numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gym .gym-line-note {
+  grid-column: 1 / -1;
+}
+
+.gym .gym-review-routine {
+  margin: 0 0 8px;
+}
+
+.gym .gym-match {
+  margin: -6px 0 0;
+}
+
+.gym .gym-field-error {
+  margin: 4px 0 0;
+  font-size: var(--fs-small);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--spend-ink);
+}
+
+.gym .gym-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gym .gym-review-actions button[type="submit"] {
+  flex: 1 1 8em;
+}
+
+.gym .gym-import-summary ul {
+  margin: 4px 0 12px;
+  padding-left: 18px;
+}
+
+.gym .gym-prompt {
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-prompt-text {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: var(--fs-small);
+  color: var(--text);
+}
+
+.gym .gym-file input[type="file"] {
+  max-width: 100%;
+}
+
+@media (max-width: 380px) {
+  .gym .gym-line-fields,
+  .gym .gym-review-numbers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

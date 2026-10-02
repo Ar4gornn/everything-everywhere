@@ -102,6 +102,7 @@ export type SectionId =
 export type CardId =
   | "stats"
   | "streaks"
+  | "gym"
   | "pending"
   | "leftover"
   | "reading"

@@ -45,6 +45,7 @@ MODULES: tuple[str, ...] = ("habits", "books", "mood", "stock", "gym", "recipes"
 CARDS: tuple[str, ...] = (
     "stats",
     "streaks",
+    "gym",
     "pending",
     "leftover",
     "reading",

@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import {
+  ApiError,
   api,
   clearTokens,
   readRefreshToken,
@@ -19,12 +20,48 @@ import {
 } from "../api/client";
 import type { Currency, Language, PreferencesPatch, User } from "../api/types";
 import { PreferenceSaver, preferencesOf } from "../layout/preferences";
+import { clearGymStore } from "../gym/store";
 import { clearAllDrafts } from "../notes/drafts";
 import { deviceZone } from "../push";
+import { PREFIX } from "../storage";
+
+/**
+ * The last user the server sent, kept so the installed app can open with no network (Epic 42,
+ * AD-58). Without it an offline launch has a token and no idea whose it is. It holds what the
+ * profile already holds (email, preferences, units) and goes wherever the tokens go: removed
+ * on sign-out and when the server says the session is over.
+ */
+const SNAPSHOT_KEY = `${PREFIX}user.snapshot`;
+
+function readSnapshot(): User | null {
+  try {
+    const raw = window.localStorage.getItem(SNAPSHOT_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === "object" && typeof (parsed as User).id === "string"
+      ? (parsed as User)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSnapshot(user: User | null): void {
+  try {
+    if (user === null) window.localStorage.removeItem(SNAPSHOT_KEY);
+    else window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(user));
+  } catch {
+    /* Full or blocked: the next offline launch signs in again, as it always did. */
+  }
+}
 
 interface AuthState {
   user: User | null;
   loading: boolean;
+  /**
+   * True while the profile on screen is the stored snapshot because the server could not be
+   * reached at launch (Epic 42). Cleared as soon as the server answers.
+   */
+  offline: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   register: (
     email: string,
@@ -48,6 +85,9 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
+  // Who is signed in, for the places that must not wait for a render to know (sign-out).
+  const userId = useRef<string | null>(null);
   // One saver per account. A save still in flight when its owner signs out, or another
   // account signs in, lands on nobody: `onChange` only touches the user it was made for.
   const saver = useRef<{ owner: string; saver: PreferenceSaver } | null>(null);
@@ -59,10 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const zoneFilled = useRef<Set<string>>(new Set());
 
   /** Every user that comes from the server goes through here, so the saver hears it too. */
-  const adopt = useCallback((found: User) => {
+  const adopt = useCallback((found: User, fromSnapshot = false) => {
     setUser(found);
+    setOffline(fromSnapshot);
+    userId.current = found.id;
+    // The snapshot is only ever what the server last said, never itself.
+    if (!fromSnapshot) writeSnapshot(found);
     const zone = deviceZone();
-    if (found.timezone === null && zone && !zoneFilled.current.has(found.id)) {
+    if (!fromSnapshot && found.timezone === null && zone && !zoneFilled.current.has(found.id)) {
       zoneFilled.current.add(found.id);
       const owner = found.id;
       void api
@@ -102,11 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshToken = readRefreshToken();
     if (refreshToken) void api.logout(refreshToken).catch(() => undefined);
     clearTokens();
+    writeSnapshot(null);
+    // The gym (Epic 42): cache, session in progress and unsent sessions go with the tokens,
+    // for the reason notes do. Only an explicit sign-out — an expired session keeps them,
+    // so signing back in sends them. The controls ask first when something would be lost
+    // (`useSignOut`).
+    if (userId.current) clearGymStore(userId.current);
+    userId.current = null;
     // Notes not yet synced are removed with the session (Epic 32): a note left in a browser
     // after its owner signed out is the leak signing out is for. See `notes/drafts.ts`.
     clearAllDrafts();
     saver.current = null;
     setUser(null);
+    setOffline(false);
   }, []);
 
   // AD-16: the 401 path is registered once. Expiry is the only way a session ends in v1,
@@ -114,7 +166,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       saver.current = null;
+      writeSnapshot(null);
+      userId.current = null;
       setUser(null);
+      setOffline(false);
     });
     return () => setUnauthorizedHandler(null);
   }, []);
@@ -130,8 +185,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((found) => {
         if (!cancelled) adopt(found);
       })
-      .catch(() => {
-        if (!cancelled) clearTokens();
+      .catch((caught: unknown) => {
+        if (cancelled) return;
+        // Only the server saying the session is over signs the person out. No network, a
+        // 5xx, a proxy restarting: the tokens are as good as they were, and the app opens
+        // on the last profile it saw (Epic 42). With no snapshot there is nobody to open it
+        // as, so it behaves as it always did.
+        const ended = caught instanceof ApiError && caught.status === 401;
+        const snapshot = ended ? null : readSnapshot();
+        if (snapshot && readToken()) adopt(snapshot, true);
+        else {
+          clearTokens();
+          writeSnapshot(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -140,6 +206,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [adopt]);
+
+  // Back online after an offline launch: ask the server who we are, once, quietly. A failure
+  // leaves the snapshot on screen and the next `online` tries again.
+  useEffect(() => {
+    if (!offline) return;
+    const retry = () => void api.me().then((found) => adopt(found), () => undefined);
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [offline, adopt]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     storeTokens(await api.login(email, password));
@@ -170,8 +245,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, signIn, register, signOut, refreshUser, updatePreferences }),
-    [user, loading, signIn, register, signOut, refreshUser, updatePreferences],
+    () => ({
+      user,
+      loading,
+      offline,
+      signIn,
+      register,
+      signOut,
+      refreshUser,
+      updatePreferences,
+    }),
+    [user, loading, offline, signIn, register, signOut, refreshUser, updatePreferences],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

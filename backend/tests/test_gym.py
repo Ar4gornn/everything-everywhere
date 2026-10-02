@@ -123,11 +123,13 @@ def test_a_routine_holds_exercises_in_order_with_targets(client, user_a):
     assert detail["lines"][1]["target_reps"] is None
 
 
-def test_the_same_exercise_twice_in_one_routine_is_refused(client, user_a):
+def test_the_same_exercise_twice_in_one_routine_is_allowed(client, user_a):
+    # Epic 42: a warm-up and a working block may name the same movement.
     routine = _routine(client, user_a)
     assert _line(client, user_a, routine["id"], exercise_name="Bench press").status_code == 201
-    # "Bench, then bench again" is sets, not two lines.
-    assert _line(client, user_a, routine["id"], exercise_name="Bench press").status_code == 409
+    assert _line(client, user_a, routine["id"], exercise_name="Bench press").status_code == 201
+    detail = client.get(f"/api/gym/routines/{routine['id']}", headers=user_a["headers"]).json()
+    assert [line["position"] for line in detail["lines"]] == [0, 1]
 
 
 def test_both_or_neither_exercise_field_is_rejected(client, user_a):

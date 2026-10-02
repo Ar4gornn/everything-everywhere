@@ -1,0 +1,286 @@
+import { describe, expect, it } from "vitest";
+
+import type { RoutineDetail, RoutineLine } from "../api/types";
+import {
+  addExercise,
+  currentExercise,
+  logSet,
+  nextSetDraft,
+  progress,
+  removeExercise,
+  removeSet,
+  skipRest,
+  startSession,
+  toCompleteBody,
+  updateSet,
+  type ActiveSession,
+  type SetDraft,
+} from "./session";
+
+/** Deterministic ids: id-1, id-2, … */
+function ids() {
+  let n = 0;
+  return () => `id-${++n}`;
+}
+
+const NOW = new Date("2031-03-04T10:00:00Z");
+const later = (seconds: number) => new Date(NOW.getTime() + seconds * 1000);
+
+function line(over: Partial<RoutineLine> & Pick<RoutineLine, "id" | "exercise_name" | "kind" | "position">): RoutineLine {
+  return {
+    exercise_id: `ex-${over.id}`,
+    video_url: null,
+    target_sets: null,
+    target_reps: null,
+    target_seconds: null,
+    target_distance_m: null,
+    target_weight: null,
+    rest_seconds: null,
+    note: null,
+    ...over,
+  };
+}
+
+const ROUTINE: RoutineDetail = {
+  id: "r1",
+  name: "Push",
+  note: null,
+  lines: [
+    line({ id: "b", exercise_name: "Plank", kind: "duration", position: 2, target_sets: 2, target_seconds: 45 }),
+    line({ id: "a", exercise_name: "Bench", kind: "reps", position: 1, target_sets: 2, target_reps: 8, target_weight: "60.00" }),
+    line({ id: "c", exercise_name: "Row", kind: "distance", position: 3, target_distance_m: 2000, rest_seconds: 0 }),
+  ],
+};
+
+const reps = (n: number, weight: string | null = null): SetDraft => ({
+  reps: n,
+  weight,
+  duration_seconds: null,
+  distance_m: null,
+});
+
+function started(): ActiveSession {
+  return startSession(ROUTINE, NOW, ids());
+}
+
+describe("starting", () => {
+  it("copies the routine in plan order with its targets", () => {
+    const session = started();
+    expect(session.routine_id).toBe("r1");
+    expect(session.routine_name).toBe("Push");
+    expect(session.exercises.map((e) => e.name)).toEqual(["Bench", "Plank", "Row"]);
+    expect(session.exercises[0]).toMatchObject({ exercise_id: "ex-a", kind: "reps", target_reps: 8, target_weight: "60.00" });
+    expect(session.sets).toEqual([]);
+    expect(session.rest_until).toBeNull();
+    expect(new Set([session.client_ref, ...session.exercises.map((e) => e.key)]).size).toBe(4);
+  });
+
+  it("starts empty with no routine", () => {
+    const session = startSession(null, NOW, ids());
+    expect(session).toMatchObject({ routine_id: null, routine_name: null, exercises: [], started_at: NOW.toISOString() });
+  });
+
+  it("counts the session for the local day it started", () => {
+    const evening = new Date(2031, 2, 4, 23, 30); // local time
+    expect(startSession(null, evening, ids()).performed_on).toBe("2031-03-04");
+  });
+});
+
+describe("prefilling the next set", () => {
+  it("uses the targets first", () => {
+    const session = started();
+    const [bench, plank, row] = session.exercises;
+    expect(nextSetDraft(session, bench!.key)).toEqual({ reps: 8, weight: "60.00", duration_seconds: null, distance_m: null });
+    expect(nextSetDraft(session, plank!.key)).toMatchObject({ reps: null, duration_seconds: 45 });
+    expect(nextSetDraft(session, row!.key)).toMatchObject({ distance_m: 2000 });
+  });
+
+  it("then the previous set of the same exercise, not another exercise's", () => {
+    let session = started();
+    const [bench, plank] = session.exercises;
+    const newId = ids();
+    session = logSet(session, bench!.key, reps(6, "62.50"), NOW, newId);
+    expect(nextSetDraft(session, bench!.key)).toMatchObject({ reps: 6, weight: "62.50" });
+    expect(nextSetDraft(session, plank!.key)).toMatchObject({ duration_seconds: 45, reps: null });
+  });
+
+  it("is empty for an unknown exercise or one with no target", () => {
+    const session = addExercise(started(), { exercise_id: null, name: "Curl", kind: "reps" }, ids());
+    const curl = session.exercises[3]!;
+    expect(nextSetDraft(session, curl.key)).toEqual({ reps: null, weight: null, duration_seconds: null, distance_m: null });
+    expect(nextSetDraft(session, "nope")).toEqual({ reps: null, weight: null, duration_seconds: null, distance_m: null });
+  });
+});
+
+describe("logging sets", () => {
+  it("refuses a set without the measure its kind needs", () => {
+    const session = started();
+    const [bench, plank, row] = session.exercises;
+    const empty: SetDraft = { reps: null, weight: "60.00", duration_seconds: null, distance_m: null };
+    expect(() => logSet(session, bench!.key, empty, NOW, ids())).toThrow("set_missing_measure");
+    // reps on a duration exercise is not its measure
+    expect(() => logSet(session, plank!.key, reps(8), NOW, ids())).toThrow("set_missing_measure");
+    expect(() => logSet(session, row!.key, reps(8), NOW, ids())).toThrow("set_missing_measure");
+    expect(() => logSet(session, bench!.key, reps(0), NOW, ids())).toThrow("set_missing_measure");
+    expect(() => logSet(session, "nope", reps(5), NOW, ids())).toThrow();
+  });
+
+  it("keeps only the kind's measure and the weight", () => {
+    const session = started();
+    const plank = session.exercises[1]!;
+    const messy: SetDraft = { reps: 9, weight: "5.00", duration_seconds: 40, distance_m: 100 };
+    const after = logSet(session, plank.key, messy, NOW, ids());
+    expect(after.sets[0]).toMatchObject({ reps: null, weight: "5.00", duration_seconds: 40, distance_m: null, done_at: NOW.toISOString() });
+  });
+
+  it("starts the rest: the line's, else 90 s for reps and 60 s otherwise", () => {
+    const session = started();
+    const [bench, plank, row] = session.exercises;
+    expect(logSet(session, bench!.key, reps(8), NOW, ids()).rest_until).toBe(later(90).toISOString());
+    expect(
+      logSet(session, plank!.key, { reps: null, weight: null, duration_seconds: 45, distance_m: null }, NOW, ids()).rest_until,
+    ).toBe(later(60).toISOString());
+    // the Row line says 0: no rest at all
+    expect(
+      logSet(session, row!.key, { reps: null, weight: null, duration_seconds: null, distance_m: 500 }, NOW, ids()).rest_until,
+    ).toBeNull();
+  });
+
+  it("does not change the session it was given", () => {
+    const session = started();
+    const frozen = JSON.stringify(session);
+    logSet(session, session.exercises[0]!.key, reps(8), NOW, ids());
+    expect(JSON.stringify(session)).toBe(frozen);
+  });
+
+  it("skips rest", () => {
+    const session = started();
+    const after = logSet(session, session.exercises[0]!.key, reps(8), NOW, ids());
+    expect(skipRest({ ...after, rest_until: later(90).toISOString() }).rest_until).toBeNull();
+  });
+});
+
+describe("editing", () => {
+  function withSet() {
+    const session = started();
+    const bench = session.exercises[0]!;
+    const next = logSet(session, bench.key, reps(8, "60.00"), NOW, ids());
+    return { session: next, setKey: next.sets[0]!.key, bench };
+  }
+
+  it("updates a set in place, keeping its place and time", () => {
+    const { session, setKey } = withSet();
+    const after = updateSet(session, setKey, reps(10, "65.00"));
+    expect(after.sets[0]).toMatchObject({ key: setKey, reps: 10, weight: "65.00", done_at: NOW.toISOString() });
+  });
+
+  it("refuses an update that empties the measure", () => {
+    const { session, setKey } = withSet();
+    expect(() => updateSet(session, setKey, reps(0))).toThrow("set_missing_measure");
+  });
+
+  it("ignores an update of a set that is gone", () => {
+    const { session } = withSet();
+    expect(updateSet(session, "ghost", reps(5))).toBe(session);
+  });
+
+  it("removes a set", () => {
+    const { session, setKey } = withSet();
+    expect(removeSet(session, setKey).sets).toEqual([]);
+  });
+
+  it("removing an exercise removes its sets and no one else's", () => {
+    let { session, bench } = withSet();
+    const plank = session.exercises[1]!;
+    session = logSet(session, plank.key, { reps: null, weight: null, duration_seconds: 30, distance_m: null }, NOW, ids());
+    const after = removeExercise(session, bench.key);
+    expect(after.exercises.map((e) => e.name)).toEqual(["Plank", "Row"]);
+    expect(after.sets).toHaveLength(1);
+    expect(after.sets[0]?.exercise).toBe(plank.key);
+  });
+
+  it("adds an exercise coined during the session", () => {
+    const session = addExercise(started(), { exercise_id: null, name: "Curl", kind: "reps" }, ids());
+    expect(session.exercises[3]).toMatchObject({ name: "Curl", exercise_id: null, target_sets: null, video_url: null });
+  });
+});
+
+describe("where the person is", () => {
+  it("points at the first exercise with sets left, then the last one touched", () => {
+    let session = started();
+    const [bench, plank, row] = session.exercises;
+    const newId = ids();
+    expect(currentExercise(session)).toBe(bench!.key);
+    session = logSet(session, bench!.key, reps(8), NOW, newId);
+    expect(currentExercise(session)).toBe(bench!.key); // 1 of 2
+    session = logSet(session, bench!.key, reps(8), NOW, newId);
+    expect(currentExercise(session)).toBe(plank!.key);
+    const timed: SetDraft = { reps: null, weight: null, duration_seconds: 45, distance_m: null };
+    session = logSet(session, plank!.key, timed, NOW, newId);
+    session = logSet(session, plank!.key, timed, NOW, newId);
+    // Row has no target: one set finishes it
+    expect(currentExercise(session)).toBe(row!.key);
+    session = logSet(session, row!.key, { reps: null, weight: null, duration_seconds: null, distance_m: 2000 }, NOW, newId);
+    expect(currentExercise(session)).toBe(row!.key); // all done: the last touched
+  });
+
+  it("is null with no exercises", () => {
+    expect(currentExercise(startSession(null, NOW, ids()))).toBeNull();
+  });
+
+  it("counts progress, with untargeted exercises counting what they have done", () => {
+    let session = started();
+    const [bench, , row] = session.exercises;
+    expect(progress(session)).toEqual({ exercisesDone: 0, exercisesTotal: 3, setsDone: 0, setsPlanned: 4 });
+    const newId = ids();
+    session = logSet(session, bench!.key, reps(8), NOW, newId);
+    session = logSet(session, bench!.key, reps(8), NOW, newId);
+    session = logSet(session, row!.key, { reps: null, weight: null, duration_seconds: null, distance_m: 2000 }, NOW, newId);
+    session = logSet(session, row!.key, { reps: null, weight: null, duration_seconds: null, distance_m: 2000 }, NOW, newId);
+    expect(progress(session)).toEqual({ exercisesDone: 2, exercisesTotal: 3, setsDone: 4, setsPlanned: 2 + 2 + 2 });
+  });
+});
+
+describe("finishing", () => {
+  it("builds the body: ids for known exercises, name and kind for coined ones, in order", () => {
+    let session = started();
+    const newId = ids();
+    session = addExercise(session, { exercise_id: null, name: "Curl", kind: "reps" }, newId);
+    const [bench, plank, , curl] = session.exercises;
+    session = logSet(session, bench!.key, reps(8, "60.00"), NOW, newId);
+    session = logSet(session, curl!.key, reps(12), NOW, newId);
+    session = logSet(session, plank!.key, { reps: null, weight: null, duration_seconds: 45, distance_m: null }, NOW, newId);
+    session = { ...session, note: "  felt good " };
+    const body = toCompleteBody(session, later(3600));
+    expect(body).toEqual({
+      client_ref: session.client_ref,
+      routine_id: "r1",
+      performed_on: session.performed_on,
+      started_at: NOW.toISOString(),
+      ended_at: later(3600).toISOString(),
+      note: "felt good",
+      sets: [
+        { exercise_id: "ex-a", reps: 8, weight: "60.00" },
+        { exercise_name: "Curl", kind: "reps", reps: 12 },
+        { exercise_id: "ex-b", duration_seconds: 45 },
+      ],
+    });
+  });
+
+  it("omits a missing routine and an empty note, and may have no sets", () => {
+    const body = toCompleteBody(startSession(null, NOW, ids()), later(60));
+    expect(body.routine_id).toBeUndefined();
+    expect(body.note).toBeUndefined();
+    expect(body.sets).toEqual([]);
+  });
+
+  it("never ends before it started", () => {
+    const body = toCompleteBody(started(), later(-600));
+    expect(body.ended_at).toBe(NOW.toISOString());
+  });
+
+  it("keeps the same client_ref however often it is built", () => {
+    const session = started();
+    expect(toCompleteBody(session, later(1)).client_ref).toBe(toCompleteBody(session, later(99)).client_ref);
+  });
+});

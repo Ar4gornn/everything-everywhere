@@ -20,7 +20,7 @@ import { preferencesOf, shownStreaks } from "./preferences";
  * |         |                    | calendar mood layer                                    |
  * | stock   | /inventory         | Stock tab, dashboard Restock, calendar stock layer,    |
  * |         |                    | push digest                                            |
- * | gym     | /gym               | Gym tab, calendar gym layer                            |
+ * | gym     | /gym, /gym/session, /gym/import, /gym/routines/:id | Gym tab, dashboard Gym card, calendar gym layer |
  * | recipes | /recipes, /recipes/:id | Recipes top link, calendar meals layer             |
  * | notes   | /notes, /notes/:id | dashboard Notes link, floating note button             |
  */
@@ -50,6 +50,7 @@ export const SECTION_LABEL: Record<SectionId, MessageKey> = {
 export const CARD_LABEL: Record<CardId, MessageKey> = {
   stats: "card.stats",
   streaks: "streaks.title",
+  gym: "gymCore.cardName",
   pending: "dash.toConfirm",
   leftover: "leftover.title",
   reading: "dash.readingNow",
@@ -66,6 +67,7 @@ export const CARD_MODULE: Partial<Record<CardId, ModuleId>> = {
   reading: "books",
   quote: "books",
   restock: "stock",
+  gym: "gym",
 };
 
 /** The module that hides a section, if any. Habits is special-cased: Books can keep it. */

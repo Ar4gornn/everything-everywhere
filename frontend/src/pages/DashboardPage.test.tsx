@@ -622,7 +622,7 @@ describe("the default card order", () => {
     return found;
   }
 
-  it("is totals, streak, to confirm, reading, quote, restock, budgets, savings, trends, categories", async () => {
+  it("is totals, streak, gym, to confirm, reading, quote, restock, budgets, savings, trends, categories", async () => {
     mockApi({
       pending: [{ id: "o1", category_name: "Rent", due_on: "2026-09-01" }],
       reading: [
@@ -651,6 +651,7 @@ describe("the default card order", () => {
     expect(cardOrder()).toEqual([
       "stats",
       "Streak",
+      "Gym",
       "To confirm",
       "Reading now",
       "A line from the shelf",
@@ -727,6 +728,7 @@ describe("cards chosen by the account (Epic 33, story 33.5)", () => {
       "Savings progress",
       "stats",
       "Streak",
+      "Gym",
       "Budget vs actual",
       "Last 6 months",
     ]);

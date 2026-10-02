@@ -263,7 +263,15 @@ describe("the module table is complete", () => {
       "pages/DashboardPage.tsx",
       "pages/InventoryPage.tsx",
     ],
-    gym: ["pages/CalendarPage.tsx", "pages/GymPage.tsx"],
+    // store.ts sends sessions finished offline, whatever the switch says: syncing is not UI.
+    gym: [
+      "gym/store.ts",
+      "pages/CalendarPage.tsx",
+      "pages/gym/GymHistory.tsx",
+      "pages/gym/GymHome.tsx",
+      "pages/gym/GymImport.tsx",
+      "pages/gym/RoutineEditor.tsx",
+    ],
     recipes: ["pages/CalendarPage.tsx", "pages/RecipePage.tsx", "pages/RecipesPage.tsx"],
     // drafts.ts sends notes already written, whatever the switch says: syncing is not UI.
     notes: ["notes/drafts.ts", "pages/NotePage.tsx", "pages/NotesPage.tsx"],

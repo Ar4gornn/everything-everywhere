@@ -9,6 +9,7 @@ import { TutorialProvider } from "./components/Tutorial/useTutorial";
 import { type MessageKey, useT } from "./i18n";
 import { SECTION_LABEL, useModules } from "./layout/modules";
 import { usePreferences } from "./layout/useLayout";
+import { flushOutbox } from "./gym/store";
 import { flushDrafts } from "./notes/drafts";
 import { SignInPage } from "./pages/SignInPage";
 import { useTheme } from "./theme";
@@ -204,6 +205,37 @@ export function App() {
     return () => window.removeEventListener("online", flush);
   }, [userId]);
 
+  // Gym sessions finished with no network are sent when it comes back and when the app opens,
+  // from whichever page is showing (Epic 42, AD-58); the gym page and dashboard card also
+  // flush on mount, and the store makes concurrent flushes one.
+  const gymOn = modules.gym;
+  useEffect(() => {
+    if (!userId || !gymOn) return;
+    const flush = () => void flushOutbox(userId).catch(() => undefined);
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [userId, gymOn]);
+
+  // The pages the gym needs at the gym are lazy chunks, which the service worker caches only
+  // once fetched — and the first fetch must not be at a gym with no signal. So once signed
+  // in, in the built app only (the dev server has no worker), fetch the Dashboard and Gym
+  // chunks when the browser is idle. The session, import and routine views are routes inside
+  // the Gym chunk, so this covers all of them.
+  useEffect(() => {
+    if (!userId || !import.meta.env.PROD) return;
+    const warm = () => {
+      void import("./pages/DashboardPage").catch(() => undefined);
+      if (gymOn) void import("./pages/GymPage").catch(() => undefined);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm);
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(warm, 2000);
+    return () => window.clearTimeout(timer);
+  }, [userId, gymOn]);
+
   // Without this the sign-in page flashes on every reload before /me answers.
   if (loading) return <main className="shell" />;
   if (!user) return <SignInPage />;
@@ -271,7 +303,7 @@ export function App() {
           <Route path="/projections" element={<ProjectionsPage />} />
           <Route path="/habits" element={<ModuleGate module="habits"><HabitsPage /></ModuleGate>} />
           <Route path="/books" element={<ModuleGate module="books"><BooksPage /></ModuleGate>} />
-          <Route path="/gym" element={<ModuleGate module="gym"><GymPage /></ModuleGate>} />
+          <Route path="/gym/*" element={<ModuleGate module="gym"><GymPage /></ModuleGate>} />
           <Route path="/inventory" element={<ModuleGate module="stock"><InventoryPage /></ModuleGate>} />
           <Route path="/recipes" element={<ModuleGate module="recipes"><RecipesPage /></ModuleGate>} />
           <Route path="/recipes/:recipeId" element={<ModuleGate module="recipes"><RecipePage /></ModuleGate>} />

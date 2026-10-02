@@ -47,6 +47,8 @@ class Exercise(TimestampedMixin, Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     video_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # What a set of this exercise measures (Epic 42): reps, duration (seconds), distance (metres).
+    kind: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'reps'"))
 
 
 class Routine(TimestampedMixin, Base):
@@ -75,9 +77,6 @@ class RoutineExercise(Base):
         CheckConstraint(
             "target_reps IS NULL OR target_reps > 0", name="routine_exercises_reps_positive"
         ),
-        UniqueConstraint(
-            "routine_id", "exercise_id", name="routine_exercises_routine_exercise_key"
-        ),
         ForeignKeyConstraint(
             ["user_id", "routine_id"],
             ["routines.user_id", "routines.id"],
@@ -103,6 +102,11 @@ class RoutineExercise(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     target_sets: Mapped[int | None] = mapped_column(Integer, nullable=True)
     target_reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_weight: Mapped[decimal.Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
+    rest_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class Workout(Base):
@@ -128,6 +132,10 @@ class Workout(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Coined by the phone (AD-58); UNIQUE (user_id, client_ref) lives in migration 0035.
+    client_ref: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
 
 
 class WorkoutSet(Base):
@@ -163,7 +171,9 @@ class WorkoutSet(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     # Nullable for a bodyweight set: 0 would be a weight, and "8 pull-ups" has none.
     weight: Mapped[decimal.Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
-    reps: Mapped[int] = mapped_column(Integer, nullable=False)
+    reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

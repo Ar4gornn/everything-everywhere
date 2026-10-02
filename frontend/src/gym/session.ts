@@ -1,4 +1,5 @@
-import type { ExerciseKind, RoutineDetail, WorkoutComplete } from "../api/types";
+import type { ExerciseKind, RoutineDetail, SetInput, WorkoutComplete } from "../api/types";
+import { todayIso } from "../months";
 
 /**
  * The live session, as a pure model (Epic 42, AD-58).
@@ -64,39 +65,119 @@ export interface SetDraft {
   distance_m: number | null;
 }
 
+
+/** Seconds of rest when the line names none: a set of reps needs more than a timed one. */
+const DEFAULT_REST: Record<ExerciseKind, number> = { reps: 90, duration: 60, distance: 60 };
+
+const EMPTY_DRAFT: SetDraft = { reps: null, weight: null, duration_seconds: null, distance_m: null };
+
 export function startSession(
   routine: RoutineDetail | null,
   now: Date,
   newId: () => string,
 ): ActiveSession {
-  void routine;
-  void now;
-  void newId;
-  throw new Error("TODO(F1): startSession");
+  const lines = routine ? [...routine.lines].sort((a, b) => a.position - b.position) : [];
+  return {
+    client_ref: newId(),
+    routine_id: routine?.id ?? null,
+    routine_name: routine?.name ?? null,
+    // The local day the session began, so a workout that crosses midnight stays on the day
+    // it was started (and the same helper the rest of the app uses for "today").
+    performed_on: todayIso(now),
+    started_at: now.toISOString(),
+    note: "",
+    exercises: lines.map((line) => ({
+      key: newId(),
+      exercise_id: line.exercise_id,
+      name: line.exercise_name,
+      kind: line.kind,
+      video_url: line.video_url,
+      target_sets: line.target_sets,
+      target_reps: line.target_reps,
+      target_seconds: line.target_seconds,
+      target_distance_m: line.target_distance_m,
+      target_weight: line.target_weight,
+      rest_seconds: line.rest_seconds,
+      note: line.note,
+    })),
+    sets: [],
+    rest_until: null,
+  };
 }
 
 export function addExercise(
   session: ActiveSession,
-  exercise: { exercise_id: string | null; name: string; kind: ExerciseKind; video_url?: string | null },
+  exercise: {
+    exercise_id: string | null;
+    name: string;
+    kind: ExerciseKind;
+    video_url?: string | null;
+  },
   newId: () => string,
 ): ActiveSession {
-  void session;
-  void exercise;
-  void newId;
-  throw new Error("TODO(F1): addExercise");
+  const added: SessionExercise = {
+    key: newId(),
+    exercise_id: exercise.exercise_id,
+    name: exercise.name,
+    kind: exercise.kind,
+    video_url: exercise.video_url ?? null,
+    target_sets: null,
+    target_reps: null,
+    target_seconds: null,
+    target_distance_m: null,
+    target_weight: null,
+    rest_seconds: null,
+    note: null,
+  };
+  return { ...session, exercises: [...session.exercises, added] };
 }
 
 export function removeExercise(session: ActiveSession, key: string): ActiveSession {
-  void session;
-  void key;
-  throw new Error("TODO(F1): removeExercise");
+  return {
+    ...session,
+    exercises: session.exercises.filter((exercise) => exercise.key !== key),
+    sets: session.sets.filter((set) => set.exercise !== key),
+  };
+}
+
+const exerciseOf = (session: ActiveSession, key: string) =>
+  session.exercises.find((exercise) => exercise.key === key);
+
+/** Only the measure the kind is counted in is kept; weight rides along for every kind. */
+function shaped(kind: ExerciseKind, draft: SetDraft): SetDraft {
+  return {
+    reps: kind === "reps" ? draft.reps : null,
+    weight: draft.weight,
+    duration_seconds: kind === "duration" ? draft.duration_seconds : null,
+    distance_m: kind === "distance" ? draft.distance_m : null,
+  };
+}
+
+function hasMeasure(kind: ExerciseKind, draft: SetDraft): boolean {
+  const value =
+    kind === "reps" ? draft.reps : kind === "duration" ? draft.duration_seconds : draft.distance_m;
+  return value !== null && Number.isFinite(value) && value > 0;
 }
 
 /** Prefill: the previous set of this exercise in the session, else its targets. */
 export function nextSetDraft(session: ActiveSession, exerciseKey: string): SetDraft {
-  void session;
-  void exerciseKey;
-  throw new Error("TODO(F1): nextSetDraft");
+  const exercise = exerciseOf(session, exerciseKey);
+  if (!exercise) return { ...EMPTY_DRAFT };
+  const previous = [...session.sets].reverse().find((set) => set.exercise === exerciseKey);
+  if (previous) {
+    return shaped(exercise.kind, {
+      reps: previous.reps,
+      weight: previous.weight,
+      duration_seconds: previous.duration_seconds,
+      distance_m: previous.distance_m,
+    });
+  }
+  return shaped(exercise.kind, {
+    reps: exercise.target_reps,
+    weight: exercise.target_weight,
+    duration_seconds: exercise.target_seconds,
+    distance_m: exercise.target_distance_m,
+  });
 }
 
 /** Throws when the draft lacks the measure the kind requires. Starts the rest timer. */
@@ -107,36 +188,55 @@ export function logSet(
   now: Date,
   newId: () => string,
 ): ActiveSession {
-  void session;
-  void exerciseKey;
-  void draft;
-  void now;
-  void newId;
-  throw new Error("TODO(F1): logSet");
+  const exercise = exerciseOf(session, exerciseKey);
+  if (!exercise) throw new Error("unknown_exercise");
+  if (!hasMeasure(exercise.kind, draft)) throw new Error("set_missing_measure");
+  const rest = exercise.rest_seconds ?? DEFAULT_REST[exercise.kind];
+  return {
+    ...session,
+    sets: [
+      ...session.sets,
+      { key: newId(), exercise: exerciseKey, ...shaped(exercise.kind, draft), done_at: now.toISOString() },
+    ],
+    rest_until: rest > 0 ? new Date(now.getTime() + rest * 1000).toISOString() : null,
+  };
 }
 
 export function updateSet(session: ActiveSession, setKey: string, draft: SetDraft): ActiveSession {
-  void session;
-  void setKey;
-  void draft;
-  throw new Error("TODO(F1): updateSet");
+  const target = session.sets.find((set) => set.key === setKey);
+  const exercise = target ? exerciseOf(session, target.exercise) : undefined;
+  if (!target || !exercise) return session;
+  if (!hasMeasure(exercise.kind, draft)) throw new Error("set_missing_measure");
+  return {
+    ...session,
+    sets: session.sets.map((set) =>
+      set.key === setKey ? { ...set, ...shaped(exercise.kind, draft) } : set,
+    ),
+  };
 }
 
 export function removeSet(session: ActiveSession, setKey: string): ActiveSession {
-  void session;
-  void setKey;
-  throw new Error("TODO(F1): removeSet");
+  return { ...session, sets: session.sets.filter((set) => set.key !== setKey) };
 }
 
 export function skipRest(session: ActiveSession): ActiveSession {
-  void session;
-  throw new Error("TODO(F1): skipRest");
+  return { ...session, rest_until: null };
 }
+
+const setsOf = (session: ActiveSession, key: string) =>
+  session.sets.filter((set) => set.exercise === key).length;
+
+/** An exercise with a target is done at that many sets; one without, at its first. */
+const isDone = (session: ActiveSession, exercise: SessionExercise) =>
+  setsOf(session, exercise.key) >= (exercise.target_sets ?? 1);
 
 /** The first exercise whose target sets are not all done, else the last one touched. */
 export function currentExercise(session: ActiveSession): string | null {
-  void session;
-  throw new Error("TODO(F1): currentExercise");
+  const open = session.exercises.find((exercise) => !isDone(session, exercise));
+  if (open) return open.key;
+  const lastSet = session.sets[session.sets.length - 1];
+  if (lastSet && exerciseOf(session, lastSet.exercise)) return lastSet.exercise;
+  return session.exercises[session.exercises.length - 1]?.key ?? null;
 }
 
 export interface Progress {
@@ -148,13 +248,50 @@ export interface Progress {
 }
 
 export function progress(session: ActiveSession): Progress {
-  void session;
-  throw new Error("TODO(F1): progress");
+  let exercisesDone = 0;
+  let setsPlanned = 0;
+  for (const exercise of session.exercises) {
+    if (isDone(session, exercise)) exercisesDone += 1;
+    setsPlanned += exercise.target_sets ?? setsOf(session, exercise.key);
+  }
+  return {
+    exercisesDone,
+    exercisesTotal: session.exercises.length,
+    setsDone: session.sets.length,
+    setsPlanned,
+  };
 }
 
-/** The body for `api.completeWorkout`. Sets in the order they were done. */
+/** The body for the complete-workout call. Sets in the order they were done. */
 export function toCompleteBody(session: ActiveSession, now: Date): WorkoutComplete {
-  void session;
-  void now;
-  throw new Error("TODO(F1): toCompleteBody");
+  const sets: SetInput[] = [];
+  for (const done of session.sets) {
+    const exercise = exerciseOf(session, done.exercise);
+    // A set whose exercise was removed cannot happen through `removeExercise`; skipping it
+    // here keeps a hand-damaged stored session from failing the whole Finish.
+    if (!exercise) continue;
+    const out: SetInput =
+      exercise.exercise_id !== null
+        ? { exercise_id: exercise.exercise_id }
+        : { exercise_name: exercise.name, kind: exercise.kind };
+    if (done.reps !== null) out.reps = done.reps;
+    if (done.weight !== null) out.weight = done.weight;
+    if (done.duration_seconds !== null) out.duration_seconds = done.duration_seconds;
+    if (done.distance_m !== null) out.distance_m = done.distance_m;
+    sets.push(out);
+  }
+  const started = new Date(session.started_at);
+  // A clock that went backwards must not make the server refuse the whole session
+  // (ended_at ≥ started_at is a CHECK).
+  const ended = now.getTime() < started.getTime() ? started : now;
+  const body: WorkoutComplete = {
+    client_ref: session.client_ref,
+    performed_on: session.performed_on,
+    started_at: session.started_at,
+    ended_at: ended.toISOString(),
+    sets,
+  };
+  if (session.routine_id !== null) body.routine_id = session.routine_id;
+  if (session.note.trim() !== "") body.note = session.note.trim();
+  return body;
 }

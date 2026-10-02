@@ -10,6 +10,7 @@ from decimal import Decimal
 from urllib.parse import urlparse
 
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,18 +52,42 @@ def list_exercises(session: Session, user_id: uuid.UUID) -> list[Exercise]:
     )
 
 
-def get_or_create_exercise(session: Session, user_id: uuid.UUID, *, name: str) -> Exercise:
-    """AD-12, the same shape as categories and vendors: insert-or-return, never check-then-act."""
+KINDS = ("reps", "duration", "distance")
+
+# The measure each kind requires on a set. The others are refused (weight is free for all).
+_REQUIRED_MEASURE = {"reps": "reps", "duration": "duration_seconds", "distance": "distance_m"}
+
+
+def check_measures(
+    kind: str, *, reps: int | None, duration_seconds: int | None, distance_m: int | None
+) -> None:
+    """A set of a ``reps`` exercise carries reps, of a ``duration`` one seconds, of a
+    ``distance`` one metres - that one, and only that one (weight is separate and optional)."""
+    given = {"reps": reps, "duration_seconds": duration_seconds, "distance_m": distance_m}
+    required = _REQUIRED_MEASURE[kind]
+    if given[required] is None:
+        raise Invalid(f"a {kind} set needs {required}", "set_missing_measure")
+    if any(value is not None for name, value in given.items() if name != required):
+        raise Invalid(f"a {kind} set takes only {required} (and a weight)", "set_wrong_measure")
+
+
+def get_or_create_exercise(
+    session: Session, user_id: uuid.UUID, *, name: str, kind: str = "reps"
+) -> Exercise:
+    """AD-12, the same shape as categories and vendors: insert-or-return, never check-then-act.
+
+    ``kind`` applies only to a new exercise: an existing one keeps the kind it has.
+    """
     inserted = session.execute(
         text(
             """
-            INSERT INTO exercises (user_id, name)
-            VALUES (:uid, :name)
+            INSERT INTO exercises (user_id, name, kind)
+            VALUES (:uid, :name, :kind)
             ON CONFLICT (user_id, lower(name)) DO NOTHING
             RETURNING id
             """
         ),
-        {"uid": str(user_id), "name": name},
+        {"uid": str(user_id), "name": name, "kind": kind},
     ).scalar_one_or_none()
 
     if inserted is None:
@@ -95,6 +120,18 @@ def update_exercise(
     session: Session, user_id: uuid.UUID, exercise_id: uuid.UUID, fields: dict
 ) -> Exercise:
     exercise = get_exercise(session, user_id, exercise_id)
+    if fields.get("kind") is not None and fields["kind"] != exercise.kind:
+        logged = session.execute(
+            select(func.count())
+            .select_from(WorkoutSet)
+            .where(WorkoutSet.user_id == user_id, WorkoutSet.exercise_id == exercise.id)
+        ).scalar_one()
+        if logged:
+            raise Conflict(
+                "That exercise has logged sets, so its kind can no longer change",
+                "exercise_kind_locked",
+            )
+        exercise.kind = fields["kind"]
     if "name" in fields and fields["name"]:
         exercise.name = fields["name"]
     if "video_url" in fields:
@@ -159,6 +196,22 @@ def create_routine(session: Session, user_id: uuid.UUID, *, name: str, note: str
     return routine
 
 
+def update_routine(
+    session: Session, user_id: uuid.UUID, routine_id: uuid.UUID, fields: dict
+) -> Routine:
+    routine = get_routine(session, user_id, routine_id)
+    if fields.get("name"):
+        routine.name = fields["name"].strip() or routine.name
+    if "note" in fields:
+        routine.note = fields["note"]
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise Conflict("You already have a routine with that name", "routine_name_taken") from exc
+    return routine
+
+
 def delete_routine(session: Session, user_id: uuid.UUID, routine_id: uuid.UUID) -> None:
     get_routine(session, user_id, routine_id)
     # Lines cascade; workouts done from it survive with a null routine_id, because what
@@ -180,6 +233,47 @@ def routine_lines(
     return [(line, exercise) for line, exercise in rows]
 
 
+def routines_full(
+    session: Session, user_id: uuid.UUID
+) -> list[tuple[Routine, list[tuple[RoutineExercise, Exercise]]]]:
+    """Every routine with its lines - two queries, for the offline cache."""
+    routines = list_routines(session, user_id)
+    grouped: dict[uuid.UUID, list[tuple[RoutineExercise, Exercise]]] = {r.id: [] for r in routines}
+    rows = session.execute(
+        select(RoutineExercise, Exercise)
+        .join(
+            Exercise,
+            (Exercise.user_id == RoutineExercise.user_id)
+            & (Exercise.id == RoutineExercise.exercise_id),
+        )
+        .where(RoutineExercise.user_id == user_id)
+        .order_by(RoutineExercise.routine_id, RoutineExercise.position, RoutineExercise.id)
+    ).all()
+    for line, exercise in rows:
+        grouped[line.routine_id].append((line, exercise))
+    return [(routine, grouped[routine.id]) for routine in routines]
+
+
+_LINE_FIELDS = (
+    "target_sets",
+    "target_reps",
+    "target_seconds",
+    "target_distance_m",
+    "target_weight",
+    "rest_seconds",
+    "note",
+)
+
+
+def _next_position(session: Session, user_id: uuid.UUID, routine_id: uuid.UUID) -> int:
+    highest = session.execute(
+        select(func.max(RoutineExercise.position)).where(
+            RoutineExercise.user_id == user_id, RoutineExercise.routine_id == routine_id
+        )
+    ).scalar_one()
+    return 0 if highest is None else highest + 1
+
+
 def add_routine_line(
     session: Session,
     user_id: uuid.UUID,
@@ -187,39 +281,133 @@ def add_routine_line(
     *,
     exercise_id: uuid.UUID | None,
     exercise_name: str | None,
-    target_sets: int | None,
-    target_reps: int | None,
-) -> RoutineExercise:
+    kind: str | None = None,
+    target_sets: int | None = None,
+    target_reps: int | None = None,
+    target_seconds: int | None = None,
+    target_distance_m: int | None = None,
+    target_weight: Decimal | None = None,
+    rest_seconds: int | None = None,
+    note: str | None = None,
+) -> tuple[RoutineExercise, Exercise]:
     get_routine(session, user_id, routine_id)
     if exercise_name is not None:
-        exercise = get_or_create_exercise(session, user_id, name=exercise_name)
+        exercise = get_or_create_exercise(
+            session, user_id, name=exercise_name, kind=kind or "reps"
+        )
     else:
         assert exercise_id is not None  # the schema's exactly-one rule guarantees it
         exercise = get_exercise(session, user_id, exercise_id)
 
     # Appended: the next position after whatever is there, so order is explicit and stable.
-    highest = session.execute(
-        select(func.max(RoutineExercise.position)).where(
-            RoutineExercise.user_id == user_id, RoutineExercise.routine_id == routine_id
-        )
-    ).scalar_one()
     line = RoutineExercise(
         user_id=user_id,
         routine_id=routine_id,
         exercise_id=exercise.id,
-        position=0 if highest is None else highest + 1,
+        position=_next_position(session, user_id, routine_id),
         target_sets=target_sets,
         target_reps=target_reps,
+        target_seconds=target_seconds,
+        target_distance_m=target_distance_m,
+        target_weight=target_weight,
+        rest_seconds=rest_seconds,
+        note=note,
     )
     session.add(line)
-    try:
-        session.flush()
-    except IntegrityError as exc:
-        session.rollback()
-        raise Conflict(
-            "That exercise is already in this routine", "routine_exercise_duplicate"
-        ) from exc
-    return line
+    session.flush()
+    return line, exercise
+
+
+def update_routine_line(
+    session: Session, user_id: uuid.UUID, line_id: uuid.UUID, fields: dict
+) -> tuple[RoutineExercise, Exercise]:
+    """Explicit null clears a target, an absent key leaves it."""
+    row = session.execute(
+        select(RoutineExercise, Exercise)
+        .join(
+            Exercise,
+            (Exercise.user_id == RoutineExercise.user_id)
+            & (Exercise.id == RoutineExercise.exercise_id),
+        )
+        .where(RoutineExercise.user_id == user_id, RoutineExercise.id == line_id)
+    ).one_or_none()
+    if row is None:
+        raise NotFound("No routine line with that id")
+    line, exercise = row
+    for key in _LINE_FIELDS:
+        if key in fields:
+            setattr(line, key, fields[key])
+    session.flush()
+    return line, exercise
+
+
+def reorder_routine_lines(
+    session: Session, user_id: uuid.UUID, routine_id: uuid.UUID, line_ids: list[uuid.UUID]
+) -> None:
+    """``line_ids`` must be exactly the routine's lines; positions become 0..n-1."""
+    get_routine(session, user_id, routine_id)
+    lines = list(
+        session.execute(
+            select(RoutineExercise).where(
+                RoutineExercise.user_id == user_id, RoutineExercise.routine_id == routine_id
+            )
+        ).scalars()
+    )
+    if len(line_ids) != len(set(line_ids)) or set(line_ids) != {line.id for line in lines}:
+        raise Invalid("line_ids must list every line of the routine exactly once", "order_mismatch")
+    by_id = {line.id: line for line in lines}
+    for position, line_id in enumerate(line_ids):
+        by_id[line_id].position = position
+    session.flush()
+
+
+def import_routine(
+    session: Session,
+    user_id: uuid.UUID,
+    *,
+    name: str,
+    note: str | None,
+    lines: list[dict],
+) -> Routine:
+    """One routine and its lines, exercises found or coined by name. All or nothing: the kinds
+    are checked against existing exercises before anything is written, and the request
+    transaction rolls back on any later refusal."""
+    names = {line["exercise_name"].lower() for line in lines}
+    existing = {
+        e.name.lower(): e
+        for e in session.execute(
+            select(Exercise).where(
+                Exercise.user_id == user_id, func.lower(Exercise.name).in_(names)
+            )
+        ).scalars()
+    }
+    coined: dict[str, str] = {}
+    for line in lines:
+        key = line["exercise_name"].lower()
+        have = existing[key].kind if key in existing else coined.setdefault(key, line["kind"])
+        if have != line["kind"]:
+            raise Invalid(
+                f"{line['exercise_name']!r} is a {have} exercise, not a {line['kind']} one",
+                "exercise_kind_mismatch",
+            )
+    routine = create_routine(session, user_id, name=name, note=note)
+    for position, line in enumerate(lines):
+        exercise = get_or_create_exercise(
+            session, user_id, name=line["exercise_name"], kind=line["kind"]
+        )
+        if line.get("video_url") and exercise.video_url is None:
+            exercise.video_url = clean_video_url(line["video_url"])
+        session.add(
+            RoutineExercise(
+                user_id=user_id,
+                routine_id=routine.id,
+                exercise_id=exercise.id,
+                position=position,
+                **{key: line.get(key) for key in _LINE_FIELDS},
+            )
+        )
+    session.flush()
+    return routine
 
 
 def remove_routine_line(session: Session, user_id: uuid.UUID, line_id: uuid.UUID) -> None:
@@ -313,15 +501,23 @@ def log_set(
     *,
     exercise_id: uuid.UUID | None,
     exercise_name: str | None,
-    reps: int,
+    reps: int | None,
     weight: Decimal | None,
+    kind: str | None = None,
+    duration_seconds: int | None = None,
+    distance_m: int | None = None,
 ) -> WorkoutSet:
     get_workout(session, user_id, workout_id)
     if exercise_name is not None:
-        exercise = get_or_create_exercise(session, user_id, name=exercise_name)
+        exercise = get_or_create_exercise(
+            session, user_id, name=exercise_name, kind=kind or "reps"
+        )
     else:
         assert exercise_id is not None
         exercise = get_exercise(session, user_id, exercise_id)
+    check_measures(
+        exercise.kind, reps=reps, duration_seconds=duration_seconds, distance_m=distance_m
+    )
 
     highest = session.execute(
         select(func.max(WorkoutSet.position)).where(
@@ -335,10 +531,98 @@ def log_set(
         position=0 if highest is None else highest + 1,
         reps=reps,
         weight=weight,
+        duration_seconds=duration_seconds,
+        distance_m=distance_m,
     )
     session.add(row)
     session.flush()
     return row
+
+
+def complete_workout(
+    session: Session,
+    user_id: uuid.UUID,
+    *,
+    client_ref: uuid.UUID,
+    routine_id: uuid.UUID | None,
+    performed_on: dt.date,
+    started_at: dt.datetime | None,
+    ended_at: dt.datetime | None,
+    note: str | None,
+    sets: list[dict],
+) -> tuple[Workout, bool]:
+    """A whole session in one write (AD-58). Returns ``(workout, created)``.
+
+    Idempotent on ``(user_id, client_ref)``: a replay returns the row already written and
+    writes nothing. The conflict target includes ``user_id``, so it never meets a row RLS hides.
+    """
+    if routine_id is not None:
+        # Unknown or foreign: stored null, not a 404 - the routine may be long gone.
+        routine_id = session.execute(
+            select(Routine.id).where(Routine.user_id == user_id, Routine.id == routine_id)
+        ).scalar_one_or_none()
+
+    inserted = session.execute(
+        pg_insert(Workout)
+        .values(
+            user_id=user_id,
+            client_ref=client_ref,
+            routine_id=routine_id,
+            performed_on=performed_on,
+            started_at=started_at,
+            ended_at=ended_at,
+            note=note,
+        )
+        .on_conflict_do_nothing(index_elements=[Workout.user_id, Workout.client_ref])
+        .returning(Workout.id)
+    ).scalar_one_or_none()
+
+    if inserted is None:
+        existing = session.execute(
+            select(Workout)
+            .where(Workout.user_id == user_id, Workout.client_ref == client_ref)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if existing is None:  # pragma: no cover - the unique key says it must be there
+            raise Conflict("workout could not be created or found", "workout_unwritable")
+        return existing, False
+
+    resolved: dict[object, Exercise] = {}
+    for position, item in enumerate(sets):
+        if item["exercise_name"] is not None:
+            key: object = ("name", item["exercise_name"].lower())
+            if key not in resolved:
+                resolved[key] = get_or_create_exercise(
+                    session, user_id, name=item["exercise_name"], kind=item["kind"] or "reps"
+                )
+        else:
+            key = ("id", item["exercise_id"])
+            if key not in resolved:
+                resolved[key] = get_exercise(session, user_id, item["exercise_id"])
+        exercise = resolved[key]
+        check_measures(
+            exercise.kind,
+            reps=item["reps"],
+            duration_seconds=item["duration_seconds"],
+            distance_m=item["distance_m"],
+        )
+        session.add(
+            WorkoutSet(
+                user_id=user_id,
+                workout_id=inserted,
+                exercise_id=exercise.id,
+                position=position,
+                reps=item["reps"],
+                weight=item["weight"],
+                duration_seconds=item["duration_seconds"],
+                distance_m=item["distance_m"],
+            )
+        )
+    session.flush()
+    workout = session.execute(
+        select(Workout).where(Workout.user_id == user_id, Workout.id == inserted)
+    ).scalar_one()
+    return workout, True
 
 
 def delete_set(session: Session, user_id: uuid.UUID, set_id: uuid.UUID) -> None:
@@ -356,7 +640,11 @@ _HISTORY = text(
     """
     SELECT w.performed_on                       AS performed_on,
            max(s.weight)                        AS top_weight,
-           sum(s.reps)                          AS reps,
+           coalesce(sum(s.reps), 0)             AS reps,
+           max(s.duration_seconds)              AS best_seconds,
+           sum(s.duration_seconds)              AS total_seconds,
+           max(s.distance_m)                    AS best_distance_m,
+           sum(s.distance_m)                    AS total_distance_m,
            count(*)                             AS sets,
            -- Volume is the honest measure of a session's work, and it is null rather than
            -- zero when nothing carried a weight: a bodyweight day has volume nobody can
@@ -381,6 +669,10 @@ def exercise_history(session: Session, user_id: uuid.UUID, exercise_id: uuid.UUI
             "reps": int(row.reps),
             "sets": int(row.sets),
             "volume": row.volume,
+            "best_seconds": row.best_seconds,
+            "total_seconds": None if row.total_seconds is None else int(row.total_seconds),
+            "best_distance_m": row.best_distance_m,
+            "total_distance_m": None if row.total_distance_m is None else int(row.total_distance_m),
         }
         for row in session.execute(_HISTORY, {"uid": str(user_id), "exercise_id": str(exercise_id)})
     ]

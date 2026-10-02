@@ -13,6 +13,15 @@
  *   navigations   Network first, falling back to the cached shell. So the app opens offline
  *                 and says so, instead of showing the browser's dinosaur.
  *
+ *   POST /gym/share  The Web Share Target (Epic 42): a workout file shared to the installed
+ *                 app from another app. The only POST the worker answers. It reads the form,
+ *                 keeps the file's text (or the shared text) in a cache of its own and
+ *                 redirects to the import page, which reads it back with `takeSharedWorkout`
+ *                 and deletes it. Capped at 256 KB; nothing in it is evaluated here — the
+ *                 page parses it. It is the one thing the worker stores that a person typed,
+ *                 which is why it has its own cache name, is removed on read, and is kept
+ *                 across updates (an update must not eat a file waiting to be imported).
+ *
  *   static assets Cache first. Safe *only* because Vite content-hashes these filenames — a
  *                 changed file is a new URL, so a cached one can never be stale.
  *
@@ -24,6 +33,10 @@
 const VERSION = "v1";
 const SHELL = `shell-${VERSION}`;
 const ASSETS = `assets-${VERSION}`;
+const SHARE_INBOX = "share-inbox";
+const SHARE_KEY = "/__share/gym";
+const SHARE_MAX_BYTES = 256 * 1024;
+const SHARE_URL = "/gym/share";
 const SHELL_URL = "/index.html";
 
 self.addEventListener("install", (event) => {
@@ -44,7 +57,7 @@ self.addEventListener("activate", (event) => {
       .then((names) =>
         Promise.all(
           names
-            .filter((name) => name !== SHELL && name !== ASSETS)
+            .filter((name) => name !== SHELL && name !== ASSETS && name !== SHARE_INBOX)
             .map((name) => caches.delete(name)),
         ),
       )
@@ -52,11 +65,49 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+async function receiveShare(request) {
+  let text = "";
+  let refused = false;
+  try {
+    const form = await request.formData();
+    const file = form.getAll("file").find((item) => typeof item !== "string");
+    if (file) {
+      // Size is checked before the bytes are read into a string.
+      if (file.size > SHARE_MAX_BYTES) refused = true;
+      else text = await file.text();
+    } else {
+      const shared = form.get("text");
+      if (typeof shared === "string") text = shared;
+    }
+    if (new Blob([text]).size > SHARE_MAX_BYTES) refused = true;
+  } catch {
+    // A body that is not a form, or a file that would not read: nothing to keep.
+    text = "";
+  }
+  if (!refused && text !== "") {
+    const cache = await caches.open(SHARE_INBOX);
+    await cache.put(
+      SHARE_KEY,
+      new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } }),
+    );
+  }
+  // 303: the browser follows with a GET, which is the import page's route (a navigation,
+  // served by the shell below). `refused=1` lets the page say "too large" instead of "nothing".
+  const to = refused ? "/gym/import?shared=1&refused=1" : "/gym/import?shared=1";
+  return Response.redirect(new URL(to, self.location.origin).href, 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
-
   const url = new URL(request.url);
+
+  // Before the GET-only return below: a share is a POST.
+  if (request.method === "POST" && url.origin === self.location.origin && url.pathname === SHARE_URL) {
+    event.respondWith(receiveShare(request));
+    return;
+  }
+
+  if (request.method !== "GET") return;
   if (url.origin !== self.location.origin) return;
 
   // The API and the health endpoint are the server's business, never the cache's.

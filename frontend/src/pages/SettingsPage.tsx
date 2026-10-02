@@ -15,6 +15,7 @@ import { SecurityCard } from "../components/SecurityCard";
 import { StreaksSettingsCard } from "../components/StreaksSettingsCard";
 import { useTutorial } from "../components/Tutorial/useTutorial";
 import { Card, ErrorBanner } from "../components/ui";
+import { useSignOut } from "../gym/useSignOut";
 import { useMoney } from "../useMoney";
 import { ACCENTS, ACCENT_SWATCH, MODES, useTheme, type Accent, type Mode } from "../theme";
 
@@ -52,7 +53,8 @@ const EXPORTS = [
 ];
 
 export function SettingsPage() {
-  const { user, signOut, refreshUser: refreshProfile } = useAuth();
+  const { user, refreshUser: refreshProfile } = useAuth();
+  const signOut = useSignOut();
   const { t, lang, setLanguage } = useLanguage();
   const theme = useTheme();
   const { discard } = theme;

@@ -192,9 +192,17 @@ async function refreshAccessToken(): Promise<boolean> {
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
-  if (!response.ok) {
+  // Only the server saying "this refresh token is no good" ends the session. Any other
+  // failure — a 502 from a proxy that is restarting, a 5xx, or (above) no network at all —
+  // says nothing about the token, and clearing it would sign the person out for being offline
+  // (Epic 42: the installed app must open at the gym with no signal). It is thrown instead,
+  // so the request fails without reaching the unauthorized handler, and the tokens stay.
+  if (response.status === 401) {
     clearTokens();
     return false;
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, `Request failed (${response.status}).`);
   }
   storeTokens((await response.json()) as Token);
   return true;

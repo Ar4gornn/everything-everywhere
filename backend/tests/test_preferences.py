@@ -23,7 +23,7 @@ DEFAULT_TABS = [
 DEFAULT_CARDS = [
     {"id": card, "on": True}
     for card in (
-        "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
+        "stats", "streaks", "gym", "pending", "leftover", "reading", "quote", "restock",
         "budgets", "savings", "trends", "categories",
     )
 ]
@@ -116,7 +116,7 @@ def test_one_layout_leaves_the_other_and_the_modules(client, user_a):
     assert {"id": "stats", "on": False} in prefs["desktop"]["cards"]
     assert [c["id"] for c in prefs["desktop"]["cards"]] == [
         "budgets", "savings", "trends", "categories",
-        "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
+        "stats", "streaks", "gym", "pending", "leftover", "reading", "quote", "restock",
     ]
 
 
@@ -222,7 +222,7 @@ def test_an_id_that_no_longer_exists_is_dropped():
     assert "chess" not in prefs["modules"]
     assert prefs["modules"]["gym"] is False
     assert [c["id"] for c in prefs["phone"]["cards"]] == [
-        "stats", "streaks", "pending", "leftover", "reading", "quote", "restock",
+        "stats", "streaks", "gym", "pending", "leftover", "reading", "quote", "restock",
         "budgets", "savings", "trends", "categories",
     ]
     assert {"id": "budgets", "on": False} in prefs["phone"]["cards"]
@@ -235,7 +235,8 @@ def test_a_missing_id_lands_after_its_default_predecessor():
                     "budgets", "savings", "trends"]  # no "quote", no "leftover"
     prefs = resolve({"desktop": {"cards": [{"id": c, "on": True} for c in stored_order]}})
     assert [c["id"] for c in prefs["desktop"]["cards"]] == [
-        "categories", "reading", "quote", "stats", "streaks", "pending", "leftover", "restock",
+        "categories", "reading", "quote", "stats", "streaks", "gym", "pending", "leftover",
+        "restock",
         "budgets", "savings", "trends",
     ]
 
