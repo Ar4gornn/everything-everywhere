@@ -2707,3 +2707,37 @@ page; streaks in the export; a push other than the daily digest.
 ### Story 41.7: QA
 
 - Second-user proof; every new guard mutated red; overflow sweep EN/FR at 375 and 320.
+
+## Epic 47: Lunar cycles (proposed, not scoped)
+
+**Status:** backlog, added 2026-10-03 at Alex's request. Nothing decided; a scoping interview comes
+before any spec (house rule). No code exists.
+
+What it could be, for the interview to choose from:
+- The moon phase per day: a small glyph on the calendar's days and on the dashboard title line,
+  computed on the device from a published astronomical algorithm (no server, no API, no data
+  stored), new/full moon dates labelled.
+- A lunar cycle as something to track against: mood (Epic 24), habits, sleep or a personal cycle
+  shown over the moon's phases.
+- Moonrise/moonset for the account's place (needs a location, which the app does not hold today).
+
+Open questions: which of these; whether any of it is stored (an AD-9-style "computed, never
+stored" rule fits a phase); hemisphere (the glyph flips south of the equator); accuracy wanted
+(phase to the day vs to the hour); EN/FR names of the phases; whether it is a module (Epic 33)
+that can be switched off.
+
+## Epic 48: Time-zone clocks (proposed, not scoped)
+
+**Status:** backlog, added 2026-10-03 at Alex's request. Nothing decided; a scoping interview comes
+before any spec. No code exists.
+
+What it could be, for the interview to choose from:
+- A world-clock card: the person picks a few places (family abroad, work), each shows the local
+  time and the difference from the account's zone (`users.timezone`, AD-52), updating each minute.
+- "Good time to call": each clock shaded for night/working hours there.
+- Times elsewhere in the app shown in another zone on request (calendar events, reminders).
+
+Open questions: where it lives (dashboard card, its own page, Settings); how places are chosen
+(IANA zone list via `Intl.supportedValuesOf("timeZone")`, city search, or both); stored per
+account (a preferences key, Epic 33) vs per device; DST handled by `Intl` only (no tz data
+shipped); whether it is a module that can be switched off; EN/FR city names.
