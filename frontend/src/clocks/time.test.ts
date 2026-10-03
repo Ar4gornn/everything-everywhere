@@ -316,11 +316,11 @@ describe("searchZones", () => {
     // "a" - city prefixes (Asia? no: city Kolkata no) ... check ordering with a substring case.
     const mixed = ["Europe/Zed", "Asia/Aden", "Africa/Amed", "Zed/Other"];
     // "ame": city-prefix Africa/Amed; id-substring "America..." not present.
+    // Asia/Xame has it mid-word, which no longer matches.
     expect(searchZones("ame", [...mixed, "America/Zzz", "Pacific/Ame", "Asia/Xame"])).toEqual([
       "Africa/Amed",
       "Pacific/Ame",
       "America/Zzz",
-      "Asia/Xame",
     ]);
   });
 
@@ -337,6 +337,83 @@ describe("searchZones", () => {
     const z = ["America/St_Johns", "Europe/Paris"];
     expect(searchZones("st. john's", z)).toEqual(["America/St_Johns"]);
     expect(searchZones("st john’s", z)).toEqual(["America/St_Johns"]);
+  });
+});
+
+describe("search matches word starts only (round 3)", () => {
+  const zones = allZones();
+
+  it("does not find a zone by the middle of a word: usa is not Lusaka, Jerusalem or Busan", () => {
+    const found = searchZones("usa", zones, 50);
+    for (const wrong of ["Africa/Lusaka", "Asia/Jerusalem", "Asia/Seoul"]) {
+      expect(found).not.toContain(wrong);
+    }
+    expect(searchZones("sak", zones, 50)).not.toContain("Africa/Lusaka");
+    expect(searchZones("lusa", zones)).toContain("Africa/Lusaka");
+  });
+
+  it("still finds the start of a later word, after a space, a slash, an underscore or a hyphen", () => {
+    expect(searchZones("york", zones)).toContain("America/New_York");
+    expect(searchZones("aires", zones)).toContain("America/Argentina/Buenos_Aires");
+    expect(searchZones("prince", zones)).toContain("America/Port-au-Prince");
+    expect(searchZones("argentina/b", zones)).toContain("America/Argentina/Buenos_Aires");
+  });
+
+  it("lists a multi-zone country as its main cities, in order, named after the country", () => {
+    for (const name of ["usa", "USA", "United States", "us", "america", "Etats-Unis"]) {
+      const { matches } = findZones(name, zones, 20);
+      expect(matches.slice(0, 6).map((m) => m.zone), name).toEqual([
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles",
+        "America/Anchorage",
+        "Pacific/Honolulu",
+      ]);
+      expect(matches[0]?.alias, name).toBe("United States");
+    }
+  });
+
+  it("does the same for Canada, Australia, Brazil, Russia, Mexico and Indonesia", () => {
+    const first = (q: string) => findZones(q, zones, 20).matches.map((m) => m.zone);
+    expect(first("canada").slice(0, 3)).toEqual(["America/Toronto", "America/Winnipeg", "America/Edmonton"]);
+    expect(first("australia")).toContain("Australia/Perth");
+    expect(first("brazil")).toEqual(
+      expect.arrayContaining(["America/Sao_Paulo", "America/Manaus"]),
+    );
+    expect(first("russia")).toEqual(expect.arrayContaining(["Europe/Moscow", "Asia/Vladivostok"]));
+    expect(first("mexico").slice(0, 2)).toEqual(["America/Mexico_City", "America/Cancun"]);
+    expect(first("indonesia")).toEqual(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]);
+  });
+
+  it("knows Hawaii, Iceland and Munchen/München, accents folded on the alias too", () => {
+    const one = (q: string) => findZones(q, zones, 5).matches[0];
+    expect(one("hawaii")).toEqual({ zone: "Pacific/Honolulu", alias: "Hawaii" });
+    expect(one("iceland")).toEqual({ zone: "Atlantic/Reykjavik", alias: "Iceland" });
+    for (const q of ["munchen", "München", "MÜNCHEN", "munc"]) {
+      expect(one(q), q).toEqual({ zone: "Europe/Berlin", alias: expect.stringMatching(/^M[uü]nchen$/) });
+    }
+    expect(searchZones("Brésil", zones)).toContain("America/Sao_Paulo");
+  });
+});
+
+describe("city display names (round 3)", () => {
+  it("gives the ids that need it their accents and punctuation", () => {
+    expect(zoneCity("America/St_Johns")).toBe("St. John's");
+    expect(zoneCity("America/Sao_Paulo")).toBe("São Paulo");
+    expect(zoneCity("Europe/Zurich")).toBe("Zürich");
+    expect(zoneCity("America/Bogota")).toBe("Bogotá");
+    expect(zoneCity("Africa/Ndjamena")).toBe("N’Djamena");
+    expect(zoneCity("Europe/Paris")).toBe("Paris");
+  });
+  it("does not repeat the city when the name only differs by accents or punctuation", () => {
+    expect(zoneHint("Zurich", "Europe/Zurich")).toBeNull();
+    expect(zoneHint("Zürich", "Europe/Zurich")).toBeNull();
+    expect(zoneHint("Sao Paulo", "America/Sao_Paulo")).toBeNull();
+    expect(zoneHint("São Paulo", "America/Sao_Paulo")).toBeNull();
+    expect(zoneHint("St Johns", "America/St_Johns")).toBeNull();
+    expect(zoneHint("St. John's", "America/St_Johns")).toBeNull();
+    expect(zoneHint("Mum", "America/Sao_Paulo")).toBe("São Paulo");
   });
 });
 

@@ -195,14 +195,42 @@ function rawCity(zone: string): string {
  *  named after its current one (`Asia/Calcutta` → `"Kolkata"`), so a place saved under an
  *  old spelling reads the same everywhere. */
 export function zoneCity(zone: string): string {
-  return rawCity(canonicalZone(zone));
+  const raw = rawCity(canonicalZone(zone));
+  return CITY_NAMES[raw] ?? raw;
 }
 
+/** Ids whose city is not written the way the id spells it: accents and punctuation the
+ *  IANA names leave out. Keyed by the id's last part, spaces for underscores. */
+const CITY_NAMES: Readonly<Record<string, string>> = {
+  "St Johns": "St. John's",
+  "Sao Paulo": "São Paulo",
+  Zurich: "Zürich",
+  Bogota: "Bogotá",
+  Asuncion: "Asunción",
+  Reykjavik: "Reykjavík",
+  Cancun: "Cancún",
+  Merida: "Mérida",
+  Curacao: "Curaçao",
+  Ndjamena: "N’Djamena",
+  Noumea: "Nouméa",
+  Belem: "Belém",
+  Cuiaba: "Cuiabá",
+  Maceio: "Maceió",
+  Mazatlan: "Mazatlán",
+  Reunion: "Réunion",
+};
+
 /** The city to print beside a place's name, or null when the name already says it
- *  (`Paris` for Europe/Paris, in any case). */
+ *  (`Paris` for Europe/Paris), whatever the case, accents or punctuation: `Sao Paulo`
+ *  says `São Paulo`, `Zurich` says `Zürich`. */
 export function zoneHint(label: string, zone: string): string | null {
   const city = zoneCity(zone);
-  return city.trim().toLowerCase() === label.trim().toLowerCase() ? null : city;
+  return foldName(city) === foldName(label) ? null : city;
+}
+
+/** Two names compared the way the search does: no case, accents, dots or apostrophes. */
+export function sameName(a: string, b: string): boolean {
+  return foldName(a) === foldName(b);
 }
 
 /** Do two zone ids name the same zone, legacy spellings included? */
@@ -307,6 +335,7 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   "San Diego": "America/Los_Angeles",
   "Las Vegas": "America/Los_Angeles",
   California: "America/Los_Angeles",
+  Hawaii: "Pacific/Honolulu",
   "Washington DC": "America/New_York",
   Boston: "America/New_York",
   Miami: "America/New_York",
@@ -323,7 +352,6 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Rio: "America/Sao_Paulo",
   "Rio de Janeiro": "America/Sao_Paulo",
   Brasilia: "America/Sao_Paulo",
-  Brazil: "America/Sao_Paulo",
   "Cape Town": "Africa/Johannesburg",
   "South Africa": "Africa/Johannesburg",
   Egypt: "Africa/Cairo",
@@ -336,6 +364,8 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Bordeaux: "Europe/Paris",
   France: "Europe/Paris",
   Munich: "Europe/Berlin",
+  München: "Europe/Berlin",
+  Munchen: "Europe/Berlin",
   Frankfurt: "Europe/Berlin",
   Hamburg: "Europe/Berlin",
   Cologne: "Europe/Berlin",
@@ -360,6 +390,7 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Edinburgh: "Europe/London",
   Glasgow: "Europe/London",
   Ireland: "Europe/Dublin",
+  Iceland: "Atlantic/Reykjavik",
   Netherlands: "Europe/Amsterdam",
   Rotterdam: "Europe/Amsterdam",
   Belgium: "Europe/Brussels",
@@ -451,7 +482,7 @@ export function allZones(): string[] {
   return [...set].sort();
 }
 
-function normalise(s: string): string {
+function foldName(s: string): string {
   return s
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
@@ -460,6 +491,85 @@ function normalise(s: string): string {
     .replace(/[_/\s]+/g, " ")
     .trim();
 }
+
+/**
+ * How `query` sits in `text` (both folded): 1 when the text starts with it, 2 when it starts
+ * a later word (after a space or a hyphen; `/` and `_` are spaces once folded), 0 otherwise.
+ * Never mid-word: "usa" is not in Lusaka, Jerusalem or Busan.
+ */
+function wordMatch(text: string, query: string): 0 | 1 | 2 {
+  let at = text.indexOf(query);
+  let best: 0 | 1 | 2 = 0;
+  while (at >= 0) {
+    if (at === 0) return 1;
+    const before = text[at - 1];
+    if (before === " " || before === "-") best = 2;
+    at = text.indexOf(query, at + 1);
+  }
+  return best;
+}
+
+/**
+ * Countries with several zones: typing one lists its main cities' zones, in this order,
+ * each read "United States → New York". The first name is the one shown; the others are
+ * other ways to say it. Single-zone countries are plain place aliases.
+ */
+const COUNTRIES: readonly { names: readonly string[]; zones: readonly string[] }[] = [
+  {
+    names: ["United States", "USA", "US", "America", "États-Unis"],
+    zones: [
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "America/Anchorage",
+      "Pacific/Honolulu",
+    ],
+  },
+  {
+    names: ["Canada"],
+    zones: [
+      "America/Toronto",
+      "America/Winnipeg",
+      "America/Edmonton",
+      "America/Vancouver",
+      "America/Halifax",
+      "America/St_Johns",
+    ],
+  },
+  {
+    names: ["Australia", "Australie"],
+    zones: [
+      "Australia/Sydney",
+      "Australia/Brisbane",
+      "Australia/Adelaide",
+      "Australia/Darwin",
+      "Australia/Perth",
+    ],
+  },
+  {
+    names: ["Brazil", "Brasil", "Brésil"],
+    zones: ["America/Sao_Paulo", "America/Fortaleza", "America/Manaus", "America/Rio_Branco"],
+  },
+  {
+    names: ["Russia", "Russie"],
+    zones: [
+      "Europe/Kaliningrad",
+      "Europe/Moscow",
+      "Asia/Yekaterinburg",
+      "Asia/Novosibirsk",
+      "Asia/Vladivostok",
+    ],
+  },
+  {
+    names: ["Mexico", "Mexique"],
+    zones: ["America/Mexico_City", "America/Cancun", "America/Chihuahua", "America/Tijuana"],
+  },
+  {
+    names: ["Indonesia", "Indonésie"],
+    zones: ["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"],
+  },
+];
 
 /** One search result: the zone, and the name it was found by when that is not the zone's
  *  own city ("Delhi" for Asia/Kolkata), so the list can say "Delhi → Kolkata". */
@@ -470,38 +580,54 @@ export interface ZoneMatch {
 
 /**
  * Zones matching what the person typed: case- and accent-insensitive, spaces and
- * underscores equal, dots and apostrophes ignored ("st. john's" finds America/St_Johns),
- * matched against the whole id, the city, the legacy spelling ("calcutta" finds
- * Asia/Kolkata) and the place aliases ("delhi" finds Asia/Kolkata). City-prefix matches
- * first (the zone's own city before an alias), then other matches, each alphabetical; at
- * most `limit`, with `total` the number before the cut.
+ * underscores equal, dots and apostrophes ignored ("st. john's" finds America/St_Johns).
+ * It matches the start of a word, never the middle of one: against the whole id, the city,
+ * the legacy spelling ("calcutta" finds Asia/Kolkata) and the place aliases ("delhi" finds
+ * Asia/Kolkata). A country with several zones ("usa") lists its main cities first. Then
+ * the zone's own city and aliases that start with the query, then other word matches, each
+ * alphabetical; at most `limit`, with `total` the number before the cut.
  */
 export function findZones(
   query: string,
   zones: readonly string[],
   limit = 20,
 ): { matches: ZoneMatch[]; total: number } {
-  const q = normalise(query);
+  const q = foldName(query);
   if (!q || limit <= 0) return { matches: [], total: 0 };
+  const known = new Set(zones);
+  const seen = new Set<string>();
+  const country: ZoneMatch[] = [];
+  for (const { names, zones: cities } of COUNTRIES) {
+    if (!names.some((name) => wordMatch(foldName(name), q) > 0)) continue;
+    for (const zone of cities) {
+      if (!known.has(zone) || seen.has(zone)) continue;
+      seen.add(zone);
+      country.push({ zone, alias: names[0] ?? null });
+    }
+  }
   const prefix: ZoneMatch[] = [];
   const other: ZoneMatch[] = [];
   for (const zone of zones) {
+    if (seen.has(zone)) continue;
     const aliases = ALIASES.get(zone) ?? [];
-    if (normalise(rawCity(zone)).startsWith(q)) {
+    if (wordMatch(foldName(rawCity(zone)), q) === 1) {
       prefix.push({ zone, alias: null });
       continue;
     }
-    const byAlias = aliases.find((name) => normalise(name).startsWith(q));
-    if (byAlias) prefix.push({ zone, alias: byAlias });
-    else if ([zone, ...(LEGACY_IDS.get(zone) ?? [])].some((id) => normalise(id).includes(q)))
-      other.push({ zone, alias: null });
-    else {
-      const inside = aliases.find((name) => normalise(name).includes(q));
-      if (inside) other.push({ zone, alias: inside });
+    const byAlias = aliases.find((name) => wordMatch(foldName(name), q) === 1);
+    if (byAlias) {
+      prefix.push({ zone, alias: byAlias });
+      continue;
     }
+    if ([zone, ...(LEGACY_IDS.get(zone) ?? [])].some((id) => wordMatch(foldName(id), q) > 0)) {
+      other.push({ zone, alias: null });
+      continue;
+    }
+    const inside = aliases.find((name) => wordMatch(foldName(name), q) > 0);
+    if (inside) other.push({ zone, alias: inside });
   }
   const byId = (a: ZoneMatch, b: ZoneMatch) => (a.zone < b.zone ? -1 : a.zone > b.zone ? 1 : 0);
-  const all = [...prefix.sort(byId), ...other.sort(byId)];
+  const all = [...country, ...prefix.sort(byId), ...other.sort(byId)];
   return { matches: all.slice(0, limit), total: all.length };
 }
 

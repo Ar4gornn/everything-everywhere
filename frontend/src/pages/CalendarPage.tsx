@@ -1186,7 +1186,9 @@ function DayDetail({
 
   /** Epic 48 (AD-64): `Paris 14:00`, plus tomorrow/yesterday, for a check-in's time. */
   const alsoIn = (day: string, doneAt: string): string | null => {
-    if (!alsoZone) return null;
+    // Your own zone chosen as the other one (a place in it, or a changed account zone): a
+    // second copy of the same time says nothing.
+    if (!alsoZone || canonicalZone(alsoZone) === canonicalZone(homeZone(user))) return null;
     try {
       const there = convertWallTime(day, timeLabel(doneAt) as string, homeZone(user), alsoZone);
       // One place in that zone: its name. None, or several (Mum and Dad in Paris): the city.

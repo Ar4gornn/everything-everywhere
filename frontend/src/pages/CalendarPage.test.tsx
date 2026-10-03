@@ -585,6 +585,21 @@ describe("CalendarPage", () => {
     expect(await screen.findByText(/13:00 · Tokyo 20:00$/)).toBeInTheDocument();
   });
 
+  it("shows no second time when the chosen zone is your own", async () => {
+    mockApi({
+      startDay: 1,
+      clocks: {
+        calendar_zone: "Europe/Paris",
+        places: [{ id: "p1", zone: "Europe/Paris", label: "Flat", hours: null }],
+      },
+    });
+    render(<CalendarPage />);
+    await openSecond();
+    expect(await screen.findByText("13:00")).toBeInTheDocument();
+    expect(screen.queryByText(/13:00 ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Flat/)).not.toBeInTheDocument();
+  });
+
   it("finds the place for a zone saved under a legacy name", async () => {
     mockApi({
       startDay: 1,

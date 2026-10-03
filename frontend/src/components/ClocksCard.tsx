@@ -33,7 +33,7 @@ export function ClocksCard() {
     <Card
       title={t("clocks.card")}
       actions={
-        <Link to="/clocks" className="clocks-open">
+        <Link to="/clocks" className="clocks-open" aria-label={t("clocks.card.openLabel")}>
           {t("clocks.card.open")}
         </Link>
       }

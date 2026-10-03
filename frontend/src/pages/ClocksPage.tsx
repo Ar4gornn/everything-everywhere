@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 
+import { api } from "../api/client";
 import type { ClockHours, ClockPlace } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { LABEL_MAX, labelProblem } from "../clocks/label";
@@ -22,25 +23,41 @@ import {
   newPlaceId,
   placeAliases,
   readClock,
+  sameZone,
   zoneCity,
   zoneHint,
 } from "../clocks/time";
+import { useSaveHomeZone } from "../clocks/useHomeZone";
 import { useNow } from "../clocks/useNow";
 import { ClockLine, useDayWord } from "../components/ClockLine";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
 import { Card, Empty, ErrorBanner } from "../components/ui";
 import { useT } from "../i18n";
-import { CLOCKS_MAX, clockHoursOf, clocksOf } from "../layout/preferences";
+import { CLOCKS_MAX, clockHoursOf, clocksOf, preferencesOf } from "../layout/preferences";
 import { usePreferences } from "../layout/useLayout";
+import { deviceZone } from "../push";
 
 /**
  * The Clocks page (Epic 48, AD-64): the account's own zone first, then the places the person
- * chose. Every write sends the whole list (AD-49). The slider is local state, so leaving the
- * page puts the clocks back on now. A failed write is reported where the action was: in the
- * place's row, or in the Add card.
+ * chose. Every write is an operation on a place id, applied to the account as the server has
+ * it right now and then sent as the whole list (AD-49), so a tab that went stale cannot undo
+ * what another device did. The slider is local state, so leaving the page puts the clocks
+ * back on now. A failed write is reported where the action was: in the place's row, or in
+ * the Add card.
  */
 
+/** A change to the list, keyed by place id; null when the place it names is gone. */
+type Op = (list: ClockPlace[]) => ClockPlace[] | null;
+type Outcome = "ok" | "gone" | "failed";
+
+const sameHours = (a: ClockHours, b: ClockHours) =>
+  a.work[0] === b.work[0] &&
+  a.work[1] === b.work[1] &&
+  a.night[0] === b.night[0] &&
+  a.night[1] === b.night[1];
+
 const SLIDER_MAX = 48; // quarter hours: +-12 h
+const QUARTER_MS = 900000;
 const QUARTERS = Array.from({ length: 96 }, (_, index) => fromMinutes(index * 15));
 const RESULTS_MAX = 20;
 /** How long "Removed Mum. Undo" stays, unless another write comes first. */
@@ -88,23 +105,44 @@ const searchInput = () => document.getElementById("clocks-search");
 
 export function ClocksPage() {
   const t = useT();
-  const user = useOptionalAuth()?.user ?? null;
+  const auth = useOptionalAuth();
+  const user = auth?.user ?? null;
+  const refreshUser = auth?.refreshUser;
   const { preferences, update } = usePreferences();
   const dayWord = useDayWord();
   const places = clocksOf(preferences);
   const defaults = clockHoursOf(preferences);
   const home = homeZone(user);
+  const saveHomeZone = useSaveHomeZone();
   const [offset, setOffset] = useState(0); // quarter hours
   const real = useNow();
-  const now = useMemo(() => new Date(real.getTime() + offset * 900000), [real, offset]);
+  // A shifted time is counted from the current quarter hour, rounded down, so the steps land
+  // on :00 :15 :30 :45 and the planned time does not creep forward every minute.
+  const now = useMemo(
+    () =>
+      offset === 0
+        ? real
+        : new Date(Math.floor(real.getTime() / QUARTER_MS) * QUARTER_MS + offset * QUARTER_MS),
+    [real, offset],
+  );
   // Which write failed, keyed by place id or "add": the message belongs where the action was.
   const [failures, setFailures] = useState<Record<string, boolean>>({});
+  // A write named a place that another device had already removed.
+  const [changedElsewhere, setChangedElsewhere] = useState(false);
   // The place an add is saving: the list already holds it (the saver is optimistic), but the
   // Add card must not count it, or an 11 -> 12 add unmounts the form mid-save.
   const [adding, setAdding] = useState<string | null>(null);
   // The last removed place, for Undo, until another write or UNDO_MS.
   const [removed, setRemoved] = useState<{ place: ClockPlace; index: number } | null>(null);
+  // Hover or focus inside the list card holds the Undo timer, so it cannot vanish under a
+  // hand that is on its way to the button.
+  const [hold, setHold] = useState({ hover: false, focus: false });
+  const held = hold.hover || hold.focus;
   const sliderRef = useRef<HTMLInputElement>(null);
+  // The device's own zone, when the account's is another one (a trip, a new phone).
+  const device = deviceZone();
+  const deviceDiffers = Boolean(user?.timezone && device && !sameZone(device, user.timezone));
+  const [homeState, setHomeState] = useState<"idle" | "saving" | "failed">("idle");
 
   // Focus that must wait for a render: a request is kept until its element exists.
   const focusWanted = useRef<(() => HTMLElement | null) | null>(null);
@@ -123,29 +161,56 @@ export function ClocksPage() {
   }, [focusTick, places]);
 
   useEffect(() => {
-    if (!removed) return;
+    if (!removed || held) return;
     const timer = window.setTimeout(() => setRemoved(null), UNDO_MS);
     return () => window.clearTimeout(timer);
-  }, [removed]);
+  }, [removed, held]);
+
+  // Back on this page after a day in another tab: the account may have moved on.
+  useEffect(() => {
+    if (!refreshUser) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshUser().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshUser]);
 
   const clearFailure = (key: string) => setFailures((f) => (f[key] ? { ...f, [key]: false } : f));
 
-  const save = async (next: ClockPlace[], key: string): Promise<boolean> => {
+  // Writes run one after the other: the second reads the account the first just wrote.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+
+  /** Apply `op` to the account's list as the server has it now, and send the result. */
+  const run = (op: Op, key: string): Promise<Outcome> => {
     setFailures((f) => ({ ...f, [key]: false }));
-    try {
-      await update({ clocks: next });
-      return true;
-    } catch {
-      setFailures((f) => ({ ...f, [key]: true }));
-      return false;
-    }
+    setChangedElsewhere(false);
+    const job = async (): Promise<Outcome> => {
+      try {
+        const next = op(clocksOf(preferencesOf(await api.me())));
+        if (next === null) {
+          // Nothing to write: show what the server has, and say why the action did nothing.
+          setChangedElsewhere(true);
+          await refreshUser?.().catch(() => undefined);
+          return "gone";
+        }
+        await update({ clocks: next });
+        return "ok";
+      } catch {
+        setFailures((f) => ({ ...f, [key]: true }));
+        return "failed";
+      }
+    };
+    const result = queue.current.then(job, job);
+    queue.current = result;
+    return result;
   };
 
   /** Any write but a remove ends the chance to undo the last remove. */
-  const write = (next: ClockPlace[], key: string) => {
+  const write = async (op: Op, key: string): Promise<boolean> => {
     setRemoved(null);
     clearFailure("undo");
-    return save(next, key);
+    return (await run(op, key)) === "ok";
   };
 
   // The day word is counted from the real today, so a shifted home time can say "tomorrow".
@@ -163,53 +228,94 @@ export function ClocksPage() {
 
   const patch = (id: string, change: Partial<ClockPlace>) =>
     write(
-      places.map((place) => (place.id === id ? { ...place, ...change } : place)),
+      (list) =>
+        list.some((place) => place.id === id)
+          ? list.map((place) => (place.id === id ? { ...place, ...change } : place))
+          : null,
       id,
     );
 
-  const move = (index: number, by: -1 | 1) => {
-    const next = [...places];
-    const other = index + by;
-    const moved = next[index];
-    if (!moved || other < 0 || other >= next.length) return;
-    [next[index], next[other]] = [next[other] as ClockPlace, moved];
-    void write(next, moved.id);
+  const move = (id: string, by: -1 | 1) => {
+    void write((list) => {
+      const from = list.findIndex((place) => place.id === id);
+      const moved = list[from];
+      if (!moved) return null;
+      const other = from + by;
+      const neighbour = list[other];
+      if (!neighbour) return list;
+      const next = [...list];
+      next[from] = neighbour;
+      next[other] = moved;
+      return next;
+    }, id);
   };
 
   const remove = (index: number) => {
     const place = places[index];
     if (!place) return;
-    // Focus goes to the next row's Edit, else the previous one's, else the search.
     const neighbour = places[index + 1] ?? places[index - 1];
-    focusSoon(() => (neighbour ? editButtonOf(neighbour.id) : searchInput()));
-    void save(
-      places.filter((p) => p.id !== place.id),
-      place.id,
-    ).then((ok) => setRemoved(ok ? { place, index } : null));
+    let gone = null as { place: ClockPlace; index: number } | null;
+    void run((list) => {
+      const at = list.findIndex((p) => p.id === place.id);
+      const found = list[at];
+      if (!found) return null;
+      gone = { place: found, index: at };
+      return list.filter((p) => p.id !== place.id);
+    }, place.id).then((outcome) => {
+      if (outcome === "failed") {
+        // The row is back (the save was refused): focus returns to its own toggle.
+        focusSoon(() => editButtonOf(place.id));
+        setRemoved(null);
+        return;
+      }
+      // Gone, or already gone: the next row's Edit, else the previous one's, else the search.
+      focusSoon(() => (neighbour ? editButtonOf(neighbour.id) : searchInput()));
+      setRemoved(outcome === "ok" ? gone : null);
+    });
   };
 
   const undo = () => {
     if (!removed) return;
     const { place, index } = removed;
-    const next = [...places];
-    next.splice(Math.min(index, next.length), 0, place);
     focusSoon(() => editButtonOf(place.id));
     // A refused undo has no row to report in (the place is still gone): it says so here.
-    void write(next, "undo").then((ok) => {
-      if (!ok) setRemoved({ place, index });
+    void write(
+      (list) => {
+        if (list.some((p) => p.id === place.id)) return list;
+        const next = [...list];
+        next.splice(Math.min(index, next.length), 0, place);
+        return next;
+      },
+      "undo",
+    ).then((ok) => {
+      if (!ok) {
+        focusWanted.current = null;
+        setRemoved({ place, index });
+      }
     });
   };
 
   const add = async (zone: string, label: string): Promise<boolean> => {
-    const id = newPlaceId();
-    setAdding(id);
+    const place: ClockPlace = { id: newPlaceId(), zone: canonicalZone(zone), label, hours: null };
+    setAdding(place.id);
     const ok = await write(
-      [...places, { id, zone: canonicalZone(zone), label, hours: null }],
+      (list) => (list.some((p) => p.id === place.id) ? list : [...list, place]),
       "add",
     );
     setAdding(null);
-    if (ok) focusSoon(() => editButtonOf(id));
+    if (ok) focusSoon(() => editButtonOf(place.id));
     return ok;
+  };
+
+  const adoptDevice = async () => {
+    if (!device) return;
+    setHomeState("saving");
+    try {
+      await saveHomeZone(device);
+      setHomeState("idle");
+    } catch {
+      setHomeState("failed");
+    }
   };
 
   const sliderCard = (
@@ -221,6 +327,9 @@ export function ClocksPage() {
         <label htmlFor="clocks-shift" className="clocks-slider-label">
           {t("clocks.page.slider")}
         </label>
+        <span id="clocks-shift-hint" className="clocks-slider-hint">
+          {t("clocks.page.sliderHint")}
+        </span>
         <input
           ref={sliderRef}
           id="clocks-shift"
@@ -230,6 +339,7 @@ export function ClocksPage() {
           step={1}
           value={offset}
           aria-valuetext={readout}
+          aria-describedby="clocks-shift-hint"
           onChange={(event) => setOffset(Number(event.target.value))}
         />
         <p className="clocks-readout">
@@ -269,6 +379,17 @@ export function ClocksPage() {
 
   const listCard = (
     <Card title={t("clocks.page.list")}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: hover and focus only hold a timer; nothing here is operated */}
+      <div
+        className="clocks-list-body"
+        onMouseEnter={() => setHold((h) => ({ ...h, hover: true }))}
+        onMouseLeave={() => setHold((h) => ({ ...h, hover: false }))}
+        onFocus={() => setHold((h) => ({ ...h, focus: true }))}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            setHold((h) => ({ ...h, focus: false }));
+        }}
+      >
       <ul className="clocks-list" aria-label={t("clocks.page.list")}>
         <ClockLine
           className="clocks-row"
@@ -279,7 +400,23 @@ export function ClocksPage() {
           dayWord={offset === 0 ? null : homeDay}
           diff={null}
           shade={homeReading.shade}
-        />
+        >
+          {deviceDiffers && device && (
+            <p className="clocks-hint clocks-home-hint">
+              {t("clocks.page.deviceZone", { city: zoneCity(device) })}{" "}
+              <button
+                type="button"
+                className="quiet"
+                disabled={homeState === "saving"}
+                aria-label={t("clocks.page.deviceZoneUseOf", { city: zoneCity(device) })}
+                onClick={() => void adoptDevice()}
+              >
+                {t("clocks.page.deviceZoneUse")}
+              </button>
+            </p>
+          )}
+          {homeState === "failed" && <ErrorBanner message={t("notify.couldNotSave")} />}
+        </ClockLine>
         {places.map((place, index) => {
           const hours = hoursFor(place, defaults);
           const reading = readClock(place.zone, now, home, hours, real);
@@ -296,8 +433,11 @@ export function ClocksPage() {
               failed={failures[place.id] === true}
               onDismissError={() => clearFailure(place.id)}
               onRename={(label) => patch(place.id, { label })}
-              onHours={(next) => patch(place.id, { hours: next })}
-              onMove={(by) => move(index, by)}
+              onHours={(next) =>
+                // Hours equal to the account's are not "custom": no tag, and they follow Settings.
+                patch(place.id, { hours: next && sameHours(next, defaults) ? null : next })
+              }
+              onMove={(by) => move(place.id, by)}
               onRemove={() => remove(index)}
             />
           );
@@ -319,7 +459,13 @@ export function ClocksPage() {
           </>
         )}
       </div>
+      {changedElsewhere && (
+        <p className="clocks-hint" role="status">
+          {t("clocks.page.changedElsewhere")}
+        </p>
+      )}
       {failures.undo && <ErrorBanner message={t("notify.couldNotSave")} />}
+      </div>
     </Card>
   );
 
@@ -487,7 +633,19 @@ function PlaceRow({
     >
       {failed && <ErrorBanner message={t("notify.couldNotSave")} />}
       {open && (
-        <div className="clocks-panel">
+        // Escape the rename and the hours editor handle themselves (they mark the event);
+        // any other Escape in the panel closes it and hands focus back to the toggle.
+        <div
+          className="clocks-panel"
+          role="group"
+          aria-label={t("clocks.page.editOf", { label: place.label })}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape" || event.defaultPrevented) return;
+            event.preventDefault();
+            toggle();
+            editRef.current?.focus();
+          }}
+        >
           {renaming ? (
             <form className="clocks-rename" onSubmit={submit}>
               <input

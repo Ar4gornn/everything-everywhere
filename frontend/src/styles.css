@@ -5996,6 +5996,8 @@ dialog.sheet::backdrop {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content max-content;
   column-gap: var(--space-2);
+  /* Wider than this and the time sits a screen away from its name. */
+  max-width: 640px;
 }
 
 .clocks-row,
@@ -6066,7 +6068,7 @@ dialog.sheet::backdrop {
   justify-content: flex-end;
   gap: var(--space-1) var(--space-2);
   min-width: 0;
-  max-width: 9rem;
+  max-width: 12rem;
   font-size: var(--fs-small);
 }
 
@@ -6089,22 +6091,27 @@ dialog.sheet::backdrop {
 .clocks-row .clocks-shade[data-shade="free"],
 .clocks-line .clocks-shade[data-shade="free"] {
   background: transparent;
+  /* An outline that reaches 3:1 on the card in every theme (--faint is held to 4.5 there). */
+  border-color: var(--faint);
 }
 
 .clocks-row .clocks-shade[data-shade="night"],
 .clocks-line .clocks-shade[data-shade="night"] {
   background: var(--secondary);
-  border-color: var(--secondary);
+  /* A visible edge of its own: on OLED the fill alone is #262626 on #0d0d0d. */
+  border-color: var(--text);
   color: var(--on-secondary);
 }
 
 /* The failure message and the editor each take a full row, across all three tracks. */
 .clocks-row > .error,
-.clocks-row > .clocks-panel {
+.clocks-row > .clocks-panel,
+.clocks-row > .clocks-home-hint {
   grid-column: 1 / -1;
 }
 
-.clocks-row > .error {
+.clocks-row > .error,
+.clocks-row > .clocks-home-hint {
   margin: 0;
 }
 
@@ -6190,6 +6197,11 @@ dialog.sheet::backdrop {
   min-height: 44px;
 }
 
+.clocks-page .clocks-slider-hint {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
 .clocks-page .clocks-slider button {
   justify-self: start;
 }
@@ -6272,6 +6284,21 @@ dialog.sheet::backdrop {
     grid-template-columns: minmax(0, 1fr) max-content;
   }
 
+  /* The page's list has a third, 44px track: the Edit toggle sits at the end of the row. */
+  .clocks-list {
+    grid-template-columns: minmax(0, 1fr) max-content 44px;
+  }
+
+  .clocks-row {
+    position: relative;
+  }
+
+  .clocks-page .clocks-edit {
+    position: absolute;
+    top: var(--space-2);
+    right: 0;
+  }
+
   .clocks-row .clocks-name,
   .clocks-line .clocks-name {
     grid-row: span 2;
@@ -6285,15 +6312,17 @@ dialog.sheet::backdrop {
     justify-self: end;
   }
 
-  /* Narrow enough that the difference and the shade stack, so the name keeps the width. */
+  /* Wide enough for "+2h30 Au travail" on one line; a longer one (a day word too) wraps
+     rather than starving the name. */
   .clocks-row .clocks-meta,
   .clocks-line .clocks-meta {
-    max-width: 6rem;
+    max-width: 10rem;
   }
 
   .clocks-page .clocks-edit-word,
   .clocks-page .clocks-back-word,
   .clocks-page .clocks-slider-title,
+  .clocks-page .clocks-slider-hint,
   .clocks-page .clocks-slider-label {
     position: absolute;
     width: 1px;
@@ -6312,6 +6341,9 @@ dialog.sheet::backdrop {
     z-index: 5;
     padding: var(--space-2) var(--space-3);
     box-shadow: 0 2px 0 var(--border);
+    /* Opaque, and square: rounded corners would let the rows scrolling under it show. */
+    background: var(--surface);
+    border-radius: 0;
   }
 
   .clocks-page .clocks-slider {
@@ -6327,8 +6359,10 @@ dialog.sheet::backdrop {
     grid-area: range;
   }
 
+  /* Two lines kept for it, so "tomorrow" appearing does not move the slider under the thumb. */
   .clocks-page .clocks-readout {
     grid-area: readout;
+    min-height: 2lh;
   }
 
   .clocks-page .clocks-slider button {
@@ -6354,6 +6388,32 @@ dialog.sheet::backdrop {
 
 .clocks-settings-range {
   display: contents;
+}
+
+.clocks-settings-home {
+  margin: 0 0 var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.clocks-settings-search {
+  width: 100%;
+  min-height: 44px;
+}
+
+.clocks-settings-results {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+
+.clocks-settings-results button.clocks-settings-result {
+  min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .clocks-settings-name {

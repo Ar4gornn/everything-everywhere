@@ -44,10 +44,21 @@ preferences), AD-52 (account time zone), AD-63 (computed, not stored).
    ("calcutta" finds `Asia/Kolkata`), and new places store the canonical id. `zoneCity`
    names a legacy id after its current one everywhere (page, card, Settings, calendar).
    Search also knows a curated **place alias** table (about 110 big cities and single-zone
-   countries: Delhi, Mumbai, India → `Asia/Kolkata`; "Washington DC", not "Washington"; no
-   abbreviations such as PST/CET/IST, which are ambiguous). A result found by an alias reads
+   countries: Delhi, Mumbai, India → `Asia/Kolkata`; "Washington DC", not "Washington"; Hawaii,
+   Iceland, München/Munchen; no abbreviations such as PST/CET/IST, which are ambiguous). A
+   result found by an alias reads
    "Delhi → Kolkata — Asia/Kolkata · 13:41 (+3h30)" and names the new place "Delhi". Dots and
-   apostrophes are ignored ("st. john's"); past 20 results the list says "Showing 20 of N". The server
+   apostrophes are ignored ("st. john's"); accents are folded on ids, cities and aliases alike.
+   **Matching is by word start (round 3):** the query must begin the id, the city or an alias,
+   or a later word of it (after a space, `/`, `_` or `-`), never the middle of one, so "usa"
+   is not Lusaka, Jerusalem or Busan. **Countries with several zones** (United States/USA/US/
+   America, Canada, Australia, Brazil, Russia, Mexico, Indonesia, with French names) list their
+   main cities' zones first, in a fixed order, each read "United States → New York" (USA: New
+   York, Chicago, Denver, Los Angeles, Anchorage, Honolulu); the new place is named after the
+   city, not the country. A city whose id spells it without accents or punctuation has a
+   display name (`zoneCity`: St. John's, São Paulo, Zürich, Bogotá, ...), and the "city under
+   the name" hint is left out when the label and the city fold to the same text ("Sao Paulo"
+   says "São Paulo"). Past 20 results the list says "Showing 20 of N". The server
    accepts both spellings, so an older saved id keeps working; wherever two zones are
    compared (calendar place lookup, Settings select) both go through `canonicalZone`.
 2. **Three sparse preferences keys**, each replaced whole by a PATCH (AD-49):
@@ -111,7 +122,14 @@ overlap; `inRange` wrap and empty; `shadeAt` night-over-work; `searchZones` acce
   the client refuses control and direction characters with a visible reason. **Empty account
   (U3):** the Add card comes first and the slider card waits for the first place. At 12 places
   the search input is hidden and only the cap message shows. Writes go through
-  `usePreferences().update({ clocks })` — the whole list. A refused write is shown where the
+  `usePreferences().update({ clocks })` — the whole list, **but built from an operation
+  (round 3)**: every change (add, rename, custom hours, move, remove, undo) is a function
+  `(list) => list` keyed by place id. Right before sending, the page reads the account
+  (`GET /api/auth/me`), applies the operation to the server's current `clocks` and sends that,
+  so a tab or device that went stale cannot undo what another did. Operations are queued, so
+  two quick edits apply in order. An operation on an id that is no longer there writes nothing,
+  shows "This place was changed on another device." and refreshes the account. The account is
+  also re-read when the tab becomes visible again. A refused write is shown where the
   action was: inside the place's row, or in the Add card; a refused rename keeps the form open
   with the typed name; a row's error clears on Cancel, Escape and collapsing. A pending or
   refused add never unmounts the Add form (an add is not counted against the cap until it
@@ -125,6 +143,21 @@ overlap; `inRange` wrap and empty; `shadeAt` night-over-work; `searchZones` acce
   follows; a "Back to now" button; state is local, so leaving the page resets it. On
   phones (≤720 px) the slider card is compact and `position: sticky` at the top while the
   list scrolls; focused list controls have a `scroll-margin-top` clear of it.
+- **Round 3 additions.** The slider's shifted times start from the current quarter hour
+  rounded **down** (so steps land on :00 :15 :30 :45 and a planned time does not creep each
+  minute); at 0 it is the real now. Its accessible name is "Choose a time to compare", the
+  15-minute step is its description. **Your time zone** (home) can be changed in Settings →
+  Clocks (searchable, saved through `PATCH /api/auth/me/notification-schedule` with the
+  account's digest hour sent back unchanged, then the profile is re-read), and the page
+  offers "This device is on {city} time. Use it" under your own row when the device's zone
+  differs from the account's. Custom hours equal to the defaults are saved as none. Escape in
+  an open row's panel collapses it and returns focus to its Edit toggle; a refused remove puts
+  focus on the restored row's toggle. The Undo line is a live region (`role="status"`); its
+  8 s timer pauses while the pointer or focus is inside the list card. On a phone the Edit
+  toggle is at the end of the row (its own 44 px track), the meta may stay on one line up to
+  10 rem, and the sticky slider card is opaque and square with two lines kept for the readout.
+  Free and night badges have their own outline tokens (`--faint`, `--text`), each held to
+  3:1 on the card in every theme by `theme.test.tsx`.
 - **`ClocksCard`** (dashboard): nothing when no places; else home + first 3 places, one line
   each (label · time · diff · shade, no "Custom hours" tag), then "+N more" (plural-correct,
   French singular at 0 and 1) linking to `/clocks`, and an "Open" action (the title is not

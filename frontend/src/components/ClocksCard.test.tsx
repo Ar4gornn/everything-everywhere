@@ -130,9 +130,17 @@ describe("the Clocks card", () => {
     expect(more).toHaveTextContent("+1 autre");
   });
 
+  it("names its Open link in both languages", async () => {
+    mount(FIVE, "fr");
+    expect(await screen.findByRole("link", { name: "Ouvrir les horloges" })).toHaveAttribute(
+      "href",
+      "/clocks",
+    );
+  });
+
   it("links its title to the clocks page", async () => {
     mount(FIVE);
-    const link = await screen.findByRole("link", { name: "Open" });
+    const link = await screen.findByRole("link", { name: "Open Clocks" });
     expect(link).toHaveAttribute("href", "/clocks");
   });
 });

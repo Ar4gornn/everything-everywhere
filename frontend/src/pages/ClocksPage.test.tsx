@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,13 @@ import { ModuleGate } from "../components/ModuleOff";
 import { LanguageProvider } from "../i18n";
 import { DEFAULT_PREFERENCES } from "../layout/preferences";
 import { ClocksPage } from "./ClocksPage";
+
+// The device's own zone, which a test moves; the real one would make the suite machine-bound.
+const device = vi.hoisted(() => ({ zone: "Europe/Paris" as string | null }));
+vi.mock("../push", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../push")>()),
+  deviceZone: () => device.zone,
+}));
 
 /**
  * The Clocks page (Epic 48.2). The real time engine and the real preferences saver run; only
@@ -22,7 +29,10 @@ const NY: ClockPlace = { id: "ny", zone: "America/New_York", label: "Mum", hours
 const TOKYO: ClockPlace = { id: "tk", zone: "Asia/Tokyo", label: "Office", hours: null };
 
 const patches: { clocks?: ClockPlace[] }[] = [];
+const schedules: { timezone: string | null; digest_time: string }[] = [];
 let patchFails = false;
+/** Another device writes to the account behind this page's back. */
+let serverSet: (change: Partial<Preferences>) => void = () => undefined;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -34,6 +44,8 @@ function json(body: unknown, status = 200): Response {
 function mount(places: ClockPlace[], overrides: Partial<Preferences> = {}, language = "en") {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   patches.length = 0;
+  schedules.length = 0;
+  let timezone = "Europe/Paris";
   let prefs: Preferences = { ...DEFAULT_PREFERENCES, clocks: places, ...overrides };
   const user = () => ({
     id: "u1",
@@ -41,9 +53,13 @@ function mount(places: ClockPlace[], overrides: Partial<Preferences> = {}, langu
     currency: "USD",
     created_at: "",
     language,
-    timezone: "Europe/Paris",
+    timezone,
+    digest_time: "07:30",
     preferences: prefs,
   });
+  serverSet = (change) => {
+    prefs = { ...prefs, ...change };
+  };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -52,6 +68,12 @@ function mount(places: ClockPlace[], overrides: Partial<Preferences> = {}, langu
         const body = JSON.parse(String(init?.body));
         patches.push(body);
         prefs = { ...prefs, ...body };
+        return json(user());
+      }
+      if (url.includes("/api/auth/me/notification-schedule")) {
+        const body = JSON.parse(String(init?.body));
+        schedules.push(body);
+        timezone = body.timezone;
         return json(user());
       }
       if (url.includes("/api/auth/me")) return json(user());
@@ -81,6 +103,7 @@ const lastPatch = () => patches[patches.length - 1]?.clocks;
 
 beforeEach(() => {
   patchFails = false;
+  device.zone = "Europe/Paris";
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
 });
 
@@ -419,7 +442,7 @@ describe("an account with no places", () => {
   it("shows the Add card first and no slider", async () => {
     mount([]);
     await screen.findByText("Add a place");
-    expect(screen.queryByLabelText("Shift in 15-minute steps")).toBeNull();
+    expect(screen.queryByLabelText("Choose a time to compare")).toBeNull();
     const titles = [...document.querySelectorAll("h2")].map((h) => h.textContent);
     expect(titles.indexOf("Add a place")).toBeLessThan(titles.indexOf("Places"));
   });
@@ -427,7 +450,7 @@ describe("an account with no places", () => {
   it("brings the slider in with the first place", async () => {
     mount([NY]);
     await screen.findByText("Mum");
-    expect(screen.getByLabelText("Shift in 15-minute steps")).toBeInTheDocument();
+    expect(screen.getByLabelText("Choose a time to compare")).toBeInTheDocument();
   });
 });
 
@@ -435,7 +458,7 @@ describe("the slider", () => {
   it("runs from -12 h to +12 h in quarter hours, and says Now at rest", async () => {
     mount([NY]);
     await screen.findByText("Mum");
-    const slider = screen.getByLabelText("Shift in 15-minute steps") as HTMLInputElement;
+    const slider = screen.getByLabelText("Choose a time to compare") as HTMLInputElement;
     expect([slider.min, slider.max, slider.step, slider.value]).toEqual(["-48", "48", "1", "0"]);
     expect(screen.getByTestId("clocks-readout")).toHaveTextContent("Now");
   });
@@ -444,7 +467,7 @@ describe("the slider", () => {
     const user = userEvent.setup();
     mount([NY]);
     await screen.findByText("Mum");
-    const slider = screen.getByLabelText("Shift in 15-minute steps");
+    const slider = screen.getByLabelText("Choose a time to compare");
     const back = screen.getByRole("button", { name: "Back to now" });
     expect(back).toBeDisabled();
     // +3h30: Paris 15:30, New York 09:30 (work).
@@ -462,7 +485,7 @@ describe("the slider", () => {
   it("says minutes under an hour", async () => {
     mount([NY]);
     await screen.findByText("Mum");
-    fireEvent.change(screen.getByLabelText("Shift in 15-minute steps"), { target: { value: "-2" } });
+    fireEvent.change(screen.getByLabelText("Choose a time to compare"), { target: { value: "-2" } });
     expect(screen.getByTestId("clocks-readout")).toHaveTextContent("11:30 (−30 min)");
   });
 
@@ -470,13 +493,13 @@ describe("the slider", () => {
     mount([NY, TOKYO]);
     await screen.findByText("Mum");
     // Real now 10:00 UTC; +12 h is 22:00 UTC: Paris 00:00 and Tokyo 07:00 on the 4th, New York 18:00 on the 3rd.
-    fireEvent.change(screen.getByLabelText("Shift in 15-minute steps"), { target: { value: "48" } });
+    fireEvent.change(screen.getByLabelText("Choose a time to compare"), { target: { value: "48" } });
     expect(screen.getByTestId("clocks-readout")).toHaveTextContent("tomorrow 00:00 (+12h)");
     expect(rowOf("tk").getByText("tomorrow")).toBeInTheDocument();
     expect(rowOf("ny").queryByText("yesterday")).toBeNull();
     expect(rowOf("ny").queryByText("tomorrow")).toBeNull();
     // -12 h: New York is still the 2nd, which is yesterday for you today.
-    fireEvent.change(screen.getByLabelText("Shift in 15-minute steps"), { target: { value: "-48" } });
+    fireEvent.change(screen.getByLabelText("Choose a time to compare"), { target: { value: "-48" } });
     expect(rowOf("ny").getByText("yesterday")).toBeInTheDocument();
     expect(rowOf("tk").queryByText("tomorrow")).toBeNull();
   });
@@ -484,14 +507,14 @@ describe("the slider", () => {
   it("says demain in French", async () => {
     mount([NY], {}, "fr");
     await screen.findByText("Mum");
-    fireEvent.change(screen.getByLabelText(/Décalage/), { target: { value: "48" } });
+    fireEvent.change(screen.getByLabelText("Choisir une heure à comparer"), { target: { value: "48" } });
     expect(screen.getByTestId("clocks-readout")).toHaveTextContent("demain 00:00 (+12h)");
   });
 
   it("is never written anywhere", async () => {
     mount([NY]);
     await screen.findByText("Mum");
-    fireEvent.change(screen.getByLabelText("Shift in 15-minute steps"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Choose a time to compare"), { target: { value: "4" } });
     expect(patches).toHaveLength(0);
   });
 });
@@ -500,7 +523,7 @@ describe("the module", () => {
   it("shows the off notice instead of the page", async () => {
     mount([NY], { modules: { ...DEFAULT_PREFERENCES.modules, clocks: false } });
     expect(await screen.findByText("Clocks is turned off")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Shift in 15-minute steps")).toBeNull();
+    expect(screen.queryByLabelText("Choose a time to compare")).toBeNull();
   });
 });
 
@@ -559,7 +582,7 @@ describe("focus", () => {
     const user = userEvent.setup();
     mount([NY]);
     await screen.findByText("Mum");
-    const slider = screen.getByLabelText("Shift in 15-minute steps");
+    const slider = screen.getByLabelText("Choose a time to compare");
     fireEvent.change(slider, { target: { value: "4" } });
     await user.click(screen.getByRole("button", { name: "Back to now" }));
     expect(slider).toHaveFocus();
@@ -788,5 +811,240 @@ describe("undo a remove", () => {
     await user.click(screen.getByRole("button", { name: "Move Gran up" }));
     await waitFor(() => expect(patches).toHaveLength(2));
     expect(screen.queryByText("Removed Office.")).toBeNull();
+  });
+});
+
+describe("writes are operations on the account as it is now (round 3)", () => {
+  it("renames on top of what another device changed, not over it", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    // Meanwhile, elsewhere: Office became HQ and Gran was added.
+    serverSet({ clocks: [NY, { ...TOKYO, label: "HQ" }, LONDON] });
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Rename Mum" }));
+    await user.keyboard("Mother");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(lastPatch()).toEqual([{ ...NY, label: "Mother" }, { ...TOKYO, label: "HQ" }, LONDON]);
+    expect(await screen.findByText("HQ")).toBeInTheDocument();
+  });
+
+  it("does nothing, and says so, when the place was removed on another device", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    serverSet({ clocks: [TOKYO] });
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Move Mum down" }));
+    expect(await screen.findByText("This place was changed on another device.")).toBeInTheDocument();
+    expect(patches).toHaveLength(0);
+    // The page now shows what the account has.
+    await waitFor(() => expect(screen.queryByText("Mum")).toBeNull());
+    expect(screen.getByText("Office")).toBeInTheDocument();
+  });
+
+  it("applies two quick edits in order: the second reads what the first wrote", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    const down = screen.getByRole("button", { name: "Move Mum down" });
+    fireEvent.click(down);
+    fireEvent.click(down);
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(patches[0]?.clocks).toEqual([TOKYO, NY, LONDON]);
+    expect(lastPatch()).toEqual([TOKYO, LONDON, NY]);
+  });
+
+  it("re-reads the account when the page becomes visible again", async () => {
+    mount([NY]);
+    await screen.findByText("Mum");
+    serverSet({ clocks: [NY, LONDON] });
+    expect(screen.queryByText("Gran")).toBeNull();
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(await screen.findByText("Gran")).toBeInTheDocument();
+  });
+});
+
+describe("custom hours equal to the defaults (round 3)", () => {
+  it("saves them as no custom hours at all", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(lastPatch()).toEqual([{ ...NY, hours: null }]);
+    expect(document.querySelector('[data-place="ny"] .clocks-tag')).toBeNull();
+  });
+
+  it("drops custom hours that were edited back to the defaults", async () => {
+    const user = userEvent.setup();
+    mount([{ ...NY, hours: { work: ["08:00", "16:00"], night: ["22:00", "06:00"] } }]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+    await user.selectOptions(screen.getByLabelText("Mum: Work starts"), "09:00");
+    await user.selectOptions(screen.getByLabelText("Mum: Work ends"), "18:00");
+    await user.selectOptions(screen.getByLabelText("Mum: Night starts"), "23:00");
+    await user.selectOptions(screen.getByLabelText("Mum: Night ends"), "07:00");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(lastPatch()).toEqual([{ ...NY, hours: null }]);
+  });
+});
+
+describe("your time zone (round 3)", () => {
+  it("says nothing while the device is on the account's zone", async () => {
+    mount([NY]);
+    await screen.findByText("Mum");
+    expect(screen.queryByText(/This device is on/)).toBeNull();
+  });
+
+  it("offers the device's zone when the account is on another, and saves it with the digest hour kept", async () => {
+    device.zone = "Asia/Tokyo";
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    expect(rowOf("home").getByText("Paris")).toBeInTheDocument();
+    expect(rowOf("home").getByText("This device is on Tokyo time.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use Tokyo as your time zone" }));
+    await waitFor(() => expect(schedules).toEqual([{ timezone: "Asia/Tokyo", digest_time: "07:30" }]));
+    // The profile was re-read: your own row is Tokyo now, and the hint is gone.
+    await waitFor(() => expect(rowOf("home").getByText("Tokyo")).toBeInTheDocument());
+    expect(screen.queryByText(/This device is on/)).toBeNull();
+  });
+});
+
+describe("keys and focus (round 3)", () => {
+  it("collapses an open row on Escape and puts focus back on its Edit toggle", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    screen.getByRole("button", { name: "Move Mum down" }).focus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "Remove Mum" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Edit Mum" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
+  });
+
+  it("leaves a rename's own Escape alone: it closes the form, not the row", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Rename Mum" }));
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("button", { name: "Remove Mum" })).toBeInTheDocument();
+  });
+
+  it("puts focus on the restored row's Edit toggle when a remove is refused", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    patchFails = true;
+    await user.click(screen.getByRole("button", { name: "Remove Mum" }));
+    await rowOf("ny").findByRole("alert");
+    await waitFor(() =>
+      expect(document.querySelector('[data-place="ny"] .clocks-edit')).toHaveFocus(),
+    );
+  });
+});
+
+describe("the slider starts from the quarter hour (round 3)", () => {
+  it("lands on :00 :15 :30 :45 once shifted, and is the real now at rest", async () => {
+    vi.setSystemTime(new Date("2026-10-03T10:07:30Z")); // Paris 12:07
+    mount([NY]);
+    await screen.findByText("Mum");
+    expect(rowOf("home").getByText("12:07")).toBeInTheDocument();
+    const slider = screen.getByLabelText("Choose a time to compare");
+    fireEvent.change(slider, { target: { value: "1" } });
+    expect(rowOf("home").getByText("12:15")).toBeInTheDocument();
+    fireEvent.change(slider, { target: { value: "-1" } });
+    expect(rowOf("home").getByText("11:45")).toBeInTheDocument();
+    fireEvent.change(slider, { target: { value: "0" } });
+    expect(rowOf("home").getByText("12:07")).toBeInTheDocument();
+  });
+
+  it("is named for what it does, with the step as its description", async () => {
+    mount([NY]);
+    await screen.findByText("Mum");
+    const slider = screen.getByRole("slider", { name: "Choose a time to compare" });
+    expect(slider).toHaveAccessibleDescription("Shift in 15-minute steps");
+  });
+});
+
+describe("the undo line (round 3)", () => {
+  it("is a live region, in a neutral French sentence", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO], {}, "fr");
+    await screen.findByText("Mum");
+    await user.click(screen.getByRole("button", { name: "Modifier Office" }));
+    await user.click(screen.getByRole("button", { name: "Retirer Office" }));
+    const line = await screen.findByText("Retiré de la liste : Office");
+    expect(line.closest('[role="status"]')).not.toBeNull();
+  });
+
+  // Testing Library's own waiting waits on a real setTimeout, so with the timer faked these
+  // tests use vi.waitFor and plain events instead.
+  describe("with the timer on", () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], now: NOW });
+    });
+    const until = (check: () => void) => vi.waitFor(check);
+    const wait = (ms: number) =>
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    const removeOfficeNow = async () => {
+      mount([NY, TOKYO]);
+      await until(() => expect(screen.getByText("Mum")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Edit Office" }));
+      fireEvent.click(screen.getByRole("button", { name: "Remove Office" }));
+      await until(() => expect(screen.getByText("Removed Office.")).toBeInTheDocument());
+      // A remove hands focus to the next row, inside the card, which holds the timer too:
+      // let go of it, so each test says which of hover and focus it is about.
+      act(() => (document.activeElement as HTMLElement | null)?.blur());
+    };
+
+    it("goes away after 8 seconds", async () => {
+      await removeOfficeNow();
+      wait(6000);
+      expect(screen.getByText("Removed Office.")).toBeInTheDocument();
+      wait(3000);
+      expect(screen.queryByText("Removed Office.")).toBeNull();
+    });
+
+    it("waits while the pointer is over the list, and starts again when it leaves", async () => {
+      await removeOfficeNow();
+      const list = screen.getByRole("list", { name: "Places" });
+      fireEvent.mouseEnter(list);
+      wait(30000);
+      expect(screen.getByText("Removed Office.")).toBeInTheDocument();
+      fireEvent.mouseLeave(list);
+      wait(6000);
+      expect(screen.getByText("Removed Office.")).toBeInTheDocument();
+      wait(3000);
+      expect(screen.queryByText("Removed Office.")).toBeNull();
+    });
+
+    it("waits while focus is inside the list card, and starts again when it leaves", async () => {
+      await removeOfficeNow();
+      const undoButton = screen.getByRole("button", { name: "Undo removing Office" });
+      act(() => undoButton.focus());
+      wait(30000);
+      expect(screen.getByText("Removed Office.")).toBeInTheDocument();
+      act(() => undoButton.blur());
+      wait(6000);
+      expect(screen.getByText("Removed Office.")).toBeInTheDocument();
+      wait(3000);
+      expect(screen.queryByText("Removed Office.")).toBeNull();
+    });
   });
 });

@@ -24,7 +24,9 @@ describe("the clocks stylesheet", () => {
     expect(row).not.toMatch(/grid-template-columns: (?!subgrid)/);
     expect(rule(".clocks-row .clocks-time,\n.clocks-line .clocks-time")).toContain("tabular-nums");
     // The editor and the error span every track.
-    expect(rule(".clocks-row > .error,\n.clocks-row > .clocks-panel")).toContain(
+    expect(
+      rule(".clocks-row > .error,\n.clocks-row > .clocks-panel,\n.clocks-row > .clocks-home-hint"),
+    ).toContain(
       "grid-column: 1 / -1;",
     );
   });
@@ -49,6 +51,45 @@ describe("the clocks stylesheet", () => {
     expect(night).toContain("background: var(--secondary)");
     // Text on the dark fill is the checked text token for it.
     expect(night).toContain("color: var(--on-secondary)");
+  });
+
+  it("caps the dashboard card's list as wide as the page, so a time stays near its name", () => {
+    expect(rule(".clocks-list,\n.clocks-lines")).toContain("max-width: 640px;");
+  });
+
+  it("on a phone puts the Edit toggle at the end of the row, in a track of its own", () => {
+    const phone = block.slice(block.indexOf("@media (max-width: 720px)"));
+    const tracks = phone.slice(phone.indexOf("  .clocks-list {"));
+    expect(tracks.slice(0, tracks.indexOf("}"))).toContain(
+      "grid-template-columns: minmax(0, 1fr) max-content 44px;",
+    );
+    const edit = phone.slice(phone.indexOf("  .clocks-page .clocks-edit {"));
+    const editRule = edit.slice(0, edit.indexOf("}"));
+    expect(editRule).toContain("position: absolute;");
+    expect(editRule).toContain("right: 0;");
+    expect(phone).toMatch(/\.clocks-row \{\s*position: relative;/);
+  });
+
+  it("lets the meta share one line while it fits, and wrap rather than starve the name", () => {
+    const phone = block.slice(block.indexOf("@media (max-width: 720px)"));
+    const meta = phone.slice(
+      phone.indexOf("  .clocks-row .clocks-meta,\n  .clocks-line .clocks-meta {\n    max-width"),
+    );
+    const rem = Number(/max-width: ([\d.]+)rem;/.exec(meta)?.[1]);
+    expect(rem).toBeGreaterThanOrEqual(10);
+    expect(rule(".clocks-row .clocks-meta,\n.clocks-line .clocks-meta")).toContain(
+      "flex-wrap: wrap;",
+    );
+  });
+
+  it("keeps the sticky slider opaque and square, with room kept for a two-line readout", () => {
+    const phone = block.slice(block.indexOf("@media (max-width: 720px)"));
+    const card = phone.slice(phone.indexOf(".clocks-page .clocks-slider-card {"));
+    const cardRule = card.slice(0, card.indexOf("}"));
+    expect(cardRule).toContain("background: var(--surface);");
+    expect(cardRule).toContain("border-radius: 0;");
+    const readout = phone.slice(phone.indexOf("  .clocks-page .clocks-readout {"));
+    expect(readout.slice(0, readout.indexOf("}"))).toContain("min-height: 2lh;");
   });
 
   it("lets the name wrap anywhere and shrink, so a 32-character name never overflows", () => {

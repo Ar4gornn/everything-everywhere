@@ -26,6 +26,14 @@ export const clocksSettings = {
     en: "Choose one of your places. Timed rows on the calendar then show both times.",
     fr: "Choisissez l’un de vos lieux. Les lignes horodatées du calendrier montrent alors les deux heures.",
   },
+  "clocks.settings.homeZone": { en: "Your time zone", fr: "Votre fuseau horaire" },
+  "clocks.settings.homeZoneHint": {
+    en: "Your own clock, and what counts as today, use this zone. Search to change it.",
+    fr: "Votre propre horloge, et ce qui compte pour aujourd’hui, suivent ce fuseau. Cherchez pour le changer.",
+  },
+  "clocks.settings.homeZoneNow": { en: "Now: {city} ({zone})", fr: "Actuel : {city} ({zone})" },
+  "clocks.settings.homeZoneResults": { en: "Matching zones", fr: "Fuseaux correspondants" },
+  "clocks.settings.homeZonePick": { en: "Use {name} ({zone})", fr: "Utiliser {name} ({zone})" },
   "clocks.settings.calendarOff": { en: "Off", fr: "Désactivé" },
   "clocks.settings.noPlaces": {
     en: "Add a place on the Clocks page to pick one here.",

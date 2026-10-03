@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ClockHours, WallTime } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
-import { canonicalZone, fromMinutes, homeZone, zoneCity } from "../clocks/time";
+import {
+  allZones,
+  canonicalZone,
+  findZones,
+  fromMinutes,
+  homeZone,
+  sameName,
+  zoneCity,
+} from "../clocks/time";
+import { useSaveHomeZone } from "../clocks/useHomeZone";
 import { useT } from "../i18n";
 import { clockHoursOf, clocksOf } from "../layout/preferences";
 import { useModule } from "../layout/modules";
@@ -30,6 +39,10 @@ function ClocksSettings() {
   const { preferences, update } = usePreferences();
   const home = canonicalZone(homeZone(useOptionalAuth()?.user ?? null));
   const [failed, setFailed] = useState(false);
+  const saveHomeZone = useSaveHomeZone();
+  const zones = useMemo(() => allZones(), []);
+  const [query, setQuery] = useState("");
+  const found = query.trim() ? findZones(query, zones, 8).matches : [];
   const hours = clockHoursOf(preferences);
   const places = clocksOf(preferences);
   const zone = preferences.calendar_zone ?? null;
@@ -40,6 +53,16 @@ function ClocksSettings() {
     pair[index] = value;
     const next: ClockHours = { ...hours, [range]: pair };
     update({ clock_hours: next }).catch(() => setFailed(true));
+  }
+
+  async function pickHome(zone: string) {
+    setFailed(false);
+    try {
+      await saveHomeZone(zone);
+      setQuery("");
+    } catch {
+      setFailed(true);
+    }
   }
 
   function setZone(value: string) {
@@ -81,7 +104,7 @@ function ClocksSettings() {
   const optionText = ({ zone: key, labels }: { zone: string; labels: string[] }) => {
     const city = zoneCity(key);
     const only = labels.length === 1 ? (labels[0] ?? "") : null;
-    return only !== null && only.trim().toLowerCase() === city.toLowerCase()
+    return only !== null && sameName(only, city)
       ? city
       : `${labels.join(", ")} · ${city}`;
   };
@@ -92,7 +115,42 @@ function ClocksSettings() {
 
   return (
     <Card title={t("clocks.settings.title")}>
-      <h3 style={{ fontSize: 15, margin: "0 0 6px" }}>{t("clocks.settings.hours")}</h3>
+      <h3 style={{ fontSize: 15, margin: "0 0 6px" }}>{t("clocks.settings.homeZone")}</h3>
+      <p className="hint" style={{ marginTop: 0 }}>
+        {t("clocks.settings.homeZoneHint")}
+      </p>
+      <p className="clocks-settings-home">
+        <strong>{t("clocks.settings.homeZoneNow", { city: zoneCity(home), zone: home })}</strong>
+      </p>
+      <input
+        type="search"
+        className="clocks-settings-search"
+        aria-label={t("clocks.page.search")}
+        value={query}
+        autoComplete="off"
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      {found.length > 0 && (
+        <ul className="clocks-settings-results" aria-label={t("clocks.settings.homeZoneResults")}>
+          {found.map(({ zone: candidate, alias }) => {
+            const city = zoneCity(candidate);
+            const name = alias ? t("clocks.page.foundAs", { alias, city }) : city;
+            return (
+              <li key={candidate}>
+                <button
+                  type="button"
+                  className="quiet clocks-settings-result"
+                  aria-label={t("clocks.settings.homeZonePick", { name, zone: candidate })}
+                  onClick={() => void pickHome(candidate)}
+                >
+                  <strong>{name}</strong> <span className="hint">— {candidate}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <h3 style={{ fontSize: 15, margin: "16px 0 6px" }}>{t("clocks.settings.hours")}</h3>
       <p className="hint" style={{ marginTop: 0 }}>
         {t("clocks.settings.hoursHint")}
       </p>

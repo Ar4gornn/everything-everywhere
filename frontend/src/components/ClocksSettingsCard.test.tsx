@@ -33,7 +33,7 @@ function me(preferences: Preferences): User {
     tutorial_skipped_at: null,
     preferences,
     timezone: "Europe/Paris",
-    digest_time: "19:00",
+    digest_time: "07:30",
   };
 }
 
@@ -49,6 +49,10 @@ function mockApi(patch: Partial<Preferences> = {}) {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     if (url.startsWith("/api/auth/me/preferences")) {
       user = { ...user, preferences: { ...user.preferences!, ...body } };
+      return json(user);
+    }
+    if (url.startsWith("/api/auth/me/notification-schedule")) {
+      user = { ...user, timezone: body.timezone, digest_time: body.digest_time };
       return json(user);
     }
     if (url.startsWith("/api/auth/me")) return json(user);
@@ -124,6 +128,35 @@ describe("ClocksSettingsCard", () => {
     await waitFor(() =>
       expect(bodiesOfPatches(fetchMock)).toContainEqual({ calendar_zone: null }),
     );
+  });
+
+  it("shows your time zone and changes it by search, keeping the digest hour", async () => {
+    const fetchMock = mockApi();
+    const user = userEvent.setup();
+    render();
+    expect(await screen.findByText("Now: Paris (Europe/Paris)")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: "Use Tokyo (Asia/Tokyo)" }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls
+          .filter(([url]) => String(url).startsWith("/api/auth/me/notification-schedule"))
+          .map(([, init]) => JSON.parse(String((init as RequestInit).body))),
+      ).toEqual([{ timezone: "Asia/Tokyo", digest_time: "07:30" }]),
+    );
+    // The profile was re-read, so the card shows the new zone and the search is cleared.
+    expect(await screen.findByText("Now: Tokyo (Asia/Tokyo)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search time zones")).toHaveValue("");
+  });
+
+  it("finds a zone by an alias here too, and says so", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render();
+    await user.type(await screen.findByLabelText("Search time zones"), "delhi");
+    expect(
+      await screen.findByRole("button", { name: "Use Delhi → Kolkata (Asia/Kolkata)" }),
+    ).toBeInTheDocument();
   });
 
   it("makes one option per zone, naming every place in it, city last unless it is the name", async () => {

@@ -404,6 +404,34 @@ describe("contrast, every theme × accent", () => {
   });
 });
 
+describe("Epic 48 clock shade outlines", () => {
+  // A free badge is an outline and a night badge a dark fill; both must have an edge you can
+  // see against the card in every theme (non-text contrast, 3:1), and the two must differ,
+  // or on OLED a night badge (#262626 on #0d0d0d) is no more than a faint smudge.
+  const borderOf = (shade: string) => {
+    const rule = new RegExp(
+      String.raw`\.clocks-row \.clocks-shade\[data-shade="${shade}"\],\s*\.clocks-line[^{]*\{([^}]*)\}`,
+    ).exec(css);
+    const token = /border-color:\s*var\(--([\w-]+)\)/.exec(rule?.[1] ?? "")?.[1];
+    expect(token, `no border-color token on the ${shade} badge`).toBeDefined();
+    return token as string;
+  };
+
+  it("names a different, themed border token for free and for night", () => {
+    expect(borderOf("free")).not.toBe(borderOf("night"));
+  });
+
+  for (const theme of THEMES) {
+    it(`reaches 3:1 against the card in ${theme}`, () => {
+      const vars = tokens(theme, "blue");
+      for (const shade of ["free", "night"]) {
+        const r = ratio(hex(vars, borderOf(shade)), hex(vars, "surface"));
+        expect(r, `${shade} outline in ${theme}`).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
+});
+
 describe("Epic 45 touch targets", () => {
   it("the Waiting card's buttons are at least 44px tall", () => {
     const rule = /\.waiting-actions button\s*\{([^}]*)\}/.exec(css);
