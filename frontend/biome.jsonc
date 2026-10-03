@@ -23,7 +23,9 @@
         // The grid pattern is deliberate (focusable cells, roving selection), and a fieldset
         // brings a border, padding and min-inline-size that every segmented control would
         // then undo in CSS.
-        "useSemanticElements": "off"
+        "useSemanticElements": "off",
+        // NameSuggest renders the labelled input inside the label it is given.
+        "noLabelWithoutControl": { "level": "error", "options": { "inputComponents": ["NameSuggest"] } }
       },
       "complexity": {
         // The few !important rules are the intended overrides (e.g. the tour ring).

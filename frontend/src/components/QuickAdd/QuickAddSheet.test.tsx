@@ -114,6 +114,14 @@ function stubFetch() {
       if (url.endsWith("/api/entries") && method === "POST") return createAnswer();
       if (/\/api\/entries\/[^/]+$/.test(url) && method === "DELETE") return deleteAnswer();
       if (url.includes("/api/categories")) return json({ items: CATEGORIES });
+      if (url.includes("/api/vendors")) {
+        return json({
+          items: [
+            { id: "v1", name: "Lidl", created_at: "2026-01-01T00:00:00Z" },
+            { id: "v3", name: "Shell", created_at: "2026-01-01T00:00:00Z" },
+          ],
+        });
+      }
       if (url.includes("/api/savings/overview")) return json({ pots: POTS });
       return json({ items: [] });
     }),
@@ -563,6 +571,61 @@ describe("vendor auto-fill", () => {
     await user.type(screen.getByLabelText("Vendor"), "lidl");
     expect(pressed("Groceries")).toBe("true");
     expect(screen.getByText("Paid from Holiday")).toBeInTheDocument();
+  });
+
+  it("is a plain input with no native datalist, and a brand-new vendor is typed and sent", async () => {
+    const user = userEvent.setup();
+    mount("2026-03-14");
+    await openSheet(user);
+    await user.type(amountInput(), "9");
+    await user.click(screen.getByRole("button", { name: "Fuel" }));
+    await openMore(user);
+    expect(document.querySelector("datalist")).toBeNull();
+    expect(screen.getByLabelText("Vendor")).not.toHaveAttribute("list");
+    await user.type(screen.getByLabelText("Vendor"), "Corner Bakery");
+    expect(screen.getByLabelText("Vendor")).toHaveValue("Corner Bakery");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]?.body).toMatchObject({ vendor_name: "Corner Bakery" });
+  });
+
+  it("shows known vendors as chips that narrow as you type", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await openMore(user);
+    await user.click(screen.getByLabelText("Vendor"));
+    const group = screen.getByRole("group", { name: "Suggestions" });
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Lidl",
+      "Shell",
+    ]);
+    await user.type(screen.getByLabelText("Vendor"), "sh");
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shell"]);
+  });
+
+  it("a tapped vendor chip fills the input and names the category like typing does", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await openMore(user);
+    await user.click(screen.getByLabelText("Vendor"));
+    await user.click(within(screen.getByRole("group", { name: "Suggestions" })).getByRole("button", { name: "Shell" }));
+    expect(screen.getByLabelText("Vendor")).toHaveValue("Shell");
+    expect(screen.getByLabelText("Vendor")).toHaveFocus();
+    expect(pressed("Fuel")).toBe("true");
+  });
+
+  it("Other… is a plain input too, with category chips", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await user.click(screen.getByRole("button", { name: "Other…" }));
+    expect(document.querySelector("datalist")).toBeNull();
+    await user.click(screen.getByLabelText("Category"));
+    const group = screen.getByRole("group", { name: "Suggestions" });
+    await user.click(within(group).getByRole("button", { name: "Rent" }));
+    expect(screen.getByLabelText("Category")).toHaveValue("Rent");
   });
 });
 

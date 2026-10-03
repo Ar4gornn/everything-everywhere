@@ -21,6 +21,7 @@ import {
 } from "../../entries/outbox";
 import { errorMessage } from "../../i18n/errors";
 import { useT } from "../../i18n";
+import { NameSuggest } from "../NameSuggest";
 import { isPositiveMoney, normalizeMoney } from "../../money";
 import { todayIso } from "../../months";
 import {
@@ -610,22 +611,15 @@ export function QuickAddSheet() {
               </button>
             </div>
             {otherOpen && (
-              <>
-                <input
-                  list="qa-category-names"
-                  aria-label={t("field.category")}
-                  placeholder={t("entries.categoryPlaceholder")}
-                  value={categoryName}
-                  onChange={(event) => chooseCategory(event.target.value)}
-                />
-                <datalist id="qa-category-names">
-                  {categories
-                    .filter((category) => category.kind === kind)
-                    .map((category) => (
-                      <option key={category.id} value={category.name} />
-                    ))}
-                </datalist>
-              </>
+              <NameSuggest
+                ariaLabel={t("field.category")}
+                placeholder={t("entries.categoryPlaceholder")}
+                value={categoryName}
+                onChange={chooseCategory}
+                names={categories
+                  .filter((category) => category.kind === kind)
+                  .map((category) => category.name)}
+              />
             )}
           </div>
 
@@ -694,19 +688,14 @@ export function QuickAddSheet() {
             <div id="qa-more" className="qa-more">
               <label>
                 {t("entries.vendor")}
-                <input
-                  list="qa-vendor-names"
-                  aria-label={t("entries.vendor")}
+                <NameSuggest
+                  ariaLabel={t("entries.vendor")}
                   placeholder={t("entries.vendorPlaceholder")}
                   value={vendorName}
-                  onChange={(event) => onVendorChange(event.target.value)}
+                  onChange={onVendorChange}
+                  names={vendors.map((vendor) => vendor.name)}
                 />
               </label>
-              <datalist id="qa-vendor-names">
-                {vendors.map((vendor) => (
-                  <option key={vendor.id} value={vendor.name} />
-                ))}
-              </datalist>
 
               <label>
                 {t("field.note")}
