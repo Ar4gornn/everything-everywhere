@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useT } from "../../i18n";
 import { isAt, type NavModel } from "../../nav/model";
 import { useNavHints } from "../../nav/hints";
+import { HintView } from "./HintView";
 import "./drawer.css";
 
 /**
@@ -101,7 +102,9 @@ function DrawerBody({ model, onClose }: { model: NavModel; onClose: () => void }
         <section key={group.id} className="nav-drawer-group" aria-labelledby={`nav-group-${group.id}`}>
           <h3 id={`nav-group-${group.id}`}>{t(group.label)}</h3>
           <ul className="nav-tiles">
-            {group.items.map((def) => (
+            {group.items.map((def) => {
+              const hint = hints[def.id];
+              return (
               <li key={def.id}>
                 <Link
                   to={def.to}
@@ -113,10 +116,11 @@ function DrawerBody({ model, onClose }: { model: NavModel; onClose: () => void }
                     {def.glyph}
                   </span>
                   <span className="nav-tile-name">{t(def.label)}</span>
-                  {hints[def.id] && <span className="nav-tile-hint">{hints[def.id]}</span>}
+                  {hint && <HintView hint={hint} className="nav-tile-hint" />}
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       ))}
@@ -136,6 +140,10 @@ function DrawerBody({ model, onClose }: { model: NavModel; onClose: () => void }
           </Link>
         </li>
       </ul>
+
+      <Link to="/settings#layout" className="nav-drawer-customise" onClick={onClose}>
+        {t("nav.drawer.customise")}
+      </Link>
     </div>
   );
 }

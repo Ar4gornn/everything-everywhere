@@ -104,27 +104,56 @@ export const NAV_ITEMS: NavItemId[] = [
   "clocks",
   "moon",
 ];
+/** A desktop's default order: the sidebar's group order (`NAV_DEFS[*].group`), so its list
+ *  reads as the sidebar draws it. A phone keeps `NAV_ITEMS`, the bar first. Server-side
+ *  `NAV_ITEMS_GROUPED`. */
+export const NAV_ITEMS_GROUPED: NavItemId[] = [
+  "dashboard",
+  "calendar",
+  "habits",
+  "books",
+  "notes",
+  "entries",
+  "plan",
+  "grow",
+  "stock",
+  "recipes",
+  "gym",
+  "clocks",
+  "moon",
+];
+const catalogueOf = (name: LayoutName): NavItemId[] =>
+  name === "phone" ? NAV_ITEMS : NAV_ITEMS_GROUPED;
 export const NAV_DEFAULT_PINNED: NavItemId[] = ["dashboard", "entries", "habits", "plan"];
 /** A phone's bottom bar: this many pinned places, then More. */
 export const PHONE_PIN_CAP = 4;
 
-export function defaultItems(): NavItem[] {
-  return NAV_ITEMS.map((id) => ({ id, pinned: NAV_DEFAULT_PINNED.includes(id) }));
+export function defaultItems(name: LayoutName = "phone"): NavItem[] {
+  return catalogueOf(name).map((id) => ({ id, pinned: NAV_DEFAULT_PINNED.includes(id) }));
 }
 
-function defaultLayout() {
+function defaultLayout(name: LayoutName) {
   return {
     tabs: SECTIONS.map(([id, slot]) => ({ id, slot })),
     cards: CARDS.map((id) => ({ id, on: true })),
-    items: defaultItems(),
+    items: defaultItems(name),
   };
+}
+
+/** Pinned places that are in the bar: a place whose module is off takes no slot. */
+export function barCount(items: NavItem[], modules?: Record<ModuleId, boolean>): number {
+  return items.filter((item) => {
+    if (!item.pinned) return false;
+    const module = NAV_DEFS[item.id]?.module;
+    return !module || !modules || modules[module];
+  }).length;
 }
 
 /**
  * A layout's places. The server resolves `items` (AD-65); this only covers a server older
  * than Epic 52, deriving them from `tabs` exactly as the server's `_resolve_items` does.
  */
-export function itemsOf(layout: Layout): NavItem[] {
+export function itemsOf(layout: Layout, name: LayoutName = "phone"): NavItem[] {
   if (layout.items) return layout.items;
   const pinned = layout.tabs
     .filter((tab) => tab.slot === "bar")
@@ -132,16 +161,23 @@ export function itemsOf(layout: Layout): NavItem[] {
     .slice(0, PHONE_PIN_CAP);
   return [
     ...pinned.map((id) => ({ id, pinned: true })),
-    ...NAV_ITEMS.filter((id) => !pinned.includes(id)).map((id) => ({ id, pinned: false })),
+    ...catalogueOf(name)
+      .filter((id) => !pinned.includes(id))
+      .map((id) => ({ id, pinned: false })),
   ];
 }
 
 /** Customise (AD-65): pin a place; refused (returns the list unchanged) when the bar already
  *  holds `PHONE_PIN_CAP`, or the place is already pinned or unknown. A newly pinned place goes
- *  last in the bar, i.e. straight after the last pinned place in the list. */
-export function pinItem(items: NavItem[], id: NavItemId): NavItem[] {
+ *  last in the bar, i.e. straight after the last pinned place in the list. With `modules`,
+ *  a pinned place whose module is off takes no slot (the server counts the same way). */
+export function pinItem(
+  items: NavItem[],
+  id: NavItemId,
+  modules?: Record<ModuleId, boolean>,
+): NavItem[] {
   const item = items.find((i) => i.id === id);
-  if (!item || item.pinned || items.filter((i) => i.pinned).length >= PHONE_PIN_CAP) return items;
+  if (!item || item.pinned || barCount(items, modules) >= PHONE_PIN_CAP) return items;
   const rest = items.filter((i) => i.id !== id);
   const after = rest.map((i) => i.pinned).lastIndexOf(true);
   return [...rest.slice(0, after + 1), { id, pinned: true }, ...rest.slice(after + 1)];
@@ -194,8 +230,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   clocks: [],
   clock_hours: CLOCK_HOURS_DEFAULT,
   calendar_zone: null,
-  phone: defaultLayout(),
-  desktop: defaultLayout(),
+  phone: defaultLayout("phone"),
+  desktop: defaultLayout("desktop"),
 };
 
 /** The account's preferences, or the app as it was when the server predates them. */
@@ -239,7 +275,15 @@ export const STREAK_MODULE: Partial<Record<StreakModuleId, ModuleId>> = {
 
 /** What the server does with a patch: each top-level key present replaces that subtree. */
 export function applyPatch(prefs: Preferences, patch: PreferencesPatch): Preferences {
-  return { ...prefs, ...patch };
+  // A layout patch may leave `tabs` out (the new client never writes them): it lays over the
+  // layout it replaces rather than dropping what it does not mention.
+  const { phone, desktop, ...rest } = patch;
+  return {
+    ...prefs,
+    ...rest,
+    ...(phone ? { phone: { ...prefs.phone, ...phone } } : {}),
+    ...(desktop ? { desktop: { ...prefs.desktop, ...desktop } } : {}),
+  };
 }
 
 /**

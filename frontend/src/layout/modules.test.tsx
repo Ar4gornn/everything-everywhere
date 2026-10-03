@@ -435,24 +435,25 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
     expect(screen.queryByRole("button", { name: /^Pin / })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Unpin / })).toBeNull();
     // Every place is in a group on a desktop, pinned or not.
-    expect(names(group("Daily"))).toEqual(["Dashboard", "Habits", "Calendar", "Books", "Notes"]);
+    // A desktop's default order is the sidebar's: group order, not bar first.
+    expect(names(group("Daily"))).toEqual(["Dashboard", "Calendar", "Habits", "Books", "Notes"]);
     expect(names(group("Money"))).toEqual(["Entries", "Plan", "Grow"]);
   });
 
   it("reorders a desktop group across what a phone would call pinned, and keeps the pins", async () => {
     renderAt("/settings", ALL_ON, echo);
     await userEvent.click(await screen.findByRole("button", { name: "Computer" }, { timeout: 5000 }));
-    // Habits is pinned, Calendar is not: on a desktop that makes no difference to the order.
+    // Habits is pinned, Books is not: on a desktop that makes no difference to the order.
     await userEvent.click(
       within(group("Daily")).getByRole("button", { name: "Move Habits down" }),
     );
-    expect(names(group("Daily"))).toEqual(["Dashboard", "Calendar", "Habits", "Books", "Notes"]);
+    expect(names(group("Daily"))).toEqual(["Dashboard", "Calendar", "Books", "Habits", "Notes"]);
 
     await waitFor(() => expect(firstPatch()).toBeDefined());
     expect(Object.keys(firstPatch())).toEqual(["desktop"]);
     const items = firstPatch().desktop?.items ?? [];
     expect(pinnedIn(items).sort()).toEqual(["dashboard", "entries", "habits", "plan"]);
-    expect(items.map((i) => i.id).indexOf("calendar")).toBeLessThan(
+    expect(items.map((i) => i.id).indexOf("books")).toBeLessThan(
       items.map((i) => i.id).indexOf("habits"),
     );
     // The phone's bar is untouched.
@@ -468,7 +469,7 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
     ]);
     renderAt("/settings", off("gym", "moon"), echo, { ...pinGym, modules: off("gym", "moon") });
     const bar = await barList();
-    // Off, but it still holds a slot in the saved bar, so it is listed and can be freed.
+    // Off, so it takes no slot, but it is still listed and can be freed.
     expect(within(bar).getByText("(off)")).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "Unpin Gym from the bar" })).toBeEnabled();
     expect(within(group("Tools")).getByText("(off)")).toBeInTheDocument();
@@ -496,6 +497,54 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
     expect(tabs()).toEqual(["Dashboard", "Entries", "Habits", "Plan"]);
     await waitFor(() => expect(firstPatch()).toBeDefined());
     expect(pinnedIn(firstPatch().phone?.items ?? [])).toEqual(["dashboard", "entries", "habits", "plan"]);
+    // The new client never writes `tabs`: a reset sends the items and the cards.
+    expect(Object.keys(firstPatch().phone ?? {}).sort()).toEqual(["cards", "items"]);
+  });
+
+  it("saves only items and cards for a layout, never tabs", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    await barList();
+    await userEvent.click(screen.getByRole("button", { name: "Unpin Plan from the bar" }));
+    await waitFor(() => expect(firstPatch()).toBeDefined());
+    expect(Object.keys(firstPatch().phone ?? {}).sort()).toEqual(["cards", "items"]);
+  });
+
+  it("does not count a pinned place whose module is off against the bar", async () => {
+    // Four pinned, one of them (gym) off: three are in the bar, so a fourth can be pinned.
+    const gymPinned = prefsWith([
+      { id: "dashboard", pinned: true },
+      { id: "entries", pinned: true },
+      { id: "gym", pinned: true },
+      { id: "plan", pinned: true },
+      ...(DEFAULT_PREFERENCES.phone.items ?? [])
+        .filter((i) => !["dashboard", "entries", "gym", "plan"].includes(i.id))
+        .map((i) => ({ ...i, pinned: false })),
+    ]);
+    renderAt("/settings", off("gym"), echo, { ...gymPinned, modules: off("gym") });
+    await barList();
+    expect(screen.getByRole("heading", { name: "In the bar (3 of 4)" })).toBeInTheDocument();
+    expect(screen.queryByText(/The bar is full/)).toBeNull();
+    const pin = screen.getByRole("button", { name: "Pin Notes to the bar" });
+    expect(pin).toBeEnabled();
+    await userEvent.click(pin);
+    await waitFor(() => expect(firstPatch()).toBeDefined());
+    expect(pinnedIn(firstPatch().phone?.items ?? [])).toEqual([
+      "dashboard", "entries", "gym", "plan", "notes",
+    ]);
+  });
+
+  it("scrolls the card into view for /settings#layout", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      renderAt("/settings#layout", ALL_ON, echo);
+      await barList();
+      await waitFor(() => expect(scroll).toHaveBeenCalled());
+      expect(scroll.mock.instances[0]).toBe(document.getElementById("layout"));
+    } finally {
+      // @ts-expect-error jsdom has no scrollIntoView; put back what it had.
+      delete Element.prototype.scrollIntoView;
+    }
   });
 });
 

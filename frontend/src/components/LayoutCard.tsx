@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import type { CardId, LayoutName, ModuleId, NavItemId, PreferencesPatch } from "../api/types";
 import { useT } from "../i18n";
@@ -8,6 +9,8 @@ import {
   LAYOUTS,
   MODULES,
   PHONE_PIN_CAP,
+  barCount,
+  defaultItems,
   itemsOf,
   moveCard,
   moveItem,
@@ -34,6 +37,16 @@ export function LayoutCard() {
   const [editing, setEditing] = useState<LayoutName>(layout);
   const [confirming, setConfirming] = useState(false);
 
+  // `/settings#layout` (the drawer's "Change what's in the bar", a module's off page): the
+  // page is a lazy chunk, so the browser's own anchor jump has nothing to land on yet.
+  const anchor = useRef<HTMLDivElement>(null);
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === "#layout") anchor.current?.scrollIntoView?.();
+  }, [hash]);
+
+  // The new client writes `items` and `cards`, never `tabs` (the server derives those for an
+  // app that has not updated).
   function save(patch: PreferencesPatch) {
     setFailed(false);
     update(patch).catch(() => setFailed(true));
@@ -44,14 +57,16 @@ export function LayoutCard() {
   }
 
   const current = preferences[editing];
-  const items = itemsOf(current);
-  const setItems = (next: typeof items) => save({ [editing]: { ...current, items: next } });
+  const items = itemsOf(current, editing);
+  const setItems = (next: typeof items) =>
+    save({ [editing]: { cards: current.cards, items: next } });
   const placeName = (id: NavItemId) => t(NAV_DEFS[id].label);
   const isOff = (id: NavItemId) => {
     const module = NAV_DEFS[id].module;
     return module ? !preferences.modules[module] : false;
   };
-  const pinnedCount = items.filter((item) => item.pinned).length;
+  // A pinned place whose module is off is not in the bar, so it takes no slot.
+  const pinnedCount = barCount(items, preferences.modules);
   const barFull = pinnedCount >= PHONE_PIN_CAP;
   const onPhone = editing === "phone";
 
@@ -113,7 +128,7 @@ export function LayoutCard() {
               aria-label={t("layout.nav.pin", { name })}
               aria-describedby={barFull ? "layout-nav-full" : undefined}
               disabled={barFull}
-              onClick={() => setItems(pinItem(items, id))}
+              onClick={() => setItems(pinItem(items, id, preferences.modules))}
             >
               <span aria-hidden="true">⤒</span>
             </button>
@@ -131,7 +146,7 @@ export function LayoutCard() {
       .map((item) => item.id),
   })).filter((group) => group.ids.length > 0);
 
-  const setCards = (next: typeof current.cards) => save({ [editing]: { ...current, cards: next } });
+  const setCards = (next: typeof current.cards) => save({ [editing]: { cards: next, items } });
   const cardName = (id: CardId) => t(CARD_LABEL[id]);
 
   function cardRow(card: (typeof current.cards)[number], index: number) {
@@ -185,7 +200,7 @@ export function LayoutCard() {
 
   return (
     // The id is where a module's "turned off" page links to.
-    <div id="layout">
+    <div id="layout" ref={anchor}>
       <Card title={t("layout.title")}>
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
           <legend style={{ fontWeight: 600, marginBottom: 6 }}>{t("layout.modules")}</legend>
@@ -277,7 +292,12 @@ export function LayoutCard() {
                 type="button"
                 onClick={() => {
                   setConfirming(false);
-                  save({ [editing]: DEFAULT_PREFERENCES[editing] });
+                  save({
+                    [editing]: {
+                      cards: DEFAULT_PREFERENCES[editing].cards,
+                      items: defaultItems(editing),
+                    },
+                  });
                 }}
               >
                 {t("layout.resetYes")}

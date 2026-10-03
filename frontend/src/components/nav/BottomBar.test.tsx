@@ -49,9 +49,24 @@ describe("BottomBar", () => {
     expect(within(bar()).getByRole("link", { name: /Dashboard/ }).classList.contains("on")).toBe(false);
   });
 
-  it("does not light More on Settings, which is in no place", () => {
+  it("lights More on Settings too: the drawer holds it", () => {
     renderBar("/settings");
-    expect(more().classList.contains("on")).toBe(false);
+    expect(more().classList.contains("on")).toBe(true);
+    expect(more().getAttribute("aria-current")).toBe("true");
+  });
+
+  it("says aria-current=page on a tab lit by a path under its place, not only on an exact match", () => {
+    renderBar("/categories/abc");
+    const entries = within(bar()).getByRole("link", { name: /Entries/ });
+    expect(entries.classList.contains("on")).toBe(true);
+    expect(entries.getAttribute("aria-current")).toBe("page");
+    expect(within(bar()).getByRole("link", { name: /Dashboard/ }).getAttribute("aria-current")).toBeNull();
+    expect(more().getAttribute("aria-current")).toBeNull();
+  });
+
+  it("gives More aria-current when the page is a drawer place", () => {
+    renderBar("/notes/abc");
+    expect(more().getAttribute("aria-current")).toBe("true");
   });
 
   it("opens the drawer and reports whether it is open", () => {

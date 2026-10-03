@@ -28,6 +28,14 @@ DEFAULT_ITEMS = [
         "stock", "recipes", "gym", "clocks", "moon",
     )
 ]
+# Epic 52 round 1: a desktop's default list is in the sidebar's group order.
+DESKTOP_ITEMS = [
+    {"id": place, "pinned": place in ("dashboard", "entries", "habits", "plan")}
+    for place in (
+        "dashboard", "calendar", "habits", "books", "notes", "entries", "plan", "grow",
+        "stock", "recipes", "gym", "clocks", "moon",
+    )
+]
 DEFAULT_CARDS = [
     {"id": card, "on": True}
     for card in (
@@ -68,7 +76,7 @@ DEFAULT = {
     "clock_hours": {"work": ["09:00", "18:00"], "night": ["23:00", "07:00"]},
     "calendar_zone": None,
     "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS, "items": DEFAULT_ITEMS},
-    "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS, "items": DEFAULT_ITEMS},
+    "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS, "items": DESKTOP_ITEMS},
 }
 
 

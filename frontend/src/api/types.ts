@@ -218,7 +218,14 @@ export interface Preferences {
 }
 
 /** Each key present replaces that subtree on the server; absent keys are untouched. */
-export type PreferencesPatch = Partial<Preferences>;
+export type PreferencesPatch = Partial<Omit<Preferences, LayoutName>> & {
+  phone?: LayoutPatch;
+  desktop?: LayoutPatch;
+};
+
+/** A layout as the client writes it: `items` and `cards`. Epic 52 round 1: the new client
+ *  never writes `tabs`; the server derives them from `items` for an app that has not updated. */
+export type LayoutPatch = Omit<Layout, "tabs"> & { tabs?: Layout["tabs"] };
 
 /** How the guided tour ended. The server keeps the time; the client only says which. */
 export type TutorialOutcome = "completed" | "skipped";

@@ -4,9 +4,12 @@ import type { Layout, NavItem, NavItemId, Preferences, PreferencesPatch } from "
 import {
   DEFAULT_PREFERENCES,
   NAV_ITEMS,
+  NAV_ITEMS_GROUPED,
   PHONE_PIN_CAP,
   PreferenceSaver,
   applyPatch,
+  barCount,
+  defaultItems,
   itemsOf,
   moveItem,
   pinItem,
@@ -69,6 +72,10 @@ describe("the defaults", () => {
       "dashboard", "entries", "habits", "plan", "calendar", "books", "notes", "grow",
       "stock", "recipes", "gym", "clocks", "moon",
     ].map((id) => ({ id, pinned: ["dashboard", "entries", "habits", "plan"].includes(id) }));
+    const desktopItems = [
+      "dashboard", "calendar", "habits", "books", "notes", "entries", "plan", "grow",
+      "stock", "recipes", "gym", "clocks", "moon",
+    ].map((id) => ({ id, pinned: ["dashboard", "entries", "habits", "plan"].includes(id) }));
     expect(DEFAULT_PREFERENCES).toEqual({
       modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true, moon: true, clocks: true },
       notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false, streak: false, moon: false },
@@ -85,7 +92,8 @@ describe("the defaults", () => {
       clock_hours: { work: ["09:00", "18:00"], night: ["23:00", "07:00"] },
       calendar_zone: null,
       phone: { tabs, cards, items },
-      desktop: { tabs, cards, items },
+      // Round 1: a desktop's default list is in the sidebar's group order, the same four pinned.
+      desktop: { tabs, cards, items: desktopItems },
     });
   });
 
@@ -103,6 +111,16 @@ describe("the defaults", () => {
     expect(prefs.notifications).toEqual(DEFAULT_PREFERENCES.notifications);
     // ...and for one older than Epic 41, which has no streak switches either.
     expect(prefs.streaks).toEqual(DEFAULT_PREFERENCES.streaks);
+  });
+
+  it("a layout patch without tabs lays over the layout it replaces, keeping its tabs", () => {
+    const items = DEFAULT_PREFERENCES.phone.items?.slice().reverse() ?? [];
+    const next = applyPatch(DEFAULT_PREFERENCES, {
+      phone: { cards: DEFAULT_PREFERENCES.phone.cards, items },
+    });
+    expect(next.phone.items).toEqual(items);
+    expect(next.phone.tabs).toBe(DEFAULT_PREFERENCES.phone.tabs);
+    expect(next.desktop).toBe(DEFAULT_PREFERENCES.desktop);
   });
 
   it("a patch replaces whole subtrees, like the server", () => {
@@ -243,6 +261,19 @@ describe("pinItem", () => {
     expect(pinItem(listOf("gym"), "chess" as NavItemId)).toEqual(listOf("gym"));
   });
 
+  it("does not count a pinned place whose module is off against the bar", () => {
+    const modules = { ...DEFAULT_PREFERENCES.modules, books: false };
+    // Four pinned, one of them (books) off: a fifth may be pinned, and is last in the bar.
+    const items = listOf("dashboard", "entries", "books", "plan");
+    expect(barCount(items, modules)).toBe(3);
+    expect(pinItem(items, "gym", modules).filter((i) => i.pinned).map((i) => i.id)).toEqual([
+      "dashboard", "entries", "books", "plan", "gym",
+    ]);
+    // With the module on (or no modules given) the same bar is full.
+    expect(pinItem(items, "gym")).toBe(items);
+    expect(pinItem(items, "gym", DEFAULT_PREFERENCES.modules)).toBe(items);
+  });
+
   it("does not mutate its input", () => {
     const before = structuredClone(listOf("gym"));
     const input = listOf("gym");
@@ -374,6 +405,20 @@ describe("itemsOf", () => {
         .filter((i) => i.pinned)
         .map((i) => i.id),
     ).toEqual(["gym", "stock", "dashboard", "entries"]);
+  });
+
+  it("lists a desktop's unpinned places in group order, a phone's bar-first", () => {
+    const phone = itemsOf(layout(DEFAULT_PREFERENCES.phone.tabs), "phone");
+    const desktop = itemsOf(layout(DEFAULT_PREFERENCES.phone.tabs), "desktop");
+    expect(desktop.slice(0, 4).map((i) => i.id)).toEqual(["dashboard", "entries", "habits", "stock"]);
+    expect(desktop.slice(4).map((i) => i.id)).toEqual(
+      NAV_ITEMS_GROUPED.filter((id) => !["dashboard", "entries", "habits", "stock"].includes(id)),
+    );
+    expect(phone.slice(4).map((i) => i.id)).toEqual(
+      NAV_ITEMS.filter((id) => !["dashboard", "entries", "habits", "stock"].includes(id)),
+    );
+    expect(defaultItems("desktop").map((i) => i.id)).toEqual(NAV_ITEMS_GROUPED);
+    expect(defaultItems("phone").map((i) => i.id)).toEqual(NAV_ITEMS);
   });
 
   it("has nothing pinned when no tab is in the bar", () => {

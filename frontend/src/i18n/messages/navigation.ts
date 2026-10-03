@@ -6,7 +6,9 @@ import type { Entry } from "../catalogue";
  */
 export const navigation = {
   "nav.moreTab": { en: "More", fr: "Plus" },
-  "nav.drawer.title": { en: "Everything", fr: "Tout" },
+  "nav.drawer.title": { en: "All places", fr: "Toutes les rubriques" },
+  "nav.drawer.customise": { en: "Change what's in the bar", fr: "Modifier la barre" },
+  "nav.skip": { en: "Skip to content", fr: "Aller au contenu" },
   "nav.sidebar": { en: "All places", fr: "Toutes les rubriques" },
   "nav.sidebar.account": { en: "Account", fr: "Compte" },
   "nav.drawer.close": { en: "Close", fr: "Fermer" },

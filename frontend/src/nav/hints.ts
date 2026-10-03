@@ -9,30 +9,33 @@ import { homeZone, hoursFor, readClock } from "../clocks/time";
 import { useNow } from "../clocks/useNow";
 import { budgetMonth, monthBounds, monthNameShort, weekdayNameShort } from "../months";
 import { type MoonEngine, type PhaseName, loadMoonEngine } from "../moon/engine";
-import { resolveHemisphere } from "../moon/hemisphere";
+import { type Hemisphere, resolveHemisphere } from "../moon/hemisphere";
+import { moonOnDay } from "../moon/useMoonView";
 import { deviceZone } from "../push";
 
-/** Phase glyphs as the northern hemisphere sees them; the south sees the lit side flipped. */
-const NORTH: Record<PhaseName, string> = {
-  new: "🌑",
-  waxingCrescent: "🌒",
-  firstQuarter: "🌓",
-  waxingGibbous: "🌔",
-  full: "🌕",
-  waningGibbous: "🌖",
-  lastQuarter: "🌗",
-  waningCrescent: "🌘",
-};
-const SOUTH: Record<PhaseName, string> = {
-  new: "🌑",
-  waxingCrescent: "🌘",
-  firstQuarter: "🌗",
-  waxingGibbous: "🌖",
-  full: "🌕",
-  waningGibbous: "🌔",
-  lastQuarter: "🌓",
-  waningCrescent: "🌒",
-};
+/** What a renderer needs to draw the moon's phase beside the text (the app's `MoonGlyph`). */
+export interface MoonHint {
+  phase: PhaseName;
+  angle: number;
+  illumination: number;
+  hemisphere: Hemisphere;
+}
+
+/** One live hint: its words, and for the moon the phase to draw before them. */
+export interface NavHint {
+  text: string;
+  moon?: MoonHint;
+}
+
+/** A place name in a hint never runs past this many characters (the full name is one tap
+ *  away on the Clocks page): a 32-character label must not break a tile or the sidebar. */
+export const HINT_LABEL_MAX = 12;
+
+/** `label` cut to `HINT_LABEL_MAX` characters (code points) plus an ellipsis. */
+export function hintLabel(label: string): string {
+  const chars = [...label];
+  return chars.length > HINT_LABEL_MAX ? `${chars.slice(0, HINT_LABEL_MAX).join("")}…` : label;
+}
 
 /** Whole days from `today` to the last day of the budget month, counting today. */
 export function daysLeftInMonth(startDay: number, today: Date): number {
@@ -44,17 +47,16 @@ export function daysLeftInMonth(startDay: number, today: Date): number {
 
 /**
  * Epic 52 (AD-65 §6): the live hint under a drawer tile or beside a sidebar entry. Only what
- * the device can compute without asking the server: Clocks (the first place's name and
- * time), Moon (phase glyph and % lit), Calendar (today, short), Plan (days left in the
- * budget month, from `budget_start_day`). Everything else has none. Re-renders on the minute.
+ * the device can compute without asking the server: Clocks (the first place's name, time
+ * and, when its day is not yours, the day word), Moon (phase and % lit, the same figure the
+ * dashboard line shows), Calendar (today, short), Plan (days left in the budget month, from
+ * `budget_start_day`). Everything else has none. Re-renders on the minute.
  *
  * `moon` says whether the lazy astronomy chunk may be requested: the drawer passes `open`,
  * the sidebar leaves the default (true, it is always on screen). A module that is off never
  * loads it either way.
  */
-export function useNavHints(
-  options: { moon?: boolean } = {},
-): Partial<Record<NavItemId, string>> {
+export function useNavHints(options: { moon?: boolean } = {}): Partial<Record<NavItemId, NavHint>> {
   const { moon: wantMoon = true } = options;
   const t = useT();
   const user = useOptionalAuth()?.user ?? null;
@@ -78,35 +80,49 @@ export function useNavHints(
     };
   }, [wantMoon, moonOn]);
 
-  const hints: Partial<Record<NavItemId, string>> = {};
+  const hints: Partial<Record<NavItemId, NavHint>> = {};
 
   const first = clocksOf(preferences)[0];
   if (first) {
     try {
       const home = homeZone(user);
       const reading = readClock(first.zone, now, home, hoursFor(first, clockHoursOf(preferences)));
-      hints.clocks = `${first.label} ${reading.time}`;
+      // A no-break space keeps the time with the name when the tile wraps.
+      const base = `${hintLabel(first.label)} ${reading.time}`;
+      const day =
+        reading.dayShift === 1
+          ? t("clocks.tomorrow")
+          : reading.dayShift === -1
+            ? t("clocks.yesterday")
+            : null;
+      hints.clocks = { text: day ? `${base} ${day}` : base };
     } catch {
       // An unknown zone is the Clocks page's problem to explain, not a tile's.
     }
   }
 
   if (engine && moonOn) {
-    const state = engine.stateAt(now);
-    const south =
-      resolveHemisphere(preferences.moon_hemisphere ?? null, user?.timezone ?? deviceZone()) ===
-      "south";
-    const glyph = (south ? SOUTH : NORTH)[state.phase];
-    hints.moon = `${glyph} ${t("moon.lit", { percent: Math.round(state.illumination * 100) })}`;
+    // The dashboard's line takes the moon on today's local noon; so does this.
+    const state = moonOnDay(engine, now);
+    const hemisphere = resolveHemisphere(
+      preferences.moon_hemisphere ?? null,
+      user?.timezone ?? deviceZone(),
+    );
+    hints.moon = {
+      text: t("moon.lit", { percent: Math.round(state.illumination * 100) }),
+      moon: { phase: state.phase, angle: state.angle, illumination: state.illumination, hemisphere },
+    };
   }
 
-  hints.calendar = t("date.dayLong", {
-    weekday: weekdayNameShort((now.getDay() + 6) % 7, t),
-    day: now.getDate(),
-    month: monthNameShort(now.getMonth() + 1, t),
-  });
+  hints.calendar = {
+    text: t("date.dayLong", {
+      weekday: weekdayNameShort((now.getDay() + 6) % 7, t),
+      day: now.getDate(),
+      month: monthNameShort(now.getMonth() + 1, t),
+    }),
+  };
 
-  hints.plan = t.n("nav.hint.planLeft", daysLeftInMonth(user?.budget_start_day ?? 1, now));
+  hints.plan = { text: t.n("nav.hint.planLeft", daysLeftInMonth(user?.budget_start_day ?? 1, now)) };
 
   return hints;
 }

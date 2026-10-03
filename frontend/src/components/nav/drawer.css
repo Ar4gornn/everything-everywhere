@@ -154,10 +154,40 @@ dialog.nav-drawer::backdrop {
   line-height: 1.2;
 }
 
+/* A hint never breaks a tile: at most two lines, the rest cut with an ellipsis. */
 .nav-drawer .nav-tile .nav-tile-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
   font-size: var(--fs-small);
   line-height: 1.2;
   color: var(--muted);
+}
+
+.nav-drawer .nav-tile .nav-tile-hint .moon-glyph {
+  flex: none;
+}
+
+.nav-drawer .nav-tile .nav-tile-hint .nav-hint-text {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* The way into the bar's editor: small, last, and a 44px target. */
+.nav-drawer .nav-drawer-customise {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  font-size: var(--fs-small);
+  color: var(--link);
 }
 
 .nav-drawer .nav-tile[aria-current="page"] {

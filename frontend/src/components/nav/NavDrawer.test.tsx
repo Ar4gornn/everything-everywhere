@@ -11,7 +11,7 @@ import { BottomBar } from "./BottomBar";
 import { NavDrawer } from "./NavDrawer";
 
 const hints = vi.hoisted(() => ({
-  value: {} as Record<string, string>,
+  value: {} as Record<string, unknown>,
   options: [] as unknown[],
 }));
 vi.mock("../../nav/hints", () => ({
@@ -51,7 +51,7 @@ function renderShell(path = "/", modules: Record<ModuleId, boolean> = ALL_ON) {
 }
 
 const more = () => screen.getByRole("button", { name: "More" });
-const drawer = () => screen.getByRole("dialog", { name: "Everything" });
+const drawer = () => screen.getByRole("dialog", { name: "All places" });
 const openDrawer = () => fireEvent.click(more());
 
 describe("NavDrawer", () => {
@@ -85,13 +85,15 @@ describe("NavDrawer", () => {
     ]);
     // Pinned places are in the bar, not repeated here.
     expect(within(drawer()).queryByRole("link", { name: /Dashboard/ })).toBeNull();
+    // Settings is the last tile; "Change what's in the bar" follows it as a plain link.
     const links = within(drawer()).getAllByRole("link");
-    expect(links[links.length - 1]?.getAttribute("href")).toBe("/settings");
-    expect(links[links.length - 1]).toHaveTextContent("Settings");
+    expect(links[links.length - 2]?.getAttribute("href")).toBe("/settings");
+    expect(links[links.length - 2]).toHaveTextContent("Settings");
+    expect(links[links.length - 1]?.getAttribute("href")).toBe("/settings#layout");
   });
 
   it("shows each tile's hint and asks for the moon only while open", () => {
-    hints.value = { clocks: "Mum 06:00", plan: "9 days left" };
+    hints.value = { clocks: { text: "Mum 06:00" }, plan: { text: "9 days left" } };
     renderShell();
     expect(hints.options).toEqual([]);
     openDrawer();
@@ -125,7 +127,7 @@ describe("NavDrawer", () => {
     expect(document.activeElement).toBe(more());
 
     openDrawer();
-    fireEvent.click(within(drawer()).getByRole("heading", { name: "Everything" }));
+    fireEvent.click(within(drawer()).getByRole("heading", { name: "All places" }));
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.click(drawer());
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -166,9 +168,36 @@ describe("NavDrawer", () => {
     window.localStorage.setItem("everything-everywhere.language", "fr");
     renderShell();
     fireEvent.click(screen.getByRole("button", { name: "Plus" }));
-    const sheet = screen.getByRole("dialog", { name: "Tout" });
+    const sheet = screen.getByRole("dialog", { name: "Toutes les rubriques" });
     expect(within(sheet).getByRole("heading", { name: "Maison et forme" })).toBeTruthy();
     expect(within(sheet).getByRole("link", { name: /Réglages/ })).toBeTruthy();
     expect(within(sheet).getByRole("button", { name: "Fermer" })).toBeTruthy();
+    expect(within(sheet).getByRole("link", { name: "Modifier la barre" })).toBeTruthy();
+  });
+
+  it("ends with a link to the bar's editor, which closes the drawer", () => {
+    renderShell();
+    openDrawer();
+    const link = within(drawer()).getByRole("link", { name: "Change what's in the bar" });
+    expect(link.getAttribute("href")).toBe("/settings#layout");
+    const all = within(drawer()).getAllByRole("link");
+    expect(all[all.length - 1]).toBe(link);
+    fireEvent.click(link);
+    expect(screen.getByTestId("where").textContent).toBe("/settings");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("draws the moon's hint with the app's glyph", () => {
+    hints.value = {
+      moon: {
+        text: "54% lit",
+        moon: { phase: "waxingGibbous", angle: 120, illumination: 0.54, hemisphere: "north" },
+      },
+    };
+    renderShell();
+    openDrawer();
+    const tile = within(drawer()).getByRole("link", { name: /Moon/ });
+    expect(tile.querySelector("svg.moon-glyph")?.getAttribute("data-hemisphere")).toBe("north");
+    expect(tile).toHaveTextContent("54% lit");
   });
 });

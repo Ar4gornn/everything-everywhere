@@ -6,7 +6,7 @@
  * pinned is ignored there). A place whose module is off is gone from all three. Settings is
  * not a place here: it is always last in the drawer and sidebar, and in the phone top bar.
  */
-import type { Layout, ModuleId, NavItemId } from "../api/types";
+import type { Layout, LayoutName, ModuleId, NavItemId } from "../api/types";
 import type { MessageKey } from "../i18n";
 import { itemsOf } from "../layout/preferences";
 
@@ -65,8 +65,12 @@ export interface NavModel {
   sidebar: { id: NavGroupId; label: MessageKey; items: NavDef[] }[];
 }
 
-export function navModel(layout: Layout, modules: Record<ModuleId, boolean>): NavModel {
-  const visible = itemsOf(layout).filter((item) => {
+export function navModel(
+  layout: Layout,
+  modules: Record<ModuleId, boolean>,
+  name: LayoutName = "phone",
+): NavModel {
+  const visible = itemsOf(layout, name).filter((item) => {
     const def = NAV_DEFS[item.id];
     return def !== undefined && (!def.module || modules[def.module]);
   });

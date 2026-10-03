@@ -13,8 +13,14 @@ PLACES = [
     "dashboard", "entries", "habits", "plan", "calendar", "books", "notes", "grow",
     "stock", "recipes", "gym", "clocks", "moon",
 ]
+GROUPED = [
+    "dashboard", "calendar", "habits", "books", "notes", "entries", "plan", "grow",
+    "stock", "recipes", "gym", "clocks", "moon",
+]
 DEFAULT_PINNED = ["dashboard", "entries", "habits", "plan"]
 DEFAULT_ITEMS = [{"id": p, "pinned": p in DEFAULT_PINNED} for p in PLACES]
+# A desktop's default is the sidebar's group order; a phone's is bar first.
+DESKTOP_ITEMS = [{"id": p, "pinned": p in DEFAULT_PINNED} for p in GROUPED]
 
 OLD_TABS = [
     {"id": "dashboard", "slot": "bar"},
@@ -70,7 +76,7 @@ def test_a_new_account_has_the_four_pinned_default(client):
     assert created.status_code == 201
     prefs = created.json()["preferences"]
     assert prefs["phone"]["items"] == DEFAULT_ITEMS
-    assert prefs["desktop"]["items"] == DEFAULT_ITEMS
+    assert prefs["desktop"]["items"] == DESKTOP_ITEMS
 
 
 def test_a_customised_tabs_layout_keeps_its_first_four_bar_tabs(client, user_a, owner_engine):
@@ -91,7 +97,7 @@ def test_a_customised_tabs_layout_keeps_its_first_four_bar_tabs(client, user_a, 
     assert _pinned(items) == ["gym", "stock", "dashboard", "entries"]
     assert items == _items(["gym", "stock", "dashboard", "entries"])
     # The other layout was never customised: the new default, not a copy of the old bar.
-    assert _prefs(client, user_a)["desktop"]["items"] == DEFAULT_ITEMS
+    assert _prefs(client, user_a)["desktop"]["items"] == DESKTOP_ITEMS
 
 
 def test_a_layout_saved_with_only_tabs_before_epic_52_still_reads(client, user_a, owner_engine):
@@ -142,7 +148,7 @@ def test_items_round_trip_in_the_persons_order(client, user_a):
     assert answer.status_code == 200, answer.text
     assert answer.json()["preferences"]["phone"]["items"] == mine
     assert _prefs(client, user_a)["phone"]["items"] == mine
-    assert _prefs(client, user_a)["desktop"]["items"] == DEFAULT_ITEMS
+    assert _prefs(client, user_a)["desktop"]["items"] == DESKTOP_ITEMS
 
 
 def test_a_phone_may_pin_four_but_not_five(client, user_a):
@@ -225,11 +231,87 @@ def test_an_old_client_writing_only_tabs_is_accepted_and_items_still_resolve(cli
 
 
 def test_tabs_and_items_may_be_sent_together(client, user_a):
+    """Stored `items` win, and the tabs an old app reads are derived from them."""
     answer = _patch(client, user_a, {"phone": {"tabs": OLD_TABS, "items": _items(["notes"])}})
     assert answer.status_code == 200, answer.text
     prefs = answer.json()["preferences"]["phone"]
-    assert prefs["tabs"] == OLD_TABS
     assert _pinned(prefs["items"]) == ["notes"]
+    assert prefs["tabs"] != OLD_TABS
+
+
+def _tab_ids(prefs, slot):
+    return [t["id"] for t in prefs["tabs"] if t["slot"] == slot]
+
+
+def test_tabs_are_derived_from_items_for_an_old_app(client, user_a):
+    """Round 1 (9): sections only, the pinned ones first in the bar, then the next sections
+    fill the bar to five, the rest are the top links (three at most)."""
+    mine = _items(["gym", "calendar", "plan", "moon"])
+    answer = _patch(client, user_a, {"phone": {"items": mine}})
+    assert answer.status_code == 200, answer.text
+    phone = answer.json()["preferences"]["phone"]
+    # Pinned sections in list order (gym, plan); calendar and moon are not sections. The rest
+    # follow in items order: dashboard, entries, habits fill the bar to five.
+    assert _tab_ids(phone, "bar") == ["gym", "plan", "dashboard", "entries", "habits"]
+    assert _tab_ids(phone, "top") == ["grow", "stock", "recipes"]
+    assert [t["id"] for t in phone["tabs"]] == ["gym", "plan", "dashboard", "entries", "habits",
+                                                "grow", "stock", "recipes"]
+    assert len(_tab_ids(phone, "bar")) == 5 and len(_tab_ids(phone, "top")) == 3
+    # A new client never wrote tabs, and the derivation is stable on read.
+    assert _prefs(client, user_a)["phone"]["tabs"] == phone["tabs"]
+
+
+def test_a_desktop_default_is_in_group_order_and_a_migrated_one_too(client, user_a, owner_engine):
+    assert _ids(_prefs(client, user_a)["desktop"]["items"]) == GROUPED
+    _store(owner_engine, user_a, {"desktop": {"tabs": OLD_TABS}})
+    items = _prefs(client, user_a)["desktop"]["items"]
+    assert _ids(items)[:4] == ["dashboard", "entries", "habits", "stock"]
+    assert _ids(items)[4:] == [p for p in GROUPED if p not in _ids(items)[:4]]
+    # The phone migrates the same list in bar-first order.
+    _store(owner_engine, user_a, {"phone": {"tabs": OLD_TABS}})
+    phone = _prefs(client, user_a)["phone"]["items"]
+    assert _ids(phone)[4:] == [p for p in PLACES if p not in _ids(phone)[:4]]
+
+
+# --- a place whose module is off takes no slot -------------------------------------------
+
+
+def _five(pinned_off):
+    """Five pinned places: the first four defaults plus `pinned_off`."""
+    return _items([*DEFAULT_PINNED, pinned_off])
+
+
+def test_an_off_module_place_takes_no_bar_slot_when_the_patch_turns_it_off(client, user_a):
+    patch_body = {"modules": {"gym": False}, "phone": {"items": _five("gym")}}
+    assert _patch(client, user_a, patch_body).status_code == 200
+
+
+def test_an_off_module_place_takes_no_bar_slot_from_the_stored_modules(client, user_a):
+    assert _patch(client, user_a, {"modules": {"gym": False}}).status_code == 200
+    # The patch carries only the layout: the stored modules decide.
+    answer = _patch(client, user_a, {"phone": {"items": _five("gym")}})
+    assert answer.status_code == 200, answer.text
+    # A place whose module is on still counts.
+    refused = _patch(client, user_a, {"phone": {"items": _five("stock")}})
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "pref_slot_full"
+
+
+def test_the_patch_modules_win_over_the_stored_ones(client, user_a):
+    assert _patch(client, user_a, {"modules": {"gym": False}}).status_code == 200
+    # Turning gym back on in the same patch: it counts again, so five is one too many.
+    refused = _patch(client, user_a, {"modules": {"gym": True}, "phone": {"items": _five("gym")}})
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "pref_slot_full"
+
+
+def test_a_stored_overfull_bar_counts_only_places_that_are_on(client, user_a, owner_engine):
+    pinned = [*DEFAULT_PINNED, "gym"]
+    _store(owner_engine, user_a, {"modules": {"gym": False}, "phone": {"items": _five("gym")}})
+    # Gym is off: four places are in the bar, and the fifth keeps its pin for when gym is on.
+    assert _pinned(_prefs(client, user_a)["phone"]["items"]) == pinned
+    _store(owner_engine, user_a, {"phone": {"items": _five("gym")}})
+    assert _pinned(_prefs(client, user_a)["phone"]["items"]) == DEFAULT_PINNED
 
 
 # --- reading never fails -----------------------------------------------------------------

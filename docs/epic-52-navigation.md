@@ -99,3 +99,51 @@ Habits left) — no hint for those.
 - Backend tests: default items; migration from a customised `tabs`; stored items merged with
   a missing id; >4 pinned on phone refused; desktop uncapped; unknown/duplicate/incomplete;
   old clients writing `tabs` still accepted.
+
+---
+
+## 6. Round 1 amendments (QA, 2026-10-04)
+
+These change §2 and §5 above; where they disagree, this section wins.
+
+- **Bar slots count only places that are on (§2.2).** A pinned place whose module is off is
+  not in the bar, so it takes no slot. Client: `barCount(items, modules)` and
+  `pinItem(items, id, modules?)`; the editor's "(n of 4)" uses the same count. Server:
+  `_check_layout` counts pinned items whose module is on, using the patch's `modules` when it
+  carries them and otherwise the stored ones (`update_preferences` reads them); read-time
+  trimming of an over-full stored phone bar counts the same way. Turning a module back on
+  can leave more than four visible pinned places: reading keeps the first four.
+- **A new client never writes `tabs` (§2.3).** `LayoutCard` saves and Reset send
+  `{cards, items}` only (`LayoutPatch`; `applyPatch` lays a layout patch over the layout it
+  replaces). When a layout has stored `items`, the server derives the resolved `tabs` from
+  them for an installed app that has not updated: sections only (dashboard, entries, habits,
+  stock, gym, plan, grow, recipes) in items order, the pinned sections first, then the next
+  sections to fill the bar to five, the rest "top" (three at most). The old app therefore
+  shows the same first places. A layout with no stored `items` keeps its stored tabs.
+- **Default order per layout.** A desktop's default `items` are in the sidebar's group order
+  (dashboard, calendar, habits, books, notes, entries, plan, grow, stock, recipes, gym,
+  clocks, moon), still marking the same four as pinned (ignored there). A phone's default
+  stays bar-first. Both sides: `NAV_ITEMS_GROUPED`, `_default_items(name)`, `itemsOf(layout,
+  name)`; a desktop layout migrated from `tabs` lists the unpinned in group order.
+- **Drawer (§3).** Titled "All places" / "Toutes les rubriques". Last in the sheet, a small
+  link "Change what's in the bar" / "Modifier la barre" to `/settings#layout`; the Layout
+  card scrolls itself into view for that hash (the page is a lazy chunk, so the browser's
+  own anchor jump has nothing to land on). Hints never break a tile: two lines at most.
+- **Desktop top bar dropped (§4).** On a desktop layout there is no `<header class="topbar">`:
+  the sidebar carries the name, Settings with the signed-in email under it, and the theme
+  switch. The phone's top bar is unchanged. `<Sidebar>` is rendered only on a desktop layout;
+  `<BottomBar>` is always rendered (CSS hides it on a desktop) and the drawer closes when the
+  window becomes a desktop.
+- **Rail tooltips.** Between 721 and 960px each link shows its name on hover and keyboard
+  focus through the app's `data-tip`.
+- **Accessibility.** A "Skip to content" link is the first focusable element and targets
+  `<main id="main" tabindex="-1">`. Sidebar group names are labelled groups, not headings.
+  A bar tab lit by a sub-path carries `aria-current="page"`; More carries
+  `aria-current="true"` on a drawer place and on Settings, and is lit there.
+- **Hints.** A clock's name in a hint is cut to 12 characters and an ellipsis. The Clocks
+  hint adds "tomorrow"/"yesterday" when the first place's day differs from yours. The Moon
+  hint uses the dashboard's own figure (`moonOnDay`, today's local noon) and the app's
+  `MoonGlyph` in the right hemisphere (`NavHint.moon`), not an emoji.
+- **Bundle.** The clock search (alias and country tables, `findZones`) moved from
+  `clocks/time.ts` to `clocks/search.ts`, imported by the Clocks page and the Settings card
+  only; `nav/hints.ts` imports the light `time.ts` alone.

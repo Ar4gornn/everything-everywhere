@@ -306,10 +306,16 @@ export function App() {
   // Read before the early returns below: a hook must run on every render.
   const modules = useModules();
   // The tabs are the account's, per layout (Epic 33): a phone and a laptop may differ.
-  const { current } = usePreferences();
+  const { current, layout } = usePreferences();
+  const desktop = layout === "desktop";
   // Epic 52 (AD-65): one model for the phone bar, the More drawer and the desktop sidebar.
-  const nav = navModel(current, modules);
+  const nav = navModel(current, modules, layout);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // A window widened past the phone breakpoint with the drawer open: the sidebar takes over,
+  // and a modal dialog left open would keep the whole page inert.
+  useEffect(() => {
+    if (desktop) setDrawerOpen(false);
+  }, [desktop]);
   // A tap on a tile closes the drawer itself; this covers every other way the page changes
   // (back button, a link in a page) so the sheet never stays over the new one.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the path is the trigger
@@ -379,7 +385,22 @@ export function App() {
     <div className="shell">
       {/* Epic 52 (AD-65): every place, grouped, down the left of a desktop. CSS hides it
           on a phone, where the bottom bar and the More drawer do the same job. */}
-      <Sidebar model={nav} pathname={pathname} />
+      {/* biome-ignore lint/a11y/useValidAnchor: a skip link is an in-page anchor; the handler
+          only keeps "#main" out of the URL and moves focus to the region */}
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        {t("nav.skip")}
+      </a>
+      {desktop ? <Sidebar model={nav} pathname={pathname} /> : null}
+      {/* The desktop has no top bar: the sidebar carries the name, Settings (with who is
+          signed in) and the theme switch. */}
+      {desktop ? null : (
       <header className="topbar">
         <h1 className="brand">{t("app.name")}</h1>
         {/* The email is the way into Settings: currency, password, recovery codes and
@@ -404,8 +425,9 @@ export function App() {
           </NavLink>
         </div>
       </header>
+      )}
 
-      <main>
+      <main id="main" tabIndex={-1}>
         {/* Nothing is drawn while a chunk loads: the bars above and below are already there,
             and a spinner for a fetch that is usually served from the worker's cache would
             flash more than it informs. */}
