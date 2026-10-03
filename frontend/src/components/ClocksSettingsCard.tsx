@@ -9,6 +9,7 @@ import {
   findZones,
   fromMinutes,
   homeZone,
+  isSearchable,
   sameName,
   zoneCity,
 } from "../clocks/time";
@@ -42,7 +43,8 @@ function ClocksSettings() {
   const saveHomeZone = useSaveHomeZone();
   const zones = useMemo(() => allZones(), []);
   const [query, setQuery] = useState("");
-  const found = query.trim() ? findZones(query, zones, 8).matches : [];
+  const searching = isSearchable(query);
+  const found = searching ? findZones(query, zones, 8).matches : [];
   const hours = clockHoursOf(preferences);
   const places = clocksOf(preferences);
   const zone = preferences.calendar_zone ?? null;
@@ -119,6 +121,7 @@ function ClocksSettings() {
       <p className="hint" style={{ marginTop: 0 }}>
         {t("clocks.settings.homeZoneHint")}
       </p>
+      <p className="hint">{t("clocks.settings.homeZoneDigest")}</p>
       <p className="clocks-settings-home">
         <strong>{t("clocks.settings.homeZoneNow", { city: zoneCity(home), zone: home })}</strong>
       </p>
@@ -130,6 +133,7 @@ function ClocksSettings() {
         autoComplete="off"
         onChange={(event) => setQuery(event.target.value)}
       />
+      {searching && found.length === 0 && <p className="hint">{t("clocks.page.noMatch")}</p>}
       {found.length > 0 && (
         <ul className="clocks-settings-results" aria-label={t("clocks.settings.homeZoneResults")}>
           {found.map(({ zone: candidate, alias }) => {

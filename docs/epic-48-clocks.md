@@ -61,6 +61,15 @@ preferences), AD-52 (account time zone), AD-63 (computed, not stored).
    says "São Paulo"). Past 20 results the list says "Showing 20 of N". The server
    accepts both spellings, so an older saved id keeps working; wherever two zones are
    compared (calendar place lookup, Settings select) both go through `canonicalZone`.
+   **Round 4:** an exact (folded) country or alias name ranks first, before every word-start
+   match ("india" → Kolkata before Indianapolis, "rio" → São Paulo before Rio Branco); a
+   query needs two characters (one letter shows nothing, not "No match"); no typo tolerance.
+   The alias table gained about 40 names (Sweden, Poland, Deutschland, Britain, Arizona,
+   Alaska, Texas, Florida, NZ, NYC, LA, the Nordics, Benelux, Austria, Kenya, Korea,
+   Malaysia, Chile, Colombia, Peru, ...). `canonicalZone` also maps the region links
+   `US/*`, `Canada/*`, `Etc/UTC`, `UCT`, `GMT`, `Universal`, `Zulu` (so a calendar zone saved
+   as `US/Eastern` beside a New York home shows no second time); those links are never
+   search aliases ("Eastern" and "Pacific" name several places).
 2. **Three sparse preferences keys**, each replaced whole by a PATCH (AD-49):
    - `clocks`: `[{id, zone, label, hours|null}]`, ≤ 12, ids unique (`pref_duplicate`), label
      1-32 trimmed with no control characters (Unicode Cc, Cs, Zl, Zp), no bidi
@@ -85,7 +94,9 @@ preferences), AD-52 (account time zone), AD-63 (computed, not stored).
    `readClock(zone, at, home, hours, reference = at)` takes the zone's date at `at` minus the
    home date at `reference`. At -12 h a place that is still today says nothing, and the
    readout shows the home time with its own day word when the shifted home date differs from
-   today ("tomorrow 02:15 (+3h)", French "demain ...").
+   today ("tomorrow 02:15", French "demain 02:15"). **Round 4:** the readout (and the
+   slider's `aria-valuetext`) is the planned home time and its day word only, no offset:
+   the base is the floored quarter hour, so "+15 min" at 12:07 read as a promise it was not.
 
 ---
 
@@ -156,6 +167,23 @@ overlap; `inRange` wrap and empty; `shadeAt` night-over-work; `searchZones` acce
   8 s timer pauses while the pointer or focus is inside the list card. On a phone the Edit
   toggle is at the end of the row (its own 44 px track), the meta may stay on one line up to
   10 rem, and the sticky slider card is opaque and square with two lines kept for the readout.
+  **Round 4 (responsiveness, tested with 800 ms latency).** Every operation is shown at once:
+  queued operations sit, in order, on a local overlay of the list (rename, custom hours,
+  move, remove, add, undo); each leaves the overlay in the same tick the saver takes it
+  (success: the server's list is shown) or when it fails (rollback, error at the action as
+  before). Add and rename Save ignore a second press or Enter while in flight and read
+  "Adding…" / "Saving…" (`aria-disabled`, so focus stays). Remove is immediate: the row
+  goes, focus moves to the neighbour and the Undo line appears at once. Removes stack: one
+  line, "Removed Office and Mum. Undo", puts every place removed in the window back in one
+  write (last removed first, each at its index), focus on the restored row's toggle at once.
+  The Undo line and "This place was changed on another device." sit at the top of the list
+  card, right under its heading (`role="status"`); the notice clears on the next successful
+  write or after 8 s. After any refused write (GET or PATCH) the account is re-read; an add
+  refused with `422 validation` while the account already has 12 places says "You already
+  have 12 places (changed on another device)." in the Add card. Escape on an open row's own
+  toggle collapses it; after "Use it" focus lands on your own row's name (`tabIndex=-1`).
+  Settings → Your time zone shows the no-match hint and "Your daily summary keeps its hour
+  in the new zone." The "Custom hours" tag never breaks inside a word (`nowrap`).
   Free and night badges have their own outline tokens (`--faint`, `--text`), each held to
   3:1 on the card in every theme by `theme.test.tsx`.
 - **`ClocksCard`** (dashboard): nothing when no places; else home + first 3 places, one line

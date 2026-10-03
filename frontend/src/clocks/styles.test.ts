@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { clocksPage } from "../i18n/messages/clocksPage";
+
 /** jsdom has no layout, so the clock rows' CSS contract is pinned on the stylesheet text. */
 const css = readFileSync(join(__dirname, "..", "styles.css"), "utf8").replace(/\r\n/g, "\n");
 const block = css.slice(css.indexOf("Epic 48 (AD-64): Clocks page"));
@@ -29,6 +31,16 @@ describe("the clocks stylesheet", () => {
     ).toContain(
       "grid-column: 1 / -1;",
     );
+  });
+
+  it("never breaks the Custom hours tag inside a word (round 4)", () => {
+    const tag = rule(".clocks-row .clocks-tag,\n.clocks-line .clocks-tag");
+    expect(tag).toContain("overflow-wrap: normal;");
+    // Wrapping between words only works if every word fits the name column (62px at 320,
+    // 12px Lato: about nine letters).
+    for (const text of Object.values(clocksPage["clocks.page.ownHoursTag"])) {
+      for (const word of text.split(" ")) expect(word.length, word).toBeLessThanOrEqual(9);
+    }
   });
 
   it("keeps the slider under the top edge on a phone, and focus clear of it", () => {

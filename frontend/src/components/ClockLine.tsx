@@ -14,6 +14,7 @@ export function ClockLine({
   className,
   id,
   label,
+  labelFocusable,
   city,
   time,
   dayWord,
@@ -26,6 +27,8 @@ export function ClockLine({
   className: "clocks-row" | "clocks-line";
   id: string;
   label: string;
+  /** Focus can be sent to the name (tabIndex -1), as after the page changes your zone. */
+  labelFocusable?: boolean;
   city: string | null;
   time: string;
   dayWord: string | null;
@@ -40,11 +43,13 @@ export function ClockLine({
     <li className={className} data-place={id}>
       <span className="clocks-name">
         <span className="clocks-name-line">
-          <strong className="clocks-label">{label}</strong>
+          <strong className="clocks-label" tabIndex={labelFocusable ? -1 : undefined}>
+            {label}
+          </strong>
           {action}
         </span>
         {city && <span className="clocks-zone">{city}</span>}
-        {ownHours && <span className="clocks-tag">{t("clocks.page.ownHours")}</span>}
+        {ownHours && <span className="clocks-tag">{t("clocks.page.ownHoursTag")}</span>}
       </span>
       <span className="clocks-time">{time}</span>
       <span className="clocks-meta">

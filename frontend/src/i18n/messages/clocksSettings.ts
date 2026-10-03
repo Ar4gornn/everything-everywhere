@@ -31,6 +31,10 @@ export const clocksSettings = {
     en: "Your own clock, and what counts as today, use this zone. Search to change it.",
     fr: "Votre propre horloge, et ce qui compte pour aujourd’hui, suivent ce fuseau. Cherchez pour le changer.",
   },
+  "clocks.settings.homeZoneDigest": {
+    en: "Your daily summary keeps its hour in the new zone.",
+    fr: "Votre résumé quotidien garde son heure dans le nouveau fuseau.",
+  },
   "clocks.settings.homeZoneNow": { en: "Now: {city} ({zone})", fr: "Actuel : {city} ({zone})" },
   "clocks.settings.homeZoneResults": { en: "Matching zones", fr: "Fuseaux correspondants" },
   "clocks.settings.homeZonePick": { en: "Use {name} ({zone})", fr: "Utiliser {name} ({zone})" },

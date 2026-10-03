@@ -126,7 +126,12 @@ interface Options {
   /** One rest day, and nothing else of gym's, on 2026-09-02 (Epic 43). */
   restDay?: boolean;
   /** Epic 48: two timed check-ins on the 2nd, an account in Paris, and these preferences. */
-  clocks?: { calendar_zone: string | null; places?: unknown[]; moduleOff?: boolean };
+  clocks?: {
+    calendar_zone: string | null;
+    places?: unknown[];
+    moduleOff?: boolean;
+    timezone?: string;
+  };
 }
 
 function mockApi(options: Options = {}) {
@@ -137,7 +142,7 @@ function mockApi(options: Options = {}) {
     if (url.includes("/api/auth/me")) {
       const extra = options.clocks
         ? {
-            timezone: "Europe/Paris",
+            timezone: options.clocks.timezone ?? "Europe/Paris",
             preferences: {
               ...DEFAULT_PREFERENCES,
               modules: { ...DEFAULT_PREFERENCES.modules, clocks: !options.clocks.moduleOff },
@@ -598,6 +603,17 @@ describe("CalendarPage", () => {
     expect(await screen.findByText("13:00")).toBeInTheDocument();
     expect(screen.queryByText(/13:00 ·/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Flat/)).not.toBeInTheDocument();
+  });
+
+  it("shows no second time for a region link of your own zone (round 4)", async () => {
+    mockApi({
+      startDay: 1,
+      clocks: { calendar_zone: "US/Eastern", timezone: "America/New_York" },
+    });
+    render(<CalendarPage />);
+    await openSecond();
+    expect(await screen.findByText("13:00")).toBeInTheDocument();
+    expect(screen.queryByText(/13:00 ·/)).not.toBeInTheDocument();
   });
 
   it("finds the place for a zone saved under a legacy name", async () => {

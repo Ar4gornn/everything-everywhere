@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import type { ClockHours, ClockPlace } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { LABEL_MAX, labelProblem } from "../clocks/label";
@@ -20,6 +20,7 @@ import {
   fromMinutes,
   homeZone,
   hoursFor,
+  isSearchable,
   newPlaceId,
   placeAliases,
   readClock,
@@ -41,14 +42,20 @@ import { deviceZone } from "../push";
  * The Clocks page (Epic 48, AD-64): the account's own zone first, then the places the person
  * chose. Every write is an operation on a place id, applied to the account as the server has
  * it right now and then sent as the whole list (AD-49), so a tab that went stale cannot undo
- * what another device did. The slider is local state, so leaving the page puts the clocks
- * back on now. A failed write is reported where the action was: in the place's row, or in
- * the Add card.
+ * what another device did. Until it is sent, the operation is already shown: queued
+ * operations sit on a local overlay of the list, in order, and each leaves it when the saver
+ * takes it (success) or when it fails (rollback). The slider is local state, so leaving the
+ * page puts the clocks back on now. A failed write is reported where the action was: in the
+ * place's row, or in the Add card.
  */
 
-/** A change to the list, keyed by place id; null when the place it names is gone. */
+/** A change to the list, keyed by place id; null when the place it names is gone. Pure: it
+ *  runs on every render while it waits, and once more on the server's list. */
 type Op = (list: ClockPlace[]) => ClockPlace[] | null;
 type Outcome = "ok" | "gone" | "failed";
+/** Why a write failed: "full" is an add refused because the account already has the most. */
+type Failure = "failed" | "full";
+type Removal = { place: ClockPlace; index: number };
 
 const sameHours = (a: ClockHours, b: ClockHours) =>
   a.work[0] === b.work[0] &&
@@ -62,6 +69,8 @@ const QUARTERS = Array.from({ length: 96 }, (_, index) => fromMinutes(index * 15
 const RESULTS_MAX = 20;
 /** How long "Removed Mum. Undo" stays, unless another write comes first. */
 export const UNDO_MS = 8000;
+/** How long "This place was changed on another device." stays, unless a write succeeds. */
+export const NOTICE_MS = 8000;
 
 type HourKey = "workStart" | "workEnd" | "nightStart" | "nightEnd";
 const HOUR_FIELDS: { key: HourKey; label: `clocks.page.${HourKey}` }[] = [
@@ -102,6 +111,8 @@ function hourValue(hours: ClockHours, key: HourKey): string {
 const editButtonOf = (id: string) =>
   document.querySelector<HTMLButtonElement>(`[data-place="${id}"] .clocks-edit`);
 const searchInput = () => document.getElementById("clocks-search");
+const homeLabel = () =>
+  document.querySelector<HTMLElement>('[data-place="home"] .clocks-label');
 
 export function ClocksPage() {
   const t = useT();
@@ -110,7 +121,13 @@ export function ClocksPage() {
   const refreshUser = auth?.refreshUser;
   const { preferences, update } = usePreferences();
   const dayWord = useDayWord();
-  const places = clocksOf(preferences);
+  // Operations queued but not yet handed to the saver, shown on top of what it shows.
+  const [pending, setPending] = useState<{ seq: number; op: Op }[]>([]);
+  const seq = useRef(0);
+  const places = pending.reduce<ClockPlace[]>(
+    (list, entry) => entry.op(list) ?? list,
+    clocksOf(preferences),
+  );
   const defaults = clockHoursOf(preferences);
   const home = homeZone(user);
   const saveHomeZone = useSaveHomeZone();
@@ -126,14 +143,14 @@ export function ClocksPage() {
     [real, offset],
   );
   // Which write failed, keyed by place id or "add": the message belongs where the action was.
-  const [failures, setFailures] = useState<Record<string, boolean>>({});
+  const [failures, setFailures] = useState<Record<string, Failure | undefined>>({});
   // A write named a place that another device had already removed.
   const [changedElsewhere, setChangedElsewhere] = useState(false);
-  // The place an add is saving: the list already holds it (the saver is optimistic), but the
-  // Add card must not count it, or an 11 -> 12 add unmounts the form mid-save.
+  // The place an add is saving: the list already holds it (it is shown at once), but the Add
+  // card must not count it, or an 11 -> 12 add unmounts the form mid-save.
   const [adding, setAdding] = useState<string | null>(null);
-  // The last removed place, for Undo, until another write or UNDO_MS.
-  const [removed, setRemoved] = useState<{ place: ClockPlace; index: number } | null>(null);
+  // Places removed since the last other write, oldest first: one Undo puts them all back.
+  const [removed, setRemoved] = useState<Removal[]>([]);
   // Hover or focus inside the list card holds the Undo timer, so it cannot vanish under a
   // hand that is on its way to the button.
   const [hold, setHold] = useState({ hover: false, focus: false });
@@ -161,10 +178,16 @@ export function ClocksPage() {
   }, [focusTick, places]);
 
   useEffect(() => {
-    if (!removed || held) return;
-    const timer = window.setTimeout(() => setRemoved(null), UNDO_MS);
+    if (removed.length === 0 || held) return;
+    const timer = window.setTimeout(() => setRemoved([]), UNDO_MS);
     return () => window.clearTimeout(timer);
   }, [removed, held]);
+
+  useEffect(() => {
+    if (!changedElsewhere) return;
+    const timer = window.setTimeout(() => setChangedElsewhere(false), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [changedElsewhere]);
 
   // Back on this page after a day in another tab: the account may have moved on.
   useEffect(() => {
@@ -176,18 +199,30 @@ export function ClocksPage() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refreshUser]);
 
-  const clearFailure = (key: string) => setFailures((f) => (f[key] ? { ...f, [key]: false } : f));
+  const clearFailure = (key: string) =>
+    setFailures((f) => (f[key] ? { ...f, [key]: undefined } : f));
 
   // Writes run one after the other: the second reads the account the first just wrote.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
 
-  /** Apply `op` to the account's list as the server has it now, and send the result. */
+  /**
+   * Show `op` at once, then apply it to the account's list as the server has it now and send
+   * the result. It leaves the overlay in the same tick the saver shows its result (no flash,
+   * no double move), or when it fails, which is the rollback.
+   */
   const run = (op: Op, key: string): Promise<Outcome> => {
-    setFailures((f) => ({ ...f, [key]: false }));
-    setChangedElsewhere(false);
+    seq.current += 1;
+    const mine = seq.current;
+    setPending((list) => [...list, { seq: mine, op }]);
+    setFailures((f) => ({ ...f, [key]: undefined }));
+    const drop = () => setPending((list) => list.filter((entry) => entry.seq !== mine));
     const job = async (): Promise<Outcome> => {
+      let had = 0;
       try {
-        const next = op(clocksOf(preferencesOf(await api.me())));
+        const current = clocksOf(preferencesOf(await api.me()));
+        had = current.length;
+        const next = op(current);
+        drop();
         if (next === null) {
           // Nothing to write: show what the server has, and say why the action did nothing.
           setChangedElsewhere(true);
@@ -195,9 +230,21 @@ export function ClocksPage() {
           return "gone";
         }
         await update({ clocks: next });
+        setChangedElsewhere(false);
         return "ok";
-      } catch {
-        setFailures((f) => ({ ...f, [key]: true }));
+      } catch (error) {
+        drop();
+        // An add refused by the schema's cap while the account already has the most: another
+        // device filled it.
+        const full =
+          key === "add" &&
+          had >= CLOCKS_MAX &&
+          error instanceof ApiError &&
+          error.status === 422 &&
+          error.code === "validation";
+        setFailures((f) => ({ ...f, [key]: full ? "full" : "failed" }));
+        // Whatever was refused, the tab re-reads the account so it shows what is really there.
+        void refreshUser?.().catch(() => undefined);
         return "failed";
       }
     };
@@ -206,37 +253,36 @@ export function ClocksPage() {
     return result;
   };
 
-  /** Any write but a remove ends the chance to undo the last remove. */
-  const write = async (op: Op, key: string): Promise<boolean> => {
-    setRemoved(null);
+  /** Any write but a remove ends the chance to undo the removes before it. */
+  const write = async (op: Op, key: string): Promise<Outcome> => {
+    setRemoved([]);
     clearFailure("undo");
-    return (await run(op, key)) === "ok";
+    return run(op, key);
   };
 
   // The day word is counted from the real today, so a shifted home time can say "tomorrow".
   const homeReading = readClock(home, now, home, defaults, real);
-  const shift = offset === 0 ? null : formatDiff(offset * 15);
   const homeDay = dayWord(homeReading.dayShift);
+  // The planned home time and its day word, nothing else: an offset from a floored base
+  // ("+15 min" at 12:07 for 12:15) read as a promise it was not.
   const readout =
-    offset === 0
-      ? t("clocks.page.now")
-      : `${homeDay ? `${homeDay} ` : ""}${homeReading.time}${shift ? ` (${shift})` : ""}`;
+    offset === 0 ? t("clocks.page.now") : `${homeDay ? `${homeDay} ` : ""}${homeReading.time}`;
   // "Your time: {time}" with the readout in bold, French spacing included.
   const [readoutBefore = "", readoutAfter = ""] = t("clocks.page.yourTime", {
     time: "\u0000",
   }).split("\u0000");
 
-  const patch = (id: string, change: Partial<ClockPlace>) =>
-    write(
+  const patch = async (id: string, change: Partial<ClockPlace>) =>
+    (await write(
       (list) =>
         list.some((place) => place.id === id)
           ? list.map((place) => (place.id === id ? { ...place, ...change } : place))
           : null,
       id,
-    );
+    )) === "ok";
 
-  const move = (id: string, by: -1 | 1) => {
-    void write((list) => {
+  const move = (id: string, by: -1 | 1): Promise<Outcome> =>
+    write((list) => {
       const from = list.findIndex((place) => place.id === id);
       const moved = list[from];
       if (!moved) return null;
@@ -248,49 +294,49 @@ export function ClocksPage() {
       next[other] = moved;
       return next;
     }, id);
-  };
 
   const remove = (index: number) => {
     const place = places[index];
     if (!place) return;
+    // At once: the row goes, focus moves to the next row's Edit (else the previous one's, else
+    // the search), and the Undo line offers it back.
     const neighbour = places[index + 1] ?? places[index - 1];
-    let gone = null as { place: ClockPlace; index: number } | null;
-    void run((list) => {
-      const at = list.findIndex((p) => p.id === place.id);
-      const found = list[at];
-      if (!found) return null;
-      gone = { place: found, index: at };
-      return list.filter((p) => p.id !== place.id);
-    }, place.id).then((outcome) => {
-      if (outcome === "failed") {
-        // The row is back (the save was refused): focus returns to its own toggle.
-        focusSoon(() => editButtonOf(place.id));
-        setRemoved(null);
-        return;
-      }
-      // Gone, or already gone: the next row's Edit, else the previous one's, else the search.
-      focusSoon(() => (neighbour ? editButtonOf(neighbour.id) : searchInput()));
-      setRemoved(outcome === "ok" ? gone : null);
+    setRemoved((list) => [...list, { place, index }]);
+    focusSoon(() => (neighbour ? editButtonOf(neighbour.id) : searchInput()));
+    void run(
+      (list) =>
+        list.some((p) => p.id === place.id) ? list.filter((p) => p.id !== place.id) : null,
+      place.id,
+    ).then((outcome) => {
+      if (outcome === "ok") return;
+      // Refused (the row is back) or already gone elsewhere: nothing of it to undo.
+      setRemoved((list) => list.filter((entry) => entry.place.id !== place.id));
+      // The row is back: focus returns to its own toggle.
+      if (outcome === "failed") focusSoon(() => editButtonOf(place.id));
     });
   };
 
   const undo = () => {
-    if (!removed) return;
-    const { place, index } = removed;
-    focusSoon(() => editButtonOf(place.id));
-    // A refused undo has no row to report in (the place is still gone): it says so here.
+    const entries = removed;
+    const last = entries[entries.length - 1];
+    if (!last) return;
+    focusSoon(() => editButtonOf(last.place.id));
+    // A refused undo has no row to report in (the places are still gone): it says so here.
     void write(
       (list) => {
-        if (list.some((p) => p.id === place.id)) return list;
+        // Last removed first: each goes back at the index it had when it went.
         const next = [...list];
-        next.splice(Math.min(index, next.length), 0, place);
+        for (const { place, index } of [...entries].reverse()) {
+          if (next.some((p) => p.id === place.id)) continue;
+          next.splice(Math.min(index, next.length), 0, place);
+        }
         return next;
       },
       "undo",
-    ).then((ok) => {
-      if (!ok) {
+    ).then((outcome) => {
+      if (outcome !== "ok") {
         focusWanted.current = null;
-        setRemoved({ place, index });
+        setRemoved(entries);
       }
     });
   };
@@ -298,10 +344,11 @@ export function ClocksPage() {
   const add = async (zone: string, label: string): Promise<boolean> => {
     const place: ClockPlace = { id: newPlaceId(), zone: canonicalZone(zone), label, hours: null };
     setAdding(place.id);
-    const ok = await write(
-      (list) => (list.some((p) => p.id === place.id) ? list : [...list, place]),
-      "add",
-    );
+    const ok =
+      (await write(
+        (list) => (list.some((p) => p.id === place.id) ? list : [...list, place]),
+        "add",
+      )) === "ok";
     setAdding(null);
     if (ok) focusSoon(() => editButtonOf(place.id));
     return ok;
@@ -313,6 +360,8 @@ export function ClocksPage() {
     try {
       await saveHomeZone(device);
       setHomeState("idle");
+      // The Use it button goes with the hint: focus lands on your own row, not on the page.
+      focusSoon(homeLabel);
     } catch {
       setHomeState("failed");
     }
@@ -372,10 +421,17 @@ export function ClocksPage() {
       home={home}
       now={real}
       defaults={defaults}
-      failed={failures.add === true}
+      failed={failures.add}
       onAdd={add}
     />
   );
+
+  // "Mum", "Mum and Office", "Mum, Office and Gran".
+  const removedLabels = removed.map((entry) => entry.place.label);
+  const removedText =
+    removedLabels.length < 2
+      ? (removedLabels[0] ?? "")
+      : `${removedLabels.slice(0, -1).join(", ")}${t("clocks.page.and")}${removedLabels[removedLabels.length - 1]}`;
 
   const listCard = (
     <Card title={t("clocks.page.list")}>
@@ -390,11 +446,34 @@ export function ClocksPage() {
             setHold((h) => ({ ...h, focus: false }));
         }}
       >
+      {/* Right under the heading, so Undo is near in the tab order, not after twelve rows. */}
+      <div className="clocks-undo" role="status">
+        {removed.length > 0 && (
+          <>
+            <span>{t("clocks.page.removed", { label: removedText })}</span>{" "}
+            <button
+              type="button"
+              className="quiet"
+              aria-label={t("clocks.page.undoOf", { label: removedText })}
+              onClick={undo}
+            >
+              {t("toast.undo")}
+            </button>
+          </>
+        )}
+      </div>
+      {changedElsewhere && (
+        <p className="clocks-hint" role="status">
+          {t("clocks.page.changedElsewhere")}
+        </p>
+      )}
+      {failures.undo && <ErrorBanner message={t("notify.couldNotSave")} />}
       <ul className="clocks-list" aria-label={t("clocks.page.list")}>
         <ClockLine
           className="clocks-row"
           id="home"
           label={t("clocks.you")}
+          labelFocusable
           city={zoneCity(home)}
           time={homeReading.time}
           dayWord={offset === 0 ? null : homeDay}
@@ -430,7 +509,7 @@ export function ClocksPage() {
               reading={reading}
               dayWord={dayWord(reading.dayShift)}
               diff={formatDiff(reading.diff) ?? t("clocks.sameTime")}
-              failed={failures[place.id] === true}
+              failed={failures[place.id] !== undefined}
               onDismissError={() => clearFailure(place.id)}
               onRename={(label) => patch(place.id, { label })}
               onHours={(next) =>
@@ -444,27 +523,6 @@ export function ClocksPage() {
         })}
       </ul>
       {places.length === 0 && <Empty>{t("clocks.page.empty")}</Empty>}
-      <div className="clocks-undo" role="status">
-        {removed && (
-          <>
-            <span>{t("clocks.page.removed", { label: removed.place.label })}</span>{" "}
-            <button
-              type="button"
-              className="quiet"
-              aria-label={t("clocks.page.undoOf", { label: removed.place.label })}
-              onClick={undo}
-            >
-              {t("toast.undo")}
-            </button>
-          </>
-        )}
-      </div>
-      {changedElsewhere && (
-        <p className="clocks-hint" role="status">
-          {t("clocks.page.changedElsewhere")}
-        </p>
-      )}
-      {failures.undo && <ErrorBanner message={t("notify.couldNotSave")} />}
       </div>
     </Card>
   );
@@ -518,20 +576,24 @@ function PlaceRow({
   onDismissError: () => void;
   onRename: (label: string) => Promise<boolean>;
   onHours: (hours: ClockHours | null) => Promise<boolean>;
-  onMove: (by: -1 | 1) => void;
+  onMove: (by: -1 | 1) => Promise<Outcome>;
   onRemove: () => void;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(place.label);
+  // A rename on its way: Save says so and a second press (or Enter) does nothing.
+  const [saving, setSaving] = useState(false);
+  const savingNow = useRef(false);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [hoursDraft, setHoursDraft] = useState(hours);
   const editRef = useRef<HTMLButtonElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const upRef = useRef<HTMLButtonElement>(null);
   const downRef = useRef<HTMLButtonElement>(null);
-  const moved = useRef<"up" | "down" | null>(null);
+  // One focus intent per move pressed, consumed by the index change it causes.
+  const moved = useRef<("up" | "down")[]>([]);
   const renamedBefore = useRef(false);
 
   // Rename opens on the name, selected; closing it (save or cancel) hands focus back to Edit.
@@ -550,9 +612,8 @@ function PlaceRow({
   // when this one has just run out of road.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the row's index changes
   useEffect(() => {
-    const was = moved.current;
+    const was = moved.current.shift();
     if (!was) return;
-    moved.current = null;
     const same = was === "up" ? upRef.current : downRef.current;
     const other = was === "up" ? downRef.current : upRef.current;
     if (same && !same.disabled) same.focus();
@@ -562,14 +623,20 @@ function PlaceRow({
   const problem = labelProblem(draft);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (savingNow.current) return;
     const label = draft.trim();
     if (!label || problem) return;
     if (label === place.label) {
       setRenaming(false);
       return;
     }
+    savingNow.current = true;
+    setSaving(true);
     // A refused save leaves the form open with what was typed.
-    if (await onRename(label)) setRenaming(false);
+    const ok = await onRename(label);
+    savingNow.current = false;
+    setSaving(false);
+    if (ok) setRenaming(false);
   };
 
   const cancelRename = () => {
@@ -596,8 +663,11 @@ function PlaceRow({
   };
 
   const move = (by: -1 | 1) => {
-    moved.current = by === -1 ? "up" : "down";
-    onMove(by);
+    moved.current.push(by === -1 ? "up" : "down");
+    void onMove(by).then((outcome) => {
+      // Nothing moved for good (gone, refused): no index change is coming for an intent left.
+      if (outcome !== "ok") moved.current = [];
+    });
   };
 
   const editButton = (
@@ -608,6 +678,12 @@ function PlaceRow({
       aria-label={t(open ? "clocks.page.doneOf" : "clocks.page.editOf", { label: place.label })}
       aria-expanded={open}
       onClick={toggle}
+      onKeyDown={(event) => {
+        // Escape on the toggle itself closes what it opened.
+        if (event.key !== "Escape" || !open) return;
+        event.preventDefault();
+        toggle();
+      }}
     >
       <span className="clocks-edit-icon" aria-hidden="true">
         {open ? "✓" : "✎"}
@@ -661,8 +737,12 @@ function PlaceRow({
                   }
                 }}
               />
-              <button type="submit" disabled={!draft.trim() || problem !== null}>
-                {t("clocks.page.save")}
+              <button
+                type="submit"
+                disabled={!draft.trim() || problem !== null}
+                aria-disabled={saving || undefined}
+              >
+                {t(saving ? "clocks.page.saving" : "clocks.page.save")}
               </button>
               <button type="button" className="quiet" onClick={cancelRename}>
                 {t("clocks.page.cancel")}
@@ -809,7 +889,7 @@ function AddPlace({
   home: string;
   now: Date;
   defaults: ClockHours;
-  failed: boolean;
+  failed: Failure | undefined;
   onAdd: (zone: string, label: string) => Promise<boolean>;
 }) {
   const t = useT();
@@ -820,13 +900,17 @@ function AddPlace({
   const [pickedFrom, setPickedFrom] = useState<string | null>(null);
   const [zone, setZone] = useState<string | null>(null);
   const [label, setLabel] = useState("");
+  // An add on its way: the button says so, and a second press or Enter adds nothing. A ref
+  // too, so two presses before a render are still one add.
+  const [busy, setBusy] = useState(false);
+  const busyNow = useRef(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const focusName = useRef(false);
 
   const { matches, total } = useMemo(
     () =>
-      query.trim() ? findZones(query, zones, RESULTS_MAX) : { matches: [], total: 0 },
+      isSearchable(query) ? findZones(query, zones, RESULTS_MAX) : { matches: [], total: 0 },
     [query, zones],
   );
 
@@ -857,7 +941,7 @@ function AddPlace({
 
   // Escape anywhere in the card starts over, back in the search.
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "Escape" || full) return;
+    if (event.key !== "Escape" || full || busy) return;
     if (!query && !zone) return;
     event.preventDefault();
     reset();
@@ -867,13 +951,20 @@ function AddPlace({
   const problem = labelProblem(label);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busyNow.current) return;
     const clean = label.trim();
     if (!zone || !clean || problem || full) return;
+    busyNow.current = true;
+    setBusy(true);
     // A refused save keeps the form, so the person can try again.
-    if (await onAdd(zone, clean)) reset();
+    const ok = await onAdd(zone, clean);
+    busyNow.current = false;
+    setBusy(false);
+    if (ok) reset();
   };
 
-  const showResults = !full && query.trim() !== "" && query !== pickedFrom;
+  // One letter is not a search yet: it says nothing rather than "No match".
+  const showResults = !full && isSearchable(query) && query !== pickedFrom;
 
   return (
     <Card title={t("clocks.page.addTitle")}>
@@ -955,16 +1046,29 @@ function AddPlace({
             </label>
             <LabelProblem problem={problem} />
             <div className="clocks-actions">
-              <button type="submit" disabled={!label.trim() || problem !== null}>
-                {t("clocks.page.add")}
+              {/* aria-disabled while busy, not disabled: a disabled button drops the focus. */}
+              <button
+                type="submit"
+                disabled={!label.trim() || problem !== null}
+                aria-disabled={busy || undefined}
+              >
+                {t(busy ? "clocks.page.adding" : "clocks.page.add")}
               </button>
-              <button type="button" className="quiet" onClick={reset}>
+              <button type="button" className="quiet" disabled={busy} onClick={reset}>
                 {t("clocks.page.cancel")}
               </button>
             </div>
           </form>
         )}
-        {failed && <ErrorBanner message={t("notify.couldNotSave")} />}
+        <ErrorBanner
+          message={
+            failed === "full"
+              ? t("clocks.page.fullElsewhere", { max: CLOCKS_MAX })
+              : failed
+                ? t("notify.couldNotSave")
+                : null
+          }
+        />
       </div>
     </Card>
   );

@@ -33,6 +33,11 @@ export const clocksPage = {
   "clocks.page.chosen": { en: "Chosen zone: {zone}", fr: "Fuseau choisi : {zone}" },
   "clocks.page.labelField": { en: "Name", fr: "Nom" },
   "clocks.page.add": { en: "Add", fr: "Ajouter" },
+  "clocks.page.adding": { en: "Adding…", fr: "Ajout…" },
+  "clocks.page.fullElsewhere": {
+    en: "You already have {max} places (changed on another device).",
+    fr: "Vous avez déjà {max} lieux (modifié sur un autre appareil).",
+  },
   "clocks.page.cancel": { en: "Cancel", fr: "Annuler" },
   "clocks.page.full": {
     en: "You have {max} places, the most there can be. Remove one to add another.",
@@ -42,6 +47,7 @@ export const clocksPage = {
   "clocks.page.renameOf": { en: "Rename {label}", fr: "Renommer {label}" },
   "clocks.page.nameOf": { en: "New name for {label}", fr: "Nouveau nom pour {label}" },
   "clocks.page.save": { en: "Save", fr: "Enregistrer" },
+  "clocks.page.saving": { en: "Saving…", fr: "Enregistrement…" },
   "clocks.page.up": { en: "Move {label} up", fr: "Monter {label}" },
   "clocks.page.down": { en: "Move {label} down", fr: "Descendre {label}" },
   "clocks.page.remove": { en: "Remove", fr: "Retirer" },
@@ -51,6 +57,8 @@ export const clocksPage = {
   "clocks.page.doneOf": { en: "Done editing {label}", fr: "Fermer les réglages de {label}" },
   "clocks.page.editOf": { en: "Edit {label}", fr: "Modifier {label}" },
   "clocks.page.ownHours": { en: "Custom hours", fr: "Horaires personnalisés" },
+  // The row tag: every word must fit the 62px name column at 320 (FR "personnalisés" is 72px).
+  "clocks.page.ownHoursTag": { en: "Custom hours", fr: "Horaires perso." },
   "clocks.page.ownHoursOf": { en: "Custom hours for {label}", fr: "Horaires personnalisés de {label}" },
   "clocks.page.labelBad": {
     en: "A name cannot contain control or text-direction characters.",
@@ -61,6 +69,7 @@ export const clocksPage = {
     fr: "Un nom doit contenir au moins un caractère visible.",
   },
   "clocks.page.removed": { en: "Removed {label}.", fr: "Retiré de la liste : {label}" },
+  "clocks.page.and": { en: " and ", fr: " et " },
   "clocks.page.changedElsewhere": {
     en: "This place was changed on another device.",
     fr: "Ce lieu a été modifié sur un autre appareil.",

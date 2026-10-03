@@ -325,8 +325,8 @@ describe("searchZones", () => {
   });
 
   it("caps at limit", () => {
-    expect(searchZones("a", zones, 2)).toHaveLength(2);
-    expect(searchZones("a", zones)).not.toHaveLength(0);
+    expect(searchZones("pa", zones, 2)).toHaveLength(2);
+    expect(searchZones("pa", zones)).not.toHaveLength(0);
   });
 
   it("returns nothing for an empty query", () => {
@@ -449,7 +449,7 @@ describe("findZones", () => {
   });
 
   it("counts every match before the cut", () => {
-    const { matches, total } = findZones("a", zones, 20);
+    const { matches, total } = findZones("am", zones, 20);
     expect(matches).toHaveLength(20);
     expect(total).toBeGreaterThan(20);
     expect(findZones("delhi", zones).total).toBe(1);
@@ -524,5 +524,97 @@ describe("newPlaceId", () => {
       ids.add(id);
     }
     expect(ids.size).toBe(50);
+  });
+});
+
+describe("search ranking and coverage (round 4)", () => {
+  const zones = allZones();
+
+  it("needs two characters: one letter finds nothing", () => {
+    expect(searchZones("a", zones)).toEqual([]);
+    expect(searchZones(" é ", zones)).toEqual([]);
+    expect(searchZones("ab", zones).length).toBeGreaterThan(0);
+  });
+
+  it("puts an exact alias first, before word-start matches of ids and cities", () => {
+    expect(findZones("india", zones).matches[0]).toEqual({ zone: "Asia/Kolkata", alias: "India" });
+    expect(findZones("rio", zones).matches[0]).toEqual({ zone: "America/Sao_Paulo", alias: "Rio" });
+    // The word-start matches are still there, after it.
+    expect(searchZones("india", zones)).toContain("America/Indiana/Indianapolis");
+    expect(searchZones("rio", zones)).toContain("America/Rio_Branco");
+  });
+
+  it("knows these countries, regions and short names, each first for its exact name", () => {
+    const table: [string, string][] = [
+      ["Sweden", "Europe/Stockholm"],
+      ["Poland", "Europe/Warsaw"],
+      ["Deutschland", "Europe/Berlin"],
+      ["Germany", "Europe/Berlin"],
+      ["Britain", "Europe/London"],
+      ["Great Britain", "Europe/London"],
+      ["Arizona", "America/Phoenix"],
+      ["Alaska", "America/Anchorage"],
+      ["Texas", "America/Chicago"],
+      ["Florida", "America/New_York"],
+      ["NZ", "Pacific/Auckland"],
+      ["New Zealand", "Pacific/Auckland"],
+      ["NYC", "America/New_York"],
+      ["LA", "America/Los_Angeles"],
+      ["Norway", "Europe/Oslo"],
+      ["Denmark", "Europe/Copenhagen"],
+      ["Finland", "Europe/Helsinki"],
+      ["Netherlands", "Europe/Amsterdam"],
+      ["Holland", "Europe/Amsterdam"],
+      ["Belgium", "Europe/Brussels"],
+      ["Switzerland", "Europe/Zurich"],
+      ["Austria", "Europe/Vienna"],
+      ["Portugal", "Europe/Lisbon"],
+      ["Turkey", "Europe/Istanbul"],
+      ["Egypt", "Africa/Cairo"],
+      ["Nigeria", "Africa/Lagos"],
+      ["Kenya", "Africa/Nairobi"],
+      ["South Africa", "Africa/Johannesburg"],
+      ["Korea", "Asia/Seoul"],
+      ["South Korea", "Asia/Seoul"],
+      ["Thailand", "Asia/Bangkok"],
+      ["Vietnam", "Asia/Ho_Chi_Minh"],
+      ["Philippines", "Asia/Manila"],
+      ["Singapore", "Asia/Singapore"],
+      ["Malaysia", "Asia/Kuala_Lumpur"],
+      ["Pakistan", "Asia/Karachi"],
+      ["Saudi Arabia", "Asia/Riyadh"],
+      ["UAE", "Asia/Dubai"],
+      ["Israel", "Asia/Jerusalem"],
+      ["Chile", "America/Santiago"],
+      ["Colombia", "America/Bogota"],
+      ["Peru", "America/Lima"],
+    ];
+    for (const [name, zone] of table) {
+      expect(searchZones(name.toLowerCase(), zones)[0], name).toBe(zone);
+    }
+  });
+
+  it("has no typo tolerance", () => {
+    expect(searchZones("swedn", zones)).toEqual([]);
+  });
+});
+
+describe("region links (round 4)", () => {
+  it("maps US/*, Canada/* and the UTC spellings to the current zone", () => {
+    expect(canonicalZone("US/Eastern")).toBe("America/New_York");
+    expect(canonicalZone("US/Pacific")).toBe("America/Los_Angeles");
+    expect(canonicalZone("US/Hawaii")).toBe("Pacific/Honolulu");
+    expect(canonicalZone("Canada/Pacific")).toBe("America/Vancouver");
+    expect(canonicalZone("Canada/Newfoundland")).toBe("America/St_Johns");
+    for (const utc of ["Etc/UTC", "GMT", "Universal", "Zulu", "Etc/GMT", "UCT"]) {
+      expect(canonicalZone(utc), utc).toBe("UTC");
+    }
+    expect(sameZone("US/Eastern", "America/New_York")).toBe(true);
+  });
+
+  it("does not turn a region link into a search alias", () => {
+    // "Eastern" or "Pacific" name several places; neither finds New York or Los Angeles.
+    expect(findZones("eastern", allZones()).matches.some((m) => m.alias === "Eastern")).toBe(false);
+    expect(findZones("pacific", allZones()).matches.some((m) => m.zone === "America/Los_Angeles")).toBe(false);
   });
 });

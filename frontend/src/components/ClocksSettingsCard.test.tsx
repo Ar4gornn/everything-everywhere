@@ -149,6 +149,22 @@ describe("ClocksSettingsCard", () => {
     expect(screen.getByLabelText("Search time zones")).toHaveValue("");
   });
 
+  it("says when the search finds nothing, and that the digest keeps its hour (round 4)", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render();
+    expect(
+      await screen.findByText("Your daily summary keeps its hour in the new zone."),
+    ).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Search time zones"), "qqqq");
+    expect(
+      await screen.findByText("No match. Try the nearest big city, or a region like Asia/Kolkata."),
+    ).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Search time zones"));
+    await user.type(screen.getByLabelText("Search time zones"), "q");
+    expect(screen.queryByText(/No match/)).toBeNull();
+  });
+
   it("finds a zone by an alias here too, and says so", async () => {
     mockApi();
     const user = userEvent.setup();

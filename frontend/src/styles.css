@@ -6049,6 +6049,9 @@ dialog.sheet::backdrop {
 .clocks-row .clocks-tag,
 .clocks-line .clocks-tag {
   align-self: flex-start;
+  /* Never broken inside a word ("personnali-sés" at 320 FR): it wraps between words only.
+     Not nowrap: the name column is 62px at 320, and the whole tag ran 10px into the meta. */
+  overflow-wrap: normal;
   font-size: var(--fs-small);
   color: var(--muted);
   border-bottom: 1px dotted var(--border-strong);
@@ -6216,7 +6219,7 @@ dialog.sheet::backdrop {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-2);
-  margin-top: var(--space-2);
+  margin: 0 0 var(--space-2);
 }
 
 .clocks-page .clocks-undo:empty {

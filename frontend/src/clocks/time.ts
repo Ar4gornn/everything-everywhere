@@ -278,7 +278,44 @@ const LEGACY_ZONES: Readonly<Record<string, string>> = {
   "Pacific/Samoa": "Pacific/Pago_Pago",
   "Pacific/Truk": "Pacific/Chuuk",
   "Pacific/Yap": "Pacific/Chuuk",
+  // Region links (round 4): a calendar zone saved as "US/Eastern" is New York's zone, so it
+  // is not shown as a second time beside a New York home. Never search aliases: "Eastern"
+  // or "Pacific" name more than one place.
+  "US/Eastern": "America/New_York",
+  "US/Central": "America/Chicago",
+  "US/Mountain": "America/Denver",
+  "US/Pacific": "America/Los_Angeles",
+  "US/Alaska": "America/Anchorage",
+  "US/Aleutian": "America/Adak",
+  "US/Arizona": "America/Phoenix",
+  "US/East-Indiana": "America/Indiana/Indianapolis",
+  "US/Hawaii": "Pacific/Honolulu",
+  "US/Indiana-Starke": "America/Indiana/Knox",
+  "US/Michigan": "America/Detroit",
+  "US/Samoa": "Pacific/Pago_Pago",
+  "Canada/Atlantic": "America/Halifax",
+  "Canada/Central": "America/Winnipeg",
+  "Canada/Eastern": "America/Toronto",
+  "Canada/Mountain": "America/Edmonton",
+  "Canada/Newfoundland": "America/St_Johns",
+  "Canada/Pacific": "America/Vancouver",
+  "Canada/Saskatchewan": "America/Regina",
+  "Canada/Yukon": "America/Whitehorse",
+  "Etc/UTC": "UTC",
+  "Etc/UCT": "UTC",
+  "Etc/Universal": "UTC",
+  "Etc/Zulu": "UTC",
+  "Etc/GMT": "UTC",
+  "Etc/Greenwich": "UTC",
+  UCT: "UTC",
+  Universal: "UTC",
+  Zulu: "UTC",
+  GMT: "UTC",
+  Greenwich: "UTC",
 };
+
+/** Legacy ids that are region links rather than an old city name: no search alias. */
+const isRegionLink = (id: string) => !id.includes("/") || /^(US|Canada|Etc)\//.test(id);
 
 /** The current name of a zone: a legacy id is mapped, anything else is returned as is. */
 export function canonicalZone(zone: string): string {
@@ -311,6 +348,8 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Kyoto: "Asia/Tokyo",
   Japan: "Asia/Tokyo",
   "South Korea": "Asia/Seoul",
+  Korea: "Asia/Seoul",
+  Malaysia: "Asia/Kuala_Lumpur",
   Busan: "Asia/Seoul",
   Philippines: "Asia/Manila",
   Hanoi: "Asia/Ho_Chi_Minh",
@@ -336,6 +375,12 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   "Las Vegas": "America/Los_Angeles",
   California: "America/Los_Angeles",
   Hawaii: "Pacific/Honolulu",
+  LA: "America/Los_Angeles",
+  Arizona: "America/Phoenix",
+  Alaska: "America/Anchorage",
+  Texas: "America/Chicago",
+  Florida: "America/New_York",
+  NYC: "America/New_York",
   "Washington DC": "America/New_York",
   Boston: "America/New_York",
   Miami: "America/New_York",
@@ -352,11 +397,15 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Rio: "America/Sao_Paulo",
   "Rio de Janeiro": "America/Sao_Paulo",
   Brasilia: "America/Sao_Paulo",
+  Chile: "America/Santiago",
+  Colombia: "America/Bogota",
+  Peru: "America/Lima",
   "Cape Town": "Africa/Johannesburg",
   "South Africa": "Africa/Johannesburg",
   Egypt: "Africa/Cairo",
   Nigeria: "Africa/Lagos",
   Abuja: "Africa/Lagos",
+  Kenya: "Africa/Nairobi",
   Lyon: "Europe/Paris",
   Marseille: "Europe/Paris",
   Toulouse: "Europe/Paris",
@@ -370,6 +419,7 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Hamburg: "Europe/Berlin",
   Cologne: "Europe/Berlin",
   Germany: "Europe/Berlin",
+  Deutschland: "Europe/Berlin",
   Barcelona: "Europe/Madrid",
   Seville: "Europe/Madrid",
   Valencia: "Europe/Madrid",
@@ -389,9 +439,12 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Manchester: "Europe/London",
   Edinburgh: "Europe/London",
   Glasgow: "Europe/London",
+  Britain: "Europe/London",
+  "Great Britain": "Europe/London",
   Ireland: "Europe/Dublin",
   Iceland: "Atlantic/Reykjavik",
   Netherlands: "Europe/Amsterdam",
+  Holland: "Europe/Amsterdam",
   Rotterdam: "Europe/Amsterdam",
   Belgium: "Europe/Brussels",
   Portugal: "Europe/Lisbon",
@@ -400,7 +453,14 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Ankara: "Europe/Istanbul",
   "St Petersburg": "Europe/Moscow",
   Krakow: "Europe/Warsaw",
+  Poland: "Europe/Warsaw",
+  Sweden: "Europe/Stockholm",
+  Norway: "Europe/Oslo",
+  Denmark: "Europe/Copenhagen",
+  Finland: "Europe/Helsinki",
+  Austria: "Europe/Vienna",
   "New Zealand": "Pacific/Auckland",
+  NZ: "Pacific/Auckland",
   Wellington: "Pacific/Auckland",
   Canberra: "Australia/Sydney",
   GMT: "UTC",
@@ -414,12 +474,14 @@ function addAlias(zone: string, name: string) {
   ALIASES.set(zone, list);
 }
 for (const [legacy, current] of Object.entries(LEGACY_ZONES)) {
+  if (isRegionLink(legacy)) continue;
   if (rawCity(legacy) !== rawCity(current)) addAlias(current, rawCity(legacy));
 }
 for (const [name, zone] of Object.entries(PLACE_ALIASES)) addAlias(zone, name);
 /** Current id -> its legacy ids, so "asia/calc" still finds Asia/Kolkata. */
 const LEGACY_IDS = new Map<string, string[]>();
 for (const [legacy, current] of Object.entries(LEGACY_ZONES)) {
+  if (isRegionLink(legacy)) continue;
   LEGACY_IDS.set(current, [...(LEGACY_IDS.get(current) ?? []), legacy]);
 }
 
@@ -593,23 +655,38 @@ export function findZones(
   limit = 20,
 ): { matches: ZoneMatch[]; total: number } {
   const q = foldName(query);
-  if (!q || limit <= 0) return { matches: [], total: 0 };
+  if (q.length < MIN_QUERY || limit <= 0) return { matches: [], total: 0 };
   const known = new Set(zones);
   const seen = new Set<string>();
+  // Countries named exactly ("brazil"), then countries whose name a word of it starts.
+  const exactCountry: ZoneMatch[] = [];
   const country: ZoneMatch[] = [];
-  for (const { names, zones: cities } of COUNTRIES) {
-    if (!names.some((name) => wordMatch(foldName(name), q) > 0)) continue;
-    for (const zone of cities) {
-      if (!known.has(zone) || seen.has(zone)) continue;
-      seen.add(zone);
-      country.push({ zone, alias: names[0] ?? null });
+  for (const exact of [true, false]) {
+    for (const { names, zones: cities } of COUNTRIES) {
+      const hit = exact
+        ? names.some((name) => foldName(name) === q)
+        : names.some((name) => wordMatch(foldName(name), q) > 0);
+      if (!hit) continue;
+      for (const zone of cities) {
+        if (!known.has(zone) || seen.has(zone)) continue;
+        seen.add(zone);
+        (exact ? exactCountry : country).push({ zone, alias: names[0] ?? null });
+      }
     }
   }
+  // A place alias said exactly ("india", "rio") is what the person meant: it comes before
+  // every word-start match (Indianapolis, Rio Branco), right after an exact country.
+  const exactAlias: ZoneMatch[] = [];
   const prefix: ZoneMatch[] = [];
   const other: ZoneMatch[] = [];
   for (const zone of zones) {
     if (seen.has(zone)) continue;
     const aliases = ALIASES.get(zone) ?? [];
+    const exact = aliases.find((name) => foldName(name) === q);
+    if (exact && foldName(rawCity(zone)) !== q) {
+      exactAlias.push({ zone, alias: exact });
+      continue;
+    }
     if (wordMatch(foldName(rawCity(zone)), q) === 1) {
       prefix.push({ zone, alias: null });
       continue;
@@ -627,8 +704,22 @@ export function findZones(
     if (inside) other.push({ zone, alias: inside });
   }
   const byId = (a: ZoneMatch, b: ZoneMatch) => (a.zone < b.zone ? -1 : a.zone > b.zone ? 1 : 0);
-  const all = [...country, ...prefix.sort(byId), ...other.sort(byId)];
+  const all = [
+    ...exactCountry,
+    ...exactAlias.sort(byId),
+    ...country,
+    ...prefix.sort(byId),
+    ...other.sort(byId),
+  ];
   return { matches: all.slice(0, limit), total: all.length };
+}
+
+/** The fewest folded characters a search needs: one letter matches half the world. */
+export const MIN_QUERY = 2;
+
+/** Is `query` long enough to search? */
+export function isSearchable(query: string): boolean {
+  return foldName(query).length >= MIN_QUERY;
 }
 
 /** `findZones`, zones only. */

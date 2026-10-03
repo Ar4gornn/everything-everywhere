@@ -31,6 +31,22 @@ const TOKYO: ClockPlace = { id: "tk", zone: "Asia/Tokyo", label: "Office", hours
 const patches: { clocks?: ClockPlace[] }[] = [];
 const schedules: { timezone: string | null; digest_time: string }[] = [];
 let patchFails = false;
+/** The server refuses a 13th place as the schema does: 422, code "validation". */
+let capRefuses = false;
+/** While set, every account request waits for it: the server is slow (round 4). */
+let gate: Promise<void> | null = null;
+let openGate: () => void = () => undefined;
+const holdServer = () => {
+  gate = new Promise<void>((resolve) => {
+    openGate = () => {
+      gate = null;
+      resolve();
+    };
+  });
+};
+let meReads = 0;
+/** The account cannot be read (the GET before a write fails). */
+let meFails = false;
 /** Another device writes to the account behind this page's back. */
 let serverSet: (change: Partial<Preferences>) => void = () => undefined;
 
@@ -63,9 +79,16 @@ function mount(places: ClockPlace[], overrides: Partial<Preferences> = {}, langu
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
+      if (gate && url.includes("/api/auth/me")) await gate;
       if (url.includes("/api/auth/me/preferences")) {
         if (patchFails) return json({ detail: "no", code: "error" }, 500);
         const body = JSON.parse(String(init?.body));
+        if (capRefuses && (body.clocks?.length ?? 0) > 12) {
+          return json(
+            { detail: [{ type: "too_long", msg: "List should have at most 12 items" }], code: "validation" },
+            422,
+          );
+        }
         patches.push(body);
         prefs = { ...prefs, ...body };
         return json(user());
@@ -76,7 +99,11 @@ function mount(places: ClockPlace[], overrides: Partial<Preferences> = {}, langu
         timezone = body.timezone;
         return json(user());
       }
-      if (url.includes("/api/auth/me")) return json(user());
+      if (url.includes("/api/auth/me")) {
+        if (meFails) return json({ detail: "no", code: "error" }, 500);
+        meReads += 1;
+        return json(user());
+      }
       return json({ items: [] });
     }),
   );
@@ -103,6 +130,10 @@ const lastPatch = () => patches[patches.length - 1]?.clocks;
 
 beforeEach(() => {
   patchFails = false;
+  capRefuses = false;
+  meFails = false;
+  gate = null;
+  meReads = 0;
   device.zone = "Europe/Paris";
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
 });
@@ -472,7 +503,9 @@ describe("the slider", () => {
     expect(back).toBeDisabled();
     // +3h30: Paris 15:30, New York 09:30 (work).
     fireEvent.change(slider, { target: { value: "14" } });
-    expect(screen.getByTestId("clocks-readout")).toHaveTextContent("15:30 (+3h30)");
+    // The planned time alone: no offset from a base that was rounded down (round 4).
+    expect(screen.getByTestId("clocks-readout")).toHaveTextContent(/^15:30$/);
+    expect(slider).toHaveAttribute("aria-valuetext", "15:30");
     expect(rowOf("home").getByText("15:30")).toBeInTheDocument();
     expect(rowOf("ny").getByText("09:30")).toBeInTheDocument();
     expect(rowOf("ny").getByText("Working")).toBeInTheDocument();
@@ -486,7 +519,7 @@ describe("the slider", () => {
     mount([NY]);
     await screen.findByText("Mum");
     fireEvent.change(screen.getByLabelText("Choose a time to compare"), { target: { value: "-2" } });
-    expect(screen.getByTestId("clocks-readout")).toHaveTextContent("11:30 (−30 min)");
+    expect(screen.getByTestId("clocks-readout")).toHaveTextContent(/^11:30$/);
   });
 
   it("counts day words from the real today, so +12 h reads tomorrow only where it is", async () => {
@@ -494,7 +527,7 @@ describe("the slider", () => {
     await screen.findByText("Mum");
     // Real now 10:00 UTC; +12 h is 22:00 UTC: Paris 00:00 and Tokyo 07:00 on the 4th, New York 18:00 on the 3rd.
     fireEvent.change(screen.getByLabelText("Choose a time to compare"), { target: { value: "48" } });
-    expect(screen.getByTestId("clocks-readout")).toHaveTextContent("tomorrow 00:00 (+12h)");
+    expect(screen.getByTestId("clocks-readout")).toHaveTextContent(/^tomorrow 00:00$/);
     expect(rowOf("tk").getByText("tomorrow")).toBeInTheDocument();
     expect(rowOf("ny").queryByText("yesterday")).toBeNull();
     expect(rowOf("ny").queryByText("tomorrow")).toBeNull();
@@ -508,7 +541,7 @@ describe("the slider", () => {
     mount([NY], {}, "fr");
     await screen.findByText("Mum");
     fireEvent.change(screen.getByLabelText("Choisir une heure à comparer"), { target: { value: "48" } });
-    expect(screen.getByTestId("clocks-readout")).toHaveTextContent("demain 00:00 (+12h)");
+    expect(screen.getByTestId("clocks-readout")).toHaveTextContent(/^demain 00:00$/);
   });
 
   it("is never written anywhere", async () => {
@@ -733,7 +766,7 @@ describe("the Add form", () => {
     const user = userEvent.setup();
     mount([NY]);
     await screen.findByText("Mum");
-    await user.type(screen.getByLabelText("Search time zones"), "a");
+    await user.type(screen.getByLabelText("Search time zones"), "am");
     expect(
       await screen.findByText(/^Showing 20 of \d+\. Type more to narrow the list\.$/),
     ).toBeInTheDocument();
@@ -1045,6 +1078,330 @@ describe("the undo line (round 3)", () => {
       expect(screen.getByText("Removed Office.")).toBeInTheDocument();
       wait(3000);
       expect(screen.queryByText("Removed Office.")).toBeNull();
+    });
+  });
+});
+
+const order = () =>
+  [...document.querySelectorAll("[data-place]")]
+    .map((el) => el.getAttribute("data-place"))
+    .filter((id) => id !== "home");
+
+describe("a slow server: changes show at once (round 4)", () => {
+  it("shows a rename before the server answers, with Save saying so", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Rename Mum" }));
+    await user.keyboard("Mother");
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(rowOf("ny").getByText("Mother")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeInTheDocument();
+    expect(patches).toHaveLength(0);
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(lastPatch()).toEqual([{ ...NY, label: "Mother" }, TOKYO]);
+    await waitFor(() => expect(screen.queryByLabelText(/New name for/)).toBeNull());
+  });
+
+  it("applies two quick moves at once, in order, focus following the arrow", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    holdServer();
+    const down = screen.getByRole("button", { name: "Move Mum down" });
+    await user.click(down);
+    expect(order()).toEqual(["tk", "ny", "ld"]);
+    expect(down).toHaveFocus();
+    await user.click(down);
+    expect(order()).toEqual(["tk", "ld", "ny"]);
+    // Down ran out: the other arrow.
+    expect(screen.getByRole("button", { name: "Move Mum up" })).toHaveFocus();
+    expect(patches).toHaveLength(0);
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(patches[0]?.clocks).toEqual([TOKYO, NY, LONDON]);
+    expect(lastPatch()).toEqual([TOKYO, LONDON, NY]);
+    expect(order()).toEqual(["tk", "ld", "ny"]);
+  });
+
+  it("rolls a refused move back, with the error in the row", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    holdServer();
+    patchFails = true;
+    await user.click(screen.getByRole("button", { name: "Move Mum down" }));
+    expect(order()).toEqual(["tk", "ny"]);
+    openGate();
+    expect(await rowOf("ny").findByRole("alert")).toBeInTheDocument();
+    expect(order()).toEqual(["ny", "tk"]);
+  });
+
+  it("rolls back when the account cannot be read before the write", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    holdServer();
+    meFails = true;
+    await user.click(screen.getByRole("button", { name: "Move Mum down" }));
+    expect(order()).toEqual(["tk", "ny"]);
+    openGate();
+    expect(await rowOf("ny").findByRole("alert")).toBeInTheDocument();
+    expect(order()).toEqual(["ny", "tk"]);
+    expect(patches).toHaveLength(0);
+  });
+
+  it("removes at once: the row goes, Undo shows and focus is on the next row", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    expect(order()).toEqual(["ny", "ld"]);
+    expect(screen.getByText("Removed Office.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Gran" })).toHaveFocus();
+    expect(patches).toHaveLength(0);
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(lastPatch()).toEqual([NY, LONDON]);
+  });
+
+  it("undoes at once, focus on the restored row's Edit", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Undo removing Office" }));
+    expect(order()).toEqual(["ny", "tk", "ld"]);
+    expect(screen.getByRole("button", { name: "Edit Office" })).toHaveFocus();
+    expect(patches).toHaveLength(1);
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(lastPatch()).toEqual([NY, TOKYO, LONDON]);
+  });
+
+  it("shows an add at once, with the button saying Adding", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByRole("button", { name: "Adding…" })).toBeInTheDocument();
+    expect(order()).toHaveLength(2);
+    expect(patches).toHaveLength(0);
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(1));
+  });
+});
+
+/** Let every queued write finish, so a second one would have been sent by now. */
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  });
+
+describe("double submits (round 4)", () => {
+  it("adds one place for two quick presses and an Enter", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    holdServer();
+    const add = screen.getByRole("button", { name: "Add" });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    fireEvent.submit(screen.getByLabelText("Name").closest("form") as HTMLFormElement);
+    openGate();
+    await waitFor(() => expect(patches.length).toBeGreaterThan(0));
+    await settle();
+    expect(patches).toHaveLength(1);
+    expect(lastPatch()).toHaveLength(2);
+  });
+
+  it("renames once for two quick Saves", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Rename Mum" }));
+    await user.keyboard("Mother");
+    holdServer();
+    const save = screen.getByRole("button", { name: "Save" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    // The second press did nothing: the form is still there, saying it is saving.
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeInTheDocument();
+    openGate();
+    await waitFor(() => expect(patches.length).toBeGreaterThan(0));
+    await settle();
+    expect(patches).toHaveLength(1);
+  });
+});
+
+describe("refused writes re-read the account (round 4)", () => {
+  it("shows what the account really has after a refusal", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    patchFails = true;
+    // Gran was added elsewhere just as this move is refused.
+    serverSet({ clocks: [NY, TOKYO, LONDON] });
+    await user.click(screen.getByRole("button", { name: "Move Mum down" }));
+    expect(await rowOf("ny").findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByText("Gran")).toBeInTheDocument();
+  });
+
+  it("says the twelve places were filled elsewhere when the cap refuses an add", async () => {
+    const user = userEvent.setup();
+    const eleven: ClockPlace[] = Array.from({ length: 11 }, (_, i) => ({
+      id: `p${i}`,
+      zone: "Asia/Tokyo",
+      label: `Place ${i}`,
+      hours: null,
+    }));
+    mount(eleven);
+    await screen.findByText("Place 10");
+    capRefuses = true;
+    serverSet({ clocks: [...eleven, LONDON] });
+    await user.type(screen.getByLabelText("Search time zones"), "paris");
+    await user.click(await screen.findByRole("button", { name: /Paris — Europe\/Paris/ }));
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("You already have 12 places (changed on another device).");
+    expect(alert.closest(".card")).toHaveTextContent("Add a place");
+    // The tab re-read the account: Gran is there.
+    expect(await screen.findByText("Gran")).toBeInTheDocument();
+  });
+
+  it("keeps the plain message for any other refusal of an add", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    patchFails = true;
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByRole("alert")).not.toHaveTextContent(/already have/);
+  });
+});
+
+describe("focus and notices (round 4)", () => {
+  it("collapses an open row on Escape on its own toggle", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    const toggle = screen.getByRole("button", { name: "Done editing Mum" });
+    expect(toggle).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Remove Mum" })).toBeNull();
+  });
+
+  it("puts focus on your own row after Use it, not on the page", async () => {
+    device.zone = "Asia/Tokyo";
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.click(screen.getByRole("button", { name: "Use Tokyo as your time zone" }));
+    await waitFor(() => expect(screen.queryByText(/This device is on/)).toBeNull());
+    await waitFor(() =>
+      expect(document.querySelector('[data-place="home"] .clocks-label')).toHaveFocus(),
+    );
+  });
+
+  it("shows 'changed on another device' above the list, until the next good write", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    serverSet({ clocks: [TOKYO] });
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Move Mum down" }));
+    const notice = await screen.findByText("This place was changed on another device.");
+    expect(notice).toHaveAttribute("role", "status");
+    const list = screen.getByRole("list", { name: "Places" });
+    expect(notice.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Rename Office" }));
+    await user.keyboard("HQ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.queryByText("This place was changed on another device.")).toBeNull(),
+    );
+  });
+
+  it("puts the Undo line at the top of the list card, before the rows", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    const line = (await screen.findByText("Removed Office.")).closest('[role="status"]');
+    const list = screen.getByRole("list", { name: "Places" });
+    expect(
+      (line?.compareDocumentPosition(list) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("offers one Undo for two removes, and puts both back in one write", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Remove Mum" }));
+    expect(await screen.findByText("Removed Office and Mum.")).toBeInTheDocument();
+    await waitFor(() => expect(patches).toHaveLength(2));
+    await user.click(screen.getByRole("button", { name: "Undo removing Office and Mum" }));
+    await waitFor(() => expect(patches).toHaveLength(3));
+    expect(lastPatch()).toEqual([NY, TOKYO, LONDON]);
+    expect(order()).toEqual(["ny", "tk", "ld"]);
+  });
+
+  it("says nothing for a one-letter search", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "a");
+    expect(screen.queryByText(/No match/)).toBeNull();
+    expect(screen.queryByRole("list", { name: "Matching zones" })).toBeNull();
+  });
+
+  describe("with the timer on", () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], now: NOW });
+    });
+
+    it("lets 'changed on another device' go after 8 seconds", async () => {
+      mount([NY, TOKYO]);
+      await vi.waitFor(() => expect(screen.getByText("Mum")).toBeInTheDocument());
+      serverSet({ clocks: [TOKYO] });
+      fireEvent.click(screen.getByRole("button", { name: "Edit Mum" }));
+      fireEvent.click(screen.getByRole("button", { name: "Move Mum down" }));
+      await vi.waitFor(() =>
+        expect(screen.getByText("This place was changed on another device.")).toBeInTheDocument(),
+      );
+      act(() => {
+        vi.advanceTimersByTime(9000);
+      });
+      expect(screen.queryByText("This place was changed on another device.")).toBeNull();
     });
   });
 });
