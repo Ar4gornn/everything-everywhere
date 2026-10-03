@@ -202,7 +202,8 @@ describe("Settings → Layout", () => {
       json({ id: "u1", email: "sam@example.com", currency: "USD", created_at: "",
         preferences: { ...DEFAULT_PREFERENCES, ...(body as object) } }),
     );
-    const gym = await screen.findByRole("checkbox", { name: "Gym" });
+    // Settings is heavy (Clocks adds hundreds of options): 1s is not enough under a full run.
+    const gym = await screen.findByRole("checkbox", { name: "Gym" }, { timeout: 5000 });
     expect(gym).toBeChecked();
     expect(within(bottomBar()).getByRole("link", { name: /Gym/ })).toBeInTheDocument();
 

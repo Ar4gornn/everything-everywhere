@@ -1,7 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 
 import { afterEach, beforeEach } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
+
+/**
+ * `findBy`/`waitFor` wait 3s, not 1s. Settings renders hundreds of `<option>`s since Epic 48,
+ * and jsdom under a full parallel run took more than a second to draw it: tests failed on
+ * timing alone, one run in two. A "does not appear" test sets its own short timeout anyway.
+ */
+configure({ asyncUtilTimeout: 3000 });
 
 /**
  * English is the language a test renders in, pinned rather than inherited (Epic 25).
