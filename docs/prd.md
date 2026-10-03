@@ -55,6 +55,11 @@ v2 concern and the schema can take a nullable `month` column later without a rew
 ### Slice 6 — Ship prep
 - README with a screenshot above the fold, LICENSE, seed script, `shipping-reviewer` pass over the full diff.
 
+### Slice 53 — Public landing page
+- Signed-out visitors to `/` get a static EN/FR page describing only shipped features, with Sign in and invite-code sign-up as the only actions; `/privacy/` states what is stored and where.
+- Signed-in users, installed apps and every `/?query` link reach the app without seeing it.
+- **Acceptance:** curl matrix on the prod stack (AD-66); landing loads no app chunk; EN/FR at 320/375 without overflow in all five themes.
+
 ## Non-functional requirements
 
 - **Isolation.** Data isolation is enforced by Postgres RLS, not by application `WHERE user_id = ?`

@@ -2707,3 +2707,20 @@ page; streaks in the export; a push other than the daily digest.
 ### Story 41.7: QA
 
 - Second-user proof; every new guard mutated red; overflow sweep EN/FR at 375 and 320.
+
+## Epic 53: A public front door — the landing page
+
+Scoped 2026-10-03, options and rejections in `LOG.md`; spec, inventory of claimable
+features, contracts and test design in `docs/epic-53-landing.md`. AD-66. No migration,
+no new dependency. Visitors get a static EN/FR landing at `/` (and `/fr/`, `/privacy/`);
+Caddy routes on marker cookie `ee_app=1` or any query to the app.
+
+**Explicitly out:** pricing, blog, testimonials, newsletter, request access, open sign-up,
+roadmap, demo account, analytics, cookie banner, imprint, push claims (off in prod).
+
+### Story 53.1: Foundation — tokens split, multi-page build, renderer skeleton
+### Story 53.2: App side — marker cookie, `/signin`, manifest id/start_url, SW shell rule
+### Story 53.3: Caddy routing, `X-EE-Page`, robots, sitemap — proven on the prod stack
+### Story 53.4: Content — copy EN/FR, layout, privacy page, language toggle, meta
+### Story 53.5: Screenshots and OG images — CDP capture script, seeded demo data
+### Story 53.6: QA

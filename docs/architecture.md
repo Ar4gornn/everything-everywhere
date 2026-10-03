@@ -1180,6 +1180,42 @@ security-definer function
   past, eleven queries); earning only for the streaks that are shown (hiding one would take
   points back); `SELECT … FOR UPDATE` on `users` (grants there are by column, AD-19).
 
+### AD-66 — Visitors get a static, prerendered landing at `/`; the app keeps `/` for anyone carrying the marker or a query
+
+- **Binds:**
+  - `frontend/landing/` (`messages.ts`, `render.ts`, `vitePlugin.ts`, `landing.ts`,
+    `landing.css`, `img/`), the four landing HTML stubs, and `vite.config.ts` inputs;
+  - `src/tokens.css`, `src/session/marker.ts`, `api/client.ts` (`clearTokens`);
+  - `public/manifest.webmanifest` (`id`, `start_url`), `public/sw.js` (navigation cache
+    rule), `public/robots.txt`, `public/sitemap.xml`;
+  - `ops/Caddyfile` (`@landing`, `X-EE-Page`), `ops/landing-shots/`.
+  - Spec: `docs/epic-53-landing.md`.
+- **Extends:**
+  - AD-14 (same origin in prod);
+  - AD-54 (`/?invite=` links stay app links);
+  - AD-62 §2.5 (signed-out `/install` stays the app).
+- **Decision.** Caddy decides which document `/` is, before any JavaScript runs.
+  - Visitor: `/` with no `ee_app=1` cookie and an empty query is rewritten to
+    `/landing.html`. That page is static HTML prerendered per language at build time. It
+    has its own small script and stylesheet and shares only the design tokens with the app.
+  - Anyone else gets the SPA as before.
+  - The cookie is a routing hint, never a credential. The client sets it whenever a
+    refresh token exists and clears it with the tokens. A forged cookie shows the sign-in
+    page; a missing one shows the landing once.
+  - Any query string means "this is an app link", which keeps invite links, `/?mood=1`
+    shortcuts and the new `start_url` `/?pwa=1` on the app. The manifest pins `id: "/"`
+    so that changing `start_url` does not change installed apps' identity.
+  - Every landing response carries `X-EE-Page: landing`. The service worker refuses to
+    store such a response, or any non-ok one, as the offline app shell. Before this,
+    every navigation response became the shell.
+- **Rejected:**
+  - An SPA route at `/`: visitors would pay for the main and ui chunks, and link previews
+    would see client-rendered meta.
+  - A `/welcome` sub-path: the root would stay a login box.
+  - A client gate script: a redirect dance on every reload, and a flash.
+  - Moving the app under `/app`: rewrites every route, push target and calendar link.
+  - Rendering French on the client: crawlers and previews would see English only.
+
 ## Consistency Conventions
 
 | Concern | Convention |
