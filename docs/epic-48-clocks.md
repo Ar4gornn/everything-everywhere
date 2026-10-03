@@ -36,9 +36,19 @@ preferences), AD-52 (account time zone), AD-63 (computed, not stored).
    everywhere in the app. The server checks zones with `zoneinfo` (`tzdata` pinned), the
    same judge as `check_timezone` (AD-52); a zone one side knows and the other does not is
    refused on write (`422 invalid_timezone`) and skipped on read, never a 500 on `/me`.
+   **Zone aliases:** Chrome's `Intl.supportedValuesOf("timeZone")` still lists legacy ids
+   (`Asia/Calcutta`, `Europe/Kiev`, `Asia/Katmandu`, `America/Buenos_Aires`, ...), so the same
+   place would appear twice. `clocks/time.ts` carries a legacy to current map (the IANA
+   `backward` file, about 30 ids); `canonicalZone(zone)` applies it, `allZones()` returns
+   canonical, deduplicated, sorted ids, `searchZones` also matches the legacy spelling
+   ("calcutta" finds `Asia/Kolkata`), and new places store the canonical id. The server
+   accepts both spellings, so an older saved id keeps working; wherever two zones are
+   compared (calendar place lookup, Settings select) both go through `canonicalZone`.
 2. **Three sparse preferences keys**, each replaced whole by a PATCH (AD-49):
    - `clocks`: `[{id, zone, label, hours|null}]`, ≤ 12, ids unique (`pref_duplicate`), label
-     1-32 trimmed with no control characters, in the person's order;
+     1-32 trimmed with no control characters (Unicode Cc, Cs, Zl, Zp) and no bidi
+     override/isolate (U+202A-U+202E, U+2066-U+2069; the zero-width joiner stays, emoji need
+     it), in the person's order. Two places may share a zone (Mum and Dad in Paris);
    - `clock_hours`: `{work: [start, end], night: [start, end]}`, default 09:00-18:00 /
      23:00-07:00; times `HH:MM` on the 15-minute grid; [start, end), end ≤ start wraps,
      start = end is empty; night wins over work;
@@ -51,7 +61,12 @@ preferences), AD-52 (account time zone), AD-63 (computed, not stored).
    calendar's second times. Card `clocks` sits after `streaks` and draws nothing while there
    are no places, so an account that never adds one sees no change.
 5. **Times are 24 h `HH:MM`** in both languages (as `timeLabel` already is); a difference is
-   `+1h`, `−7h30`, `+5h45`, or "Same time".
+   `+1h`, `−7h30`, `+5h45`, `+15 min` / `−30 min` under an hour (U+2212 minus), or "Same time".
+6. **The slider's day words are counted from the real today**, not from the shifted instant:
+   `readClock(zone, at, home, hours, reference = at)` takes the zone's date at `at` minus the
+   home date at `reference`. At -12 h a place that is still today says nothing, and the
+   readout shows the home time with its own day word when the shifted home date differs from
+   today ("tomorrow 02:15 (+3h)", French "demain ...").
 
 ---
 
@@ -70,16 +85,30 @@ overlap; `inRange` wrap and empty; `shadeAt` night-over-work; `searchZones` acce
 
 - **`/clocks`** (`ClocksPage`): `ViewSwitch` (Dashboard views) at the top as on `/calendar`;
   home row first ("You" + zone city); then each place: label, time, `dayShift` word,
-  diff, shade badge (text, not colour alone). Add: a search input over `allZones()` via
-  `searchZones` (a list of buttons, max 20), then a label field prefilled with `zoneCity`;
-  cap at 12 with a reason when reached. Each row: rename, move up/down, remove, and
-  "Own hours" (work and night start/end, 15-minute `<select>`s; "Use default" clears it).
-  Writes go through `usePreferences().update({ clocks })` — the whole list — with
-  the existing "couldn't save" error. **Slider**: `<input type="range">` −48..+48 quarter
+  diff, shade badge (text, not colour alone). Rows are a grid `name | time | meta`, so the
+  times line up; the city is left out when the label already says it (case-insensitive).
+  The three shades look different (work: tinted fill, free: outline, night: dark fill),
+  using existing theme tokens only.
+  **Lighter rows (U2):** a row shows only name, time, meta and one "Edit" toggle
+  (`aria-expanded`); expanded: Rename, Own hours, up/down, Remove (still immediate, no
+  confirm). A place with its own hours carries a small "Own hours" tag when collapsed (U5).
+  The own-hours editor keeps a local draft of the four selects with Save (one write),
+  Cancel and "Use default".
+  Add: a search input over `allZones()` via `searchZones` (a list of buttons, max 20, each
+  "Kolkata — Asia/Kolkata · 13:41 (+3h30)", U1), then a label field prefilled with `zoneCity`;
+  the client refuses control and direction characters with a visible reason. **Empty account
+  (U3):** the Add card comes first and the slider card waits for the first place. At 12 places
+  the search input is hidden and only the cap message shows. Writes go through
+  `usePreferences().update({ clocks })` — the whole list. A refused write is shown where the
+  action was: inside the place's row, or in the Add card; a refused rename keeps the form open
+  with the typed name. Focus: rename opens on the name, selected, Escape cancels, and focus
+  returns to the row's Edit button; after a move it stays on the same arrow (the other one if
+  that one just ran out). **Slider**: `<input type="range">` −48..+48 quarter
   hours, labelled with the home time it represents ("Now" at 0); every clock and shade
   follows; a "Back to now" button; state is local, so leaving the page resets it.
 - **`ClocksCard`** (dashboard): nothing when no places; else home + first 3 places, one line
-  each (label · time · diff · shade), the title linking to `/clocks`. Live via `useNow()`.
+  each (label · time · diff · shade), with an "Open" action linking to `/clocks` (the title
+  is not a link). Same grid and shade looks as the page. Live via `useNow()`.
 - Route and card wiring exist already (skeleton). CSS in `styles.css`, qualified class names
   (`.clocks-…`) — class names are global here.
 - Must fit 320 px in French with 12 places and long labels: no element past its card or the
@@ -91,10 +120,13 @@ overlap; `inRange` wrap and empty; `shadeAt` night-over-work; `searchZones` acce
 
 - **`ClocksSettingsCard`** (Settings, beside `MoonSettingsCard`, only with the module on):
   default work and night hours (same `<select>`s), saved as `clock_hours`; the calendar zone
-  as a `<select>`: "Off" + each place (label · city) + home excluded; saved as
-  `calendar_zone`. A link to `/clocks`.
+  as a `<select>`: "Off" + one option per canonical zone (every label sharing it joined by
+  ", ", then " · " and the city; the city is left out when it equals the only label), home
+  excluded; saved as the canonical id. A saved zone whose place was removed stays in the
+  select with the hint "Not one of your places any more". A link to `/clocks`.
 - **Calendar**: with the module on and `calendar_zone` set, each habit check-in row with a
-  `done_at` shows `13:00 · Paris 14:00` (label of the matching place, else `zoneCity`), plus
+  `done_at` shows `13:00 · Paris 14:00` (label of the one place in that zone; `zoneCity` when
+  there is none or several), plus
   "tomorrow"/"yesterday" when the day shifts. The conversion is `convertWallTime(day,
   done_at, home, calendar_zone)`. Today that is the only timed row on the calendar.
 - **Backend tests** (`tests/test_clocks_preferences.py`, and fix the catalogue tests that list

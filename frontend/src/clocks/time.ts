@@ -140,11 +140,19 @@ function clampShift(n: number): -1 | 0 | 1 {
 }
 
 /** Everything a clock face shows, for `zone` at `at`, relative to `home`. */
-export function readClock(zone: string, at: Date, home: string, hours: ClockHours): ClockReading {
+export function readClock(
+  zone: string,
+  at: Date,
+  home: string,
+  hours: ClockHours,
+  reference: Date = at,
+): ClockReading {
   const minutes = wallMinutes(zone, at);
   return {
     time: fromMinutes(minutes),
-    dayShift: clampShift(daysBetween(wallDate(home, at), wallDate(zone, at))),
+    // The day word is relative to the home date at `reference` (the real now when the page
+    // shows a shifted instant), so a place that is still "today" says nothing.
+    dayShift: clampShift(daysBetween(wallDate(home, reference), wallDate(zone, at))),
     diff: zoneOffset(zone, at) - zoneOffset(home, at),
     shade: shadeAt(hours, minutes),
   };
@@ -152,13 +160,14 @@ export function readClock(zone: string, at: Date, home: string, hours: ClockHour
 
 /**
  * A difference in minutes as the clock shows it: `"+1h"`, `"−7h30"` (U+2212 minus),
- * `"+5h45"`, and `null` for 0 (the caller says "Same time"). Language-neutral on purpose:
+ * `"+5h45"`, `"+15 min"` under an hour, and `null` for 0 (the caller says "Same time"). Language-neutral on purpose:
  * "h" reads the same in English and French.
  */
 export function formatDiff(minutes: number): string | null {
   const total = Math.round(minutes);
   if (total === 0) return null;
   const abs = Math.abs(total);
+  if (abs < 60) return `${total < 0 ? "−" : "+"}${abs} min`;
   const h = Math.floor(abs / 60);
   const m = abs % 60;
   return `${total < 0 ? "−" : "+"}${h}h${m === 0 ? "" : pad2(m)}`;
@@ -180,6 +189,72 @@ export function homeZone(user: Pick<User, "timezone"> | null | undefined): strin
 export function zoneCity(zone: string): string {
   const last = zone.split("/").pop() ?? zone;
   return last.replace(/_/g, " ");
+}
+
+/** The city to print beside a place's name, or null when the name already says it
+ *  (`Paris` for Europe/Paris, in any case). */
+export function zoneHint(label: string, zone: string): string | null {
+  const city = zoneCity(zone);
+  return city.trim().toLowerCase() === label.trim().toLowerCase() ? null : city;
+}
+
+/** Do two zone ids name the same zone, legacy spellings included? */
+export function sameZone(a: string, b: string): boolean {
+  return canonicalZone(a) === canonicalZone(b);
+}
+
+/**
+ * Legacy zone ids -> the current IANA name (the `backward` file). Chrome's
+ * `Intl.supportedValuesOf("timeZone")` still lists several of the left-hand names, so
+ * the same place would otherwise appear twice, under two ids. The server accepts both
+ * spellings; places are stored under the current one.
+ */
+const LEGACY_ZONES: Readonly<Record<string, string>> = {
+  "Africa/Asmera": "Africa/Asmara",
+  "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+  "America/Catamarca": "America/Argentina/Catamarca",
+  "America/Cordoba": "America/Argentina/Cordoba",
+  "America/Jujuy": "America/Argentina/Jujuy",
+  "America/Mendoza": "America/Argentina/Mendoza",
+  "America/Coral_Harbour": "America/Atikokan",
+  "America/Godthab": "America/Nuuk",
+  "America/Indianapolis": "America/Indiana/Indianapolis",
+  "America/Fort_Wayne": "America/Indiana/Indianapolis",
+  "America/Knox_IN": "America/Indiana/Knox",
+  "America/Louisville": "America/Kentucky/Louisville",
+  "America/Montreal": "America/Toronto",
+  "America/Shiprock": "America/Denver",
+  "Antarctica/South_Pole": "Pacific/Auckland",
+  "Asia/Ashkhabad": "Asia/Ashgabat",
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Dacca": "Asia/Dhaka",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Macao": "Asia/Macau",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Asia/Tel_Aviv": "Asia/Jerusalem",
+  "Asia/Thimbu": "Asia/Thimphu",
+  "Asia/Ujung_Pandang": "Asia/Makassar",
+  "Asia/Ulan_Bator": "Asia/Ulaanbaatar",
+  "Atlantic/Faeroe": "Atlantic/Faroe",
+  "Europe/Kiev": "Europe/Kyiv",
+  "Pacific/Enderbury": "Pacific/Kanton",
+  "Pacific/Ponape": "Pacific/Pohnpei",
+  "Pacific/Samoa": "Pacific/Pago_Pago",
+  "Pacific/Truk": "Pacific/Chuuk",
+  "Pacific/Yap": "Pacific/Chuuk",
+};
+
+/** The current name of a zone: a legacy id is mapped, anything else is returned as is. */
+export function canonicalZone(zone: string): string {
+  return LEGACY_ZONES[zone] ?? zone;
+}
+
+const ALIASES = new Map<string, string[]>();
+for (const [legacy, current] of Object.entries(LEGACY_ZONES)) {
+  const list = ALIASES.get(current) ?? [];
+  list.push(legacy);
+  ALIASES.set(current, list);
 }
 
 const FALLBACK_ZONES = [
@@ -221,8 +296,9 @@ const FALLBACK_ZONES = [
   "Pacific/Honolulu",
 ];
 
-/** Every zone this browser knows (`Intl.supportedValuesOf("timeZone")`), sorted; a short
- *  built-in list when the browser lacks `supportedValuesOf`. Always includes `"UTC"`. */
+/** Every zone this browser knows (`Intl.supportedValuesOf("timeZone")`) under its current
+ *  name, deduplicated and sorted; a short built-in list when the browser lacks
+ *  `supportedValuesOf`. Always includes `"UTC"`. */
 export function allZones(): string[] {
   let zones: string[] = [];
   const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
@@ -232,7 +308,7 @@ export function allZones(): string[] {
     zones = [];
   }
   if (zones.length === 0) zones = FALLBACK_ZONES;
-  const set = new Set(zones);
+  const set = new Set(zones.map(canonicalZone));
   set.add("UTC");
   return [...set].sort();
 }
@@ -248,7 +324,8 @@ function normalise(s: string): string {
 
 /**
  * Zones matching what the person typed: case- and accent-insensitive, spaces and
- * underscores equal, matched against the whole id and against the city. City-prefix
+ * underscores equal, matched against the whole id, the city, and the legacy spelling
+ * ("calcutta" finds Asia/Kolkata). City-prefix
  * matches first, then other matches, each alphabetical; at most `limit`.
  */
 export function searchZones(query: string, zones: readonly string[], limit = 20): string[] {
@@ -257,10 +334,9 @@ export function searchZones(query: string, zones: readonly string[], limit = 20)
   const prefix: string[] = [];
   const other: string[] = [];
   for (const zone of zones) {
-    const id = normalise(zone);
-    const city = normalise(zoneCity(zone));
-    if (city.startsWith(q)) prefix.push(zone);
-    else if (id.includes(q)) other.push(zone);
+    const names = [zone, ...(ALIASES.get(zone) ?? [])];
+    if (names.some((name) => normalise(zoneCity(name)).startsWith(q))) prefix.push(zone);
+    else if (names.some((name) => normalise(name).includes(q))) other.push(zone);
   }
   const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return [...prefix.sort(byId), ...other.sort(byId)].slice(0, limit);

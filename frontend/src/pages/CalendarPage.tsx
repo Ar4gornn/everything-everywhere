@@ -24,7 +24,7 @@ import { QuoteCard } from "../components/QuoteCard";
 import { Card, Empty, ErrorBanner } from "../components/ui";
 import { timeLabel } from "../schedule";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
-import { convertWallTime, homeZone, zoneCity } from "../clocks/time";
+import { canonicalZone, convertWallTime, homeZone, zoneCity } from "../clocks/time";
 import { useModules } from "../layout/modules";
 import { clocksOf, preferencesOf } from "../layout/preferences";
 import { fromCents, toCents } from "../money";
@@ -1189,7 +1189,9 @@ function DayDetail({
     if (!alsoZone) return null;
     try {
       const there = convertWallTime(day, timeLabel(doneAt) as string, homeZone(user), alsoZone);
-      const place = clocksOf(prefs).find((p) => p.zone === alsoZone)?.label ?? zoneCity(alsoZone);
+      // One place in that zone: its name. None, or several (Mum and Dad in Paris): the city.
+      const here = clocksOf(prefs).filter((p) => canonicalZone(p.zone) === canonicalZone(alsoZone));
+      const place = here.length === 1 ? (here[0]?.label ?? zoneCity(alsoZone)) : zoneCity(alsoZone);
       const when =
         there.dayShift === 1 ? ` ${t("clocks.tomorrow")}` : there.dayShift === -1 ? ` ${t("clocks.yesterday")}` : "";
       return `${place} ${there.time}${when}`;
@@ -1275,7 +1277,7 @@ function DayDetail({
           {/* One row per occurrence since Epic 26, so three doses are three lines rather
               than one line with a multiplier — and each one can say what time it was. */}
           {row.done_at ? (
-            <span className="hint">
+            <span className="hint" style={{ overflowWrap: "anywhere" }}>
               {" "}
               {timeLabel(row.done_at)}
               {alsoIn(row.done_on, row.done_at) ? ` · ${alsoIn(row.done_on, row.done_at)}` : ""}

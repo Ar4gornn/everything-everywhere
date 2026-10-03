@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ClockHours } from "../api/types";
 import {
   allZones,
+  canonicalZone,
   convertWallTime,
   formatDiff,
   fromMinutes,
@@ -10,12 +11,14 @@ import {
   inRange,
   newPlaceId,
   readClock,
+  sameZone,
   searchZones,
   shadeAt,
   toMinutes,
   wallDate,
   wallMinutes,
   zoneCity,
+  zoneHint,
   zoneOffset,
 } from "./time";
 
@@ -172,6 +175,16 @@ describe("readClock", () => {
   });
 });
 
+describe("readClock with a reference instant", () => {
+  it("counts the day word from the reference, not from the shifted instant", () => {
+    const now = at("2026-03-20T12:00:00Z"); // Paris and Los Angeles are both on the 20th
+    const shifted = at("2026-03-21T00:00:00Z"); // 12 h on: Paris is the 21st, LA still the 20th
+    expect(readClock("America/Los_Angeles", shifted, PARIS, HOURS).dayShift).toBe(-1);
+    expect(readClock("America/Los_Angeles", shifted, PARIS, HOURS, now).dayShift).toBe(0);
+    expect(readClock(PARIS, shifted, PARIS, HOURS, now).dayShift).toBe(1);
+  });
+});
+
 describe("formatDiff", () => {
   it("formats with a real minus sign", () => {
     expect(formatDiff(60)).toBe("+1h");
@@ -179,7 +192,12 @@ describe("formatDiff", () => {
     expect(formatDiff(345)).toBe("+5h45");
     expect(formatDiff(-60)).toBe("−1h");
     expect(formatDiff(1500)).toBe("+25h");
-    expect(formatDiff(30)).toBe("+0h30");
+    expect(formatDiff(60 + 15)).toBe("+1h15");
+  });
+  it("says minutes under an hour", () => {
+    expect(formatDiff(15)).toBe("+15 min");
+    expect(formatDiff(-30)).toBe("−30 min");
+    expect(formatDiff(59)).toBe("+59 min");
   });
   it("is null for no difference", () => {
     expect(formatDiff(0)).toBeNull();
@@ -204,7 +222,42 @@ describe("zoneCity", () => {
   });
 });
 
+describe("zoneHint / sameZone", () => {
+  it("drops the city when the name already says it, whatever the case", () => {
+    expect(zoneHint("paris", PARIS)).toBeNull();
+    expect(zoneHint(" Paris ", PARIS)).toBeNull();
+    expect(zoneHint("Mum", PARIS)).toBe("Paris");
+  });
+  it("treats a legacy spelling as the same zone", () => {
+    expect(sameZone("Asia/Calcutta", "Asia/Kolkata")).toBe(true);
+    expect(sameZone("Asia/Kolkata", PARIS)).toBe(false);
+  });
+});
+
+describe("canonicalZone", () => {
+  it("maps legacy ids to the current one and leaves the rest alone", () => {
+    expect(canonicalZone("Asia/Calcutta")).toBe("Asia/Kolkata");
+    expect(canonicalZone("Europe/Kiev")).toBe("Europe/Kyiv");
+    expect(canonicalZone("America/Buenos_Aires")).toBe("America/Argentina/Buenos_Aires");
+    expect(canonicalZone("America/Indianapolis")).toBe("America/Indiana/Indianapolis");
+    expect(canonicalZone("Europe/Paris")).toBe("Europe/Paris");
+    expect(canonicalZone("UTC")).toBe("UTC");
+  });
+  it("only ever returns an id this engine accepts", () => {
+    for (const legacy of ["Asia/Calcutta", "Asia/Katmandu", "Asia/Saigon", "Asia/Rangoon", "America/Godthab", "Pacific/Enderbury", "Pacific/Truk", "Pacific/Ponape", "Atlantic/Faeroe", "America/Louisville"]) {
+      expect(() => new Intl.DateTimeFormat("en", { timeZone: canonicalZone(legacy) })).not.toThrow();
+    }
+  });
+});
+
 describe("allZones", () => {
+  it("lists no legacy name", () => {
+    const z = allZones();
+    for (const legacy of ["Asia/Calcutta", "Europe/Kiev", "Asia/Katmandu", "Asia/Saigon"]) {
+      expect(z).not.toContain(legacy);
+    }
+    expect(z).toContain("Asia/Kolkata");
+  });
   it("is sorted, unique and has UTC", () => {
     const z = allZones();
     expect(z).toContain("UTC");
@@ -225,6 +278,11 @@ describe("searchZones", () => {
     "America/Paramaribo",
     "UTC",
   ];
+
+  it("finds a zone by its legacy spelling", () => {
+    expect(searchZones("calcutta", zones)).toEqual(["Asia/Kolkata"]);
+    expect(searchZones("asia/calc", zones)).toEqual(["Asia/Kolkata"]);
+  });
 
   it("ignores accents and case", () => {
     expect(searchZones("sao", zones)).toEqual(["America/Sao_Paulo"]);

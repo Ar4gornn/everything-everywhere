@@ -89,6 +89,8 @@ STREAKS: tuple[str, ...] = STREAK_MODULES
 POINTS_NAME_MAX = 24
 # Cs: a lone surrogate is valid in a Python str but not in JSON, and jsonb refuses it -> 500.
 _REFUSED_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
+#: U+202A-U+202E (embeddings, overrides) and U+2066-U+2069 (isolates): clock labels only.
+_BIDI_CONTROLS = frozenset(chr(c) for c in (*range(0x202A, 0x202F), *range(0x2066, 0x206A)))
 
 #: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
 #: three that existed before stay on; the two new ones are opt-in, so the digest keeps
@@ -246,6 +248,10 @@ def clean_clock_label(raw: str) -> str:
         raise ValueError(f"between 1 and {CLOCK_LABEL_MAX} characters")
     if any(unicodedata.category(c) in _REFUSED_CATEGORIES for c in label):
         raise ValueError("no control characters")
+    # Bidi overrides and isolates (Cf) can make a label read as another one; the zero-width
+    # joiner stays allowed, emoji sequences need it.
+    if any(c in _BIDI_CONTROLS for c in label):
+        raise ValueError("no direction-control characters")
     return label
 
 

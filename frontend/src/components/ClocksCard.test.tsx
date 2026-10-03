@@ -98,6 +98,19 @@ describe("the Clocks card", () => {
     expect(screen.queryByText("Fifth")).toBeNull();
   });
 
+  it("leaves the city out when the name says it, and tags a place with its own hours", async () => {
+    mount([
+      place("a", "Europe/London", "london"),
+      { ...place("b", "Asia/Tokyo", "Office"), hours: { work: ["08:00", "16:00"], night: ["22:00", "06:00"] } },
+    ]);
+    const list = await screen.findByRole("list", { name: "Time in other places" });
+    const lines = within(list).getAllByRole("listitem");
+    expect(lines[1]?.querySelector(".clocks-zone")).toBeNull();
+    expect(lines[2]?.querySelector(".clocks-zone")?.textContent).toBe("Tokyo");
+    expect(lines[2]).toHaveTextContent("Own hours");
+    expect(lines[1]).not.toHaveTextContent("Own hours");
+  });
+
   it("links its title to the clocks page", async () => {
     mount(FIVE);
     const link = await screen.findByRole("link", { name: "Open" });

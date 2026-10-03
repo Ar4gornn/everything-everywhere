@@ -5983,10 +5983,12 @@ dialog.sheet::backdrop {
   padding: 0;
 }
 
+/* name | time | meta, so every row's time sits in the same column. The name column may
+   shrink to nothing and wraps anywhere; the meta column is capped so it cannot starve it. */
 .clocks-row,
 .clocks-line {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: baseline;
   gap: var(--space-1) var(--space-2);
   min-width: 0;
@@ -6003,7 +6005,6 @@ dialog.sheet::backdrop {
 .clocks-line .clocks-name {
   display: flex;
   flex-direction: column;
-  flex: 1 1 8rem;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -6014,44 +6015,93 @@ dialog.sheet::backdrop {
   color: var(--muted);
 }
 
+.clocks-row .clocks-tag,
+.clocks-line .clocks-tag {
+  align-self: flex-start;
+  font-size: var(--fs-small);
+  color: var(--muted);
+  border-bottom: 1px dotted var(--border-strong);
+}
+
 .clocks-row .clocks-time,
 .clocks-line .clocks-time {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  text-align: right;
 }
 
 .clocks-row .clocks-meta,
 .clocks-line .clocks-meta {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-1) var(--space-2);
   min-width: 0;
+  max-width: 9rem;
   font-size: var(--fs-small);
 }
 
+/* Three looks, not three words: working is a tinted fill, free an empty outline, night a
+   dark fill with light text. Every colour is an existing theme token. */
 .clocks-row .clocks-shade,
 .clocks-line .clocks-shade {
   padding: 1px 6px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
+  white-space: nowrap;
+}
+
+.clocks-row .clocks-shade[data-shade="work"],
+.clocks-line .clocks-shade[data-shade="work"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-ink);
+}
+
+.clocks-row .clocks-shade[data-shade="free"],
+.clocks-line .clocks-shade[data-shade="free"] {
+  background: transparent;
 }
 
 .clocks-row .clocks-shade[data-shade="night"],
 .clocks-line .clocks-shade[data-shade="night"] {
-  border-style: dashed;
+  background: var(--secondary);
+  border-color: var(--secondary);
+  color: var(--on-secondary);
+}
+
+/* The Edit toggle, the failure message and the editor each take a full row. */
+.clocks-row > .clocks-edit,
+.clocks-row > .error,
+.clocks-row > .clocks-panel {
+  grid-column: 1 / -1;
+}
+
+.clocks-row > .clocks-edit {
+  justify-self: start;
+}
+
+.clocks-row > .error {
+  margin: 0;
+}
+
+.clocks-page .clocks-panel {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .clocks-row .clocks-actions,
 .clocks-page .clocks-add .clocks-actions {
   display: flex;
   flex-wrap: wrap;
-  flex: 1 1 100%;
   gap: var(--space-2);
   min-width: 0;
 }
 
+.clocks-page .clocks-edit,
 .clocks-page .clocks-actions button,
-.clocks-page .clocks-slider button {
+.clocks-page .clocks-slider button,
+.clocks-page .clocks-rename button {
   min-height: 44px;
   max-width: 100%;
 }
@@ -6072,7 +6122,6 @@ dialog.sheet::backdrop {
 .clocks-page .clocks-hours {
   display: flex;
   flex-wrap: wrap;
-  flex: 1 1 100%;
   gap: var(--space-2) var(--space-3);
   min-width: 0;
 }
@@ -6080,6 +6129,10 @@ dialog.sheet::backdrop {
 .clocks-page .clocks-hours label {
   flex: 1 1 8rem;
   min-width: 0;
+}
+
+.clocks-page .clocks-hours .clocks-actions {
+  flex: 1 1 100%;
 }
 
 .clocks-page .clocks-hours select {
@@ -6117,6 +6170,11 @@ dialog.sheet::backdrop {
 .clocks-page .clocks-hint {
   margin: 0 0 var(--space-2);
   color: var(--muted);
+}
+
+.clocks-page .clocks-rename .clocks-hint {
+  flex: 1 1 100%;
+  margin: 0;
 }
 
 .clocks-page .clocks-results {

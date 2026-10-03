@@ -85,11 +85,11 @@ describe("ClocksSettingsCard", () => {
   it("shows the default hours and 96 quarter-hour choices", async () => {
     mockApi();
     render();
-    const from = await screen.findByLabelText("Working hours from");
+    const from = await screen.findByLabelText("Working hours start");
     expect(from).toHaveValue("09:00");
-    expect(screen.getByLabelText("Working hours to")).toHaveValue("18:00");
-    expect(screen.getByLabelText("Night hours from")).toHaveValue("23:00");
-    expect(screen.getByLabelText("Night hours to")).toHaveValue("07:00");
+    expect(screen.getByLabelText("Working hours end")).toHaveValue("18:00");
+    expect(screen.getByLabelText("Night hours start")).toHaveValue("23:00");
+    expect(screen.getByLabelText("Night hours end")).toHaveValue("07:00");
     expect(from.querySelectorAll("option")).toHaveLength(96);
   });
 
@@ -97,7 +97,7 @@ describe("ClocksSettingsCard", () => {
     const fetchMock = mockApi();
     const user = userEvent.setup();
     render();
-    await user.selectOptions(await screen.findByLabelText("Working hours from"), "08:45");
+    await user.selectOptions(await screen.findByLabelText("Working hours start"), "08:45");
     await waitFor(() =>
       expect(bodiesOfPatches(fetchMock)).toContainEqual({
         clock_hours: { work: ["08:45", "18:00"], night: ["23:00", "07:00"] },
@@ -124,6 +124,55 @@ describe("ClocksSettingsCard", () => {
     await waitFor(() =>
       expect(bodiesOfPatches(fetchMock)).toContainEqual({ calendar_zone: null }),
     );
+  });
+
+  it("makes one option per zone, naming every place in it, city last unless it is the name", async () => {
+    mockApi({
+      clocks: [
+        ...PLACES,
+        { id: "p3", zone: "America/New_York", label: "Dad", hours: null },
+        { id: "p4", zone: "Europe/Paris", label: "paris", hours: null },
+      ],
+    });
+    render();
+    const select = await screen.findByLabelText("Calendar: also show times in");
+    expect(Array.from(select.querySelectorAll("option")).map((o) => o.textContent)).toEqual([
+      "Off",
+      "Sam's flat, Dad · New York",
+      "Office · Kolkata",
+      "Paris",
+    ]);
+  });
+
+  it("selects the place for a zone saved under its legacy name", async () => {
+    mockApi({
+      clocks: [{ id: "p2", zone: "Asia/Kolkata", label: "Office", hours: null }],
+      calendar_zone: "Asia/Calcutta",
+    });
+    render();
+    const select = (await screen.findByLabelText("Calendar: also show times in")) as HTMLSelectElement;
+    expect(select.value).toBe("Asia/Kolkata");
+    expect(screen.queryByText("Not one of your places any more")).toBeNull();
+  });
+
+  it("keeps a zone whose place was removed in the select and says so", async () => {
+    mockApi({ clocks: PLACES, calendar_zone: "Asia/Tokyo" });
+    render();
+    const select = (await screen.findByLabelText("Calendar: also show times in")) as HTMLSelectElement;
+    expect(select.value).toBe("Asia/Tokyo");
+    expect(Array.from(select.querySelectorAll("option")).map((o) => o.textContent)).toContain("Tokyo");
+    expect(screen.getByText("Not one of your places any more")).toBeInTheDocument();
+  });
+
+  it("lays each from/to label out as a flex row, not the app-wide grid", async () => {
+    mockApi();
+    render();
+    const from = await screen.findByLabelText("Working hours start");
+    const label = from.closest("label") as HTMLElement;
+    expect(label.style.display).toBe("flex");
+    expect(label.style.alignItems).toBe("center");
+    const to = screen.getByLabelText("Working hours end") as HTMLSelectElement;
+    expect(to.style.width).toBe((from as HTMLSelectElement).style.width);
   });
 
   it("links to the Clocks page", async () => {

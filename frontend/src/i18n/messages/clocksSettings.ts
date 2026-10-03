@@ -10,12 +10,20 @@ export const clocksSettings = {
   },
   "clocks.settings.work": { en: "Working hours", fr: "Heures de travail" },
   "clocks.settings.night": { en: "Night hours", fr: "Heures de nuit" },
+  "clocks.settings.workStart": { en: "Working hours start", fr: "Heures de travail, début" },
+  "clocks.settings.workEnd": { en: "Working hours end", fr: "Heures de travail, fin" },
+  "clocks.settings.nightStart": { en: "Night hours start", fr: "Heures de nuit, début" },
+  "clocks.settings.nightEnd": { en: "Night hours end", fr: "Heures de nuit, fin" },
+  "clocks.settings.removedPlace": {
+    en: "Not one of your places any more",
+    fr: "Ce n’est plus l’un de vos lieux",
+  },
   "clocks.settings.from": { en: "from", fr: "de" },
   "clocks.settings.to": { en: "to", fr: "à" },
   "clocks.settings.calendarZone": { en: "Calendar: also show times in", fr: "Calendrier : afficher aussi les heures à" },
   "clocks.settings.calendarZoneHint": {
     en: "Choose one of your places. Timed rows on the calendar then show both times.",
-    fr: "Choisissez l'un de vos lieux. Les lignes horodatées du calendrier montrent alors les deux heures.",
+    fr: "Choisissez l’un de vos lieux. Les lignes horodatées du calendrier montrent alors les deux heures.",
   },
   "clocks.settings.calendarOff": { en: "Off", fr: "Désactivé" },
   "clocks.settings.noPlaces": {

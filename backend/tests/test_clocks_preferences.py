@@ -57,6 +57,23 @@ def test_places_round_trip_in_the_persons_order(client, user_a):
     assert _prefs(client, user_a)["clocks"] == places
 
 
+@pytest.mark.parametrize("bad", ["\u202eevil", "a\u2066b", "a\u202ab", "a\u2069b"])
+def test_a_label_with_a_direction_override_is_refused(client, user_a, bad):
+    assert _patch(client, user_a, {"clocks": [_place(label=bad)]}).status_code == 422
+
+
+def test_a_zero_width_joiner_in_a_label_is_still_allowed(client, user_a):
+    label = "👨\u200d👩 home"
+    answer = _patch(client, user_a, {"clocks": [_place(label=label)]})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["preferences"]["clocks"][0]["label"] == label
+
+
+def test_two_places_may_share_a_zone(client, user_a):
+    places = [_place("a", "Europe/Paris", "Mum"), _place("b", "Europe/Paris", "Dad")]
+    assert _patch(client, user_a, {"clocks": places}).status_code == 200
+
+
 def test_a_label_is_trimmed(client, user_a):
     answer = _patch(client, user_a, {"clocks": [_place(label="  Paris  ")]})
     assert answer.json()["preferences"]["clocks"][0]["label"] == "Paris"

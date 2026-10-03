@@ -188,7 +188,8 @@ describe("the /moon route", () => {
   it("is a module Customise can switch, and not a bottom tab", async () => {
     expect(MODULES).toContain("moon");
     renderAt("/settings");
-    const layout = await screen.findByText("Sections you use");
+    // Settings is a heavy page (Clocks adds 384 options); 1s is not enough under a full run.
+    const layout = await screen.findByText("Sections you use", undefined, { timeout: 5000 });
     const card = layout.closest("fieldset") as HTMLElement;
     expect(within(card).getByRole("checkbox", { name: "Moon" })).toBeChecked();
     const bar = screen.getByRole("navigation", { name: "Sections" });
@@ -323,7 +324,7 @@ describe("Settings → Moon", () => {
 
   it("is not shown with the module off", async () => {
     renderAt("/settings", { modules: withoutMoon });
-    await screen.findByText("Sections you use");
+    await screen.findByText("Sections you use", undefined, { timeout: 5000 });
     expect(screen.queryByRole("radio", { name: "Southern" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Set it on the Moon page" })).not.toBeInTheDocument();
   });

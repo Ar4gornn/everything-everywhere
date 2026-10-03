@@ -569,6 +569,50 @@ describe("CalendarPage", () => {
     expect(screen.getByText(/23:30 · New York 17:30$/)).toBeInTheDocument();
   });
 
+  it("names a zone shared by several places by its city, not by one of them", async () => {
+    mockApi({
+      startDay: 1,
+      clocks: {
+        calendar_zone: "Asia/Tokyo",
+        places: [
+          { id: "p1", zone: "Asia/Tokyo", label: "Mum", hours: null },
+          { id: "p2", zone: "Asia/Tokyo", label: "Dad", hours: null },
+        ],
+      },
+    });
+    render(<CalendarPage />);
+    await openSecond();
+    expect(await screen.findByText(/13:00 · Tokyo 20:00$/)).toBeInTheDocument();
+  });
+
+  it("finds the place for a zone saved under a legacy name", async () => {
+    mockApi({
+      startDay: 1,
+      clocks: {
+        calendar_zone: "Asia/Calcutta",
+        places: [{ id: "p1", zone: "Asia/Kolkata", label: "Gran", hours: null }],
+      },
+    });
+    render(<CalendarPage />);
+    await openSecond();
+    // Kolkata is UTC+5:30: 13:00 Paris (UTC+2) is 16:30.
+    expect(await screen.findByText(/13:00 · Gran 16:30$/)).toBeInTheDocument();
+  });
+
+  it("lets a long place name wrap anywhere instead of overflowing the row", async () => {
+    mockApi({
+      startDay: 1,
+      clocks: {
+        calendar_zone: "Asia/Tokyo",
+        places: [{ id: "p1", zone: "Asia/Tokyo", label: "W".repeat(32), hours: null }],
+      },
+    });
+    render(<CalendarPage />);
+    await openSecond();
+    const hint = await screen.findByText(/13:00 · W{32} 20:00$/);
+    expect(hint.style.overflowWrap).toBe("anywhere");
+  });
+
   it("shows one time only with no zone chosen, or with the module off", async () => {
     mockApi({ startDay: 1, clocks: { calendar_zone: null } });
     const first = render(<CalendarPage />);
