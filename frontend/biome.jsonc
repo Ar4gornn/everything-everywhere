@@ -7,7 +7,7 @@
 // focusable roles) are the ones tsc cannot see and a page test rarely exercises.
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
-  "files": { "includes": ["src/**", "vite.config.ts"] },
+  "files": { "includes": ["src/**", "landing/**", "vite.config.ts"] },
   "formatter": { "enabled": false },
   "assist": { "enabled": false },
   "linter": {

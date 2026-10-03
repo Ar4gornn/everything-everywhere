@@ -1,0 +1,17 @@
+@import "../src/tokens.css";
+@import "@fontsource/lato/latin-400.css";
+@import "@fontsource/lato/latin-700.css";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}

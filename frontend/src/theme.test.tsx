@@ -238,7 +238,9 @@ describe("ThemeProvider", () => {
  * for text in high contrast. A palette edit that breaks a pair fails here, not in a
  * screenshot someone happens to take.
  */
-const css = readFileSync(join(__dirname, "styles.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+const css = (
+  readFileSync(join(__dirname, "tokens.css"), "utf-8") + readFileSync(join(__dirname, "styles.css"), "utf-8")
+).replace(/\/\*[\s\S]*?\*\//g, "");
 
 type Rule = { conditions: [string, string][]; specificity: number; decls: [string, string][] };
 
