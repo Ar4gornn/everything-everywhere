@@ -202,7 +202,7 @@ Full text is in `docs/architecture.md` (AD-66). In short:
   navigation response is cached as `/index.html`, so one visit to the landing would make
   the installed app open offline onto the marketing page.
 - **`/signin`.** The app's signed-out branch already renders `SignInPage` on any path.
-  Signed in, `/signin` gets an explicit `<Navigate to="/" replace />`. `SignInPage` reads
+  Signed in, the existing `*` → `/` fallback already covers `/signin` (an explicit route was built and removed in review: redundant, untestable). `SignInPage` reads
   `?mode=register` once, opens the register form and strips the parameter, the same way it
   handles `?invite=` (AD-54).
 
@@ -269,7 +269,7 @@ Builders do not commit. Opus reviews each story and commits it.
 - `src/session/marker.ts`. Wire it in `api/client.ts`: call `setMarker()` where the
   refresh token is stored and `clearMarker()` in `clearTokens()`. Call `setMarker()` on
   boot when a refresh token exists.
-- In `App.tsx`, signed in: `<Route path="/signin" element={<Navigate to="/" replace />} />`.
+- `App.tsx`: no change; the `*` fallback covers signed-in `/signin`.
   `SignInPage` reads `?mode=register` once (like `takeInviteFromUrl`) and strips it.
 - `public/manifest.webmanifest`: `"id": "/"`, `"start_url": "/?pwa=1"`. In `index.html`,
   `manifest.webmanifest?v=3`.
@@ -278,7 +278,6 @@ Builders do not commit. Opus reviews each story and commits it.
   - marker set on sign-in and register, cleared on sign-out and on a failed refresh, set on
     boot with a stored token;
   - `Secure` added only on https;
-  - `/signin` signed in → dashboard;
   - `?mode=register` opens register and is stripped; `?invite=` still wins;
   - manifest has `id` "/" and `start_url` "/?pwa=1";
   - sw: a landing-marked response is not cached, an ok app response is cached, a 404 is
