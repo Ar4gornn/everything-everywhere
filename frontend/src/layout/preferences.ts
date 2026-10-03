@@ -1,5 +1,7 @@
 import type {
   CardId,
+  NavItem,
+  NavItemId,
   ClockHours,
   ClockPlace,
   Layout,
@@ -84,11 +86,68 @@ export const NOTIFICATIONS: [NotificationKind, boolean][] = [
   ["moon", false],
 ];
 
+/** Epic 52 (AD-65): every place, default order (mirrors `NAV_ITEMS` server-side). The
+ *  list leads with the pinned four in bar order; drawer and sidebar group the rest. */
+export const NAV_ITEMS: NavItemId[] = [
+  "dashboard",
+  "entries",
+  "habits",
+  "plan",
+  "calendar",
+  "books",
+  "notes",
+  "grow",
+  "stock",
+  "recipes",
+  "gym",
+  "clocks",
+  "moon",
+];
+export const NAV_DEFAULT_PINNED: NavItemId[] = ["dashboard", "entries", "habits", "plan"];
+/** A phone's bottom bar: this many pinned places, then More. */
+export const PHONE_PIN_CAP = 4;
+
+export function defaultItems(): NavItem[] {
+  return NAV_ITEMS.map((id) => ({ id, pinned: NAV_DEFAULT_PINNED.includes(id) }));
+}
+
 function defaultLayout() {
   return {
     tabs: SECTIONS.map(([id, slot]) => ({ id, slot })),
     cards: CARDS.map((id) => ({ id, on: true })),
+    items: defaultItems(),
   };
+}
+
+/**
+ * A layout's places. The server resolves `items` (AD-65); this only covers a server older
+ * than Epic 52, deriving them from `tabs` exactly as the server's `_resolve_items` does.
+ */
+export function itemsOf(layout: Layout): NavItem[] {
+  if (layout.items) return layout.items;
+  const pinned = layout.tabs
+    .filter((tab) => tab.slot === "bar")
+    .map((tab) => tab.id as NavItemId)
+    .slice(0, PHONE_PIN_CAP);
+  return [
+    ...pinned.map((id) => ({ id, pinned: true })),
+    ...NAV_ITEMS.filter((id) => !pinned.includes(id)).map((id) => ({ id, pinned: false })),
+  ];
+}
+
+/** Customise (builder C implements): pin a place; refused (returns the list unchanged)
+ *  when the bar already holds `PHONE_PIN_CAP`. A newly pinned place goes last in the bar. */
+export function pinItem(items: NavItem[], _id: NavItemId): NavItem[] {
+  return items;
+}
+/** Unpin a place; it returns to its group in the drawer. */
+export function unpinItem(items: NavItem[], _id: NavItemId): NavItem[] {
+  return items;
+}
+/** Move a place one step within its own list: among the pinned (bar order), or among the
+ *  unpinned of its group (drawer/sidebar order). A move past either end is a no-op. */
+export function moveItem(items: NavItem[], _id: NavItemId, _step: -1 | 1): NavItem[] {
+  return items;
 }
 
 /** Epic 48 (AD-64): places besides the account's own zone; the server refuses a 13th. */

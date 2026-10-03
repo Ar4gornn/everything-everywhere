@@ -120,6 +120,23 @@ PHONE_CAPS = {"bar": 5, "top": 3}
 _SECTION_IDS = tuple(section_id for section_id, _ in SECTIONS)
 _DEFAULT_SLOT = dict(SECTIONS)
 
+#: Epic 52 (AD-65): every place the navigation can show — the eight sections and the five
+#: views that used to hide behind chips and links — in their default order. On a phone the
+#: pinned ones are the bottom bar, in list order, and the rest are in the More drawer; on a
+#: desktop all are in the sidebar. The drawer and sidebar group them (the client's
+#: ``nav/model.ts``) and keep list order within each group, so the default list leads with
+#: the four pinned places in bar order.
+NAV_ITEMS: tuple[str, ...] = (
+    "dashboard", "entries", "habits", "plan",  # the bar
+    "calendar", "books", "notes", "grow",
+    "stock", "recipes", "gym",
+    "clocks", "moon",
+)
+#: Pinned by default: the daily money-and-habits loop.
+NAV_DEFAULT_PINNED: tuple[str, ...] = ("dashboard", "entries", "habits", "plan")
+#: A phone's bottom bar holds this many pinned places plus More.
+PHONE_PIN_CAP = 4
+
 
 def _merge(stored: list[dict], catalogue: tuple[str, ...], make) -> list[dict]:
     """Stored order, minus ids that no longer exist, plus ids it lacks at their default place.
@@ -172,7 +189,41 @@ def _resolve_layout(stored: object) -> dict:
         CARDS,
         lambda card_id: {"id": card_id, "on": True},
     )
-    return {"tabs": tabs, "cards": cards}
+    return {"tabs": tabs, "cards": cards, "items": _resolve_items(layout, tabs)}
+
+
+def _default_items() -> list[dict]:
+    return [{"id": item_id, "pinned": item_id in NAV_DEFAULT_PINNED} for item_id in NAV_ITEMS]
+
+
+def _resolve_items(layout: dict, tabs: list[dict]) -> list[dict]:
+    """The stored ``items`` merged with the catalogue; or, for a layout saved before Epic 52,
+    derived from its ``tabs``: the first four bar tabs (in their order) stay pinned, and
+    everything else follows in the default order. An account that never customised its tabs
+    gets the new default rather than a copy of the old five-tab bar."""
+    stored = layout.get("items")
+    if isinstance(stored, list):
+        clean = [
+            {"id": item["id"], "pinned": item["pinned"]}
+            for item in stored
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+            and isinstance(item.get("pinned"), bool)
+        ]
+        items = _merge(clean, NAV_ITEMS, lambda item_id: {"id": item_id, "pinned": False})
+        # A stored list that pins more than a bar holds (an older rule, a hand edit) keeps
+        # the first four; reading never refuses.
+        seen = 0
+        for item in items:
+            if item["pinned"]:
+                seen += 1
+                if seen > PHONE_PIN_CAP:
+                    item["pinned"] = False
+        return items
+    if not isinstance(layout.get("tabs"), list) or not layout.get("tabs"):
+        return _default_items()
+    pinned = [tab["id"] for tab in tabs if tab["slot"] == "bar"][:PHONE_PIN_CAP]
+    rest = [item_id for item_id in NAV_ITEMS if item_id not in pinned]
+    return [{"id": i, "pinned": True} for i in pinned] + [{"id": i, "pinned": False} for i in rest]
 
 
 def clean_points_name(raw: str) -> str:
@@ -350,6 +401,18 @@ def _check_streaks(shown: dict[str, bool]) -> None:
 
 
 def _check_layout(name: str, layout: dict) -> None:
+    items = layout.get("items")
+    if items is not None:
+        ids = [item["id"] for item in items]
+        for item_id in ids:
+            if item_id not in NAV_ITEMS:
+                raise Invalid(f"no place called {item_id!r}", "pref_unknown_id")
+        _no_duplicates(ids, "place")
+        # Complete for the same reason as the tabs: nowhere to reach a place it left out.
+        if len(ids) != len(NAV_ITEMS):
+            raise Invalid("the list must name every place once", "pref_incomplete")
+        if name == "phone" and sum(item["pinned"] for item in items) > PHONE_PIN_CAP:
+            raise Invalid(f"a phone's bar holds at most {PHONE_PIN_CAP}", "pref_slot_full")
     tabs = layout.get("tabs")
     if tabs is not None:
         ids = [tab["id"] for tab in tabs]

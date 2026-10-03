@@ -76,6 +76,15 @@ class Card(BaseModel):
     on: StrictBool
 
 
+class NavItem(BaseModel):
+    """Epic 52 (AD-65): one place in the navigation, and whether it is pinned to the bar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = _PrefId
+    pinned: StrictBool
+
+
 class LayoutIn(BaseModel):
     """One layout's subtree. A key left out is the default, so it is stored left out."""
 
@@ -83,6 +92,8 @@ class LayoutIn(BaseModel):
 
     tabs: list[Tab] | None = Field(default=None, max_length=32)
     cards: list[Card] | None = Field(default=None, max_length=32)
+    # Epic 52: replaces `tabs` for clients that know it; `tabs` stays accepted from older ones.
+    items: list[NavItem] | None = Field(default=None, max_length=32)
 
 
 def _points_name(value: object) -> str:
@@ -156,6 +167,7 @@ class PreferencesUpdate(BaseModel):
 class LayoutOut(BaseModel):
     tabs: list[Tab]
     cards: list[Card]
+    items: list[NavItem]
 
 
 class PreferencesOut(BaseModel):
