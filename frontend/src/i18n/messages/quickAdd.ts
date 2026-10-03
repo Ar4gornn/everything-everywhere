@@ -17,6 +17,7 @@ export const quickAdd = {
   },
   "quickAdd.categories": { en: "Category", fr: "Catégorie" },
   "quickAdd.other": { en: "Other…", fr: "Autre…" },
+  "suggest.group": { en: "Suggestions", fr: "Suggestions" },
   "quickAdd.today": { en: "Today", fr: "Aujourd’hui" },
   "quickAdd.yesterday": { en: "Yesterday", fr: "Hier" },
   "quickAdd.pickDate": { en: "Another day", fr: "Autre jour" },

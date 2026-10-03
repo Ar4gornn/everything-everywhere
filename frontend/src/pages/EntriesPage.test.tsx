@@ -75,6 +75,14 @@ function mockApi(
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("/api/categories")) return json({ items: cats });
     if (url.includes("/api/savings/overview")) return json(overview(pots));
+    if (url.includes("/api/vendors")) {
+      return json({
+        items: [
+          { id: "v1", name: "Lidl", created_at: "2026-01-01T00:00:00Z" },
+          { id: "v2", name: "Shell", created_at: "2026-01-01T00:00:00Z" },
+        ],
+      });
+    }
     if (url.includes("/api/entries") && init?.method === "POST") {
       return json({ ...entries[0], id: "e2" }, 201);
     }
@@ -661,6 +669,23 @@ describe("quantity and unit price (AD-29)", () => {
         vendor_name: "Shell",
       });
     });
+  });
+});
+
+describe("vendor and category suggestions", () => {
+  it("are chips, not a native datalist, and a tapped vendor chip fills the field", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<EntriesPage />);
+    await screen.findByRole("table", { name: "Entries" });
+    const form = screen.getByRole("form", { name: "Record an entry" });
+    expect(form.querySelector("datalist")).toBeNull();
+    const vendor = within(form).getByLabelText("Vendor");
+    await user.type(vendor, "sh");
+    const group = within(form).getByRole("group", { name: "Suggestions" });
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shell"]);
+    await user.click(within(group).getByRole("button", { name: "Shell" }));
+    expect(vendor).toHaveValue("Shell");
   });
 });
 

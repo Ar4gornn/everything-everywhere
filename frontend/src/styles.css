@@ -5595,6 +5595,22 @@ dialog.sheet::backdrop {
   font-size: var(--fs-tip);
 }
 
+.name-suggest {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.name-suggest .chips {
+  max-width: 100%;
+}
+
+.name-suggest .chip {
+  min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .sheet .qa-kind .chip {
   flex: 1 1 0;
 }

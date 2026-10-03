@@ -15,6 +15,7 @@ import {
 } from "../api/types";
 import { CheckInButton } from "../components/CheckInButton";
 import { ListRow, useOpenRow } from "../components/ListRow";
+import { NameSuggest } from "../components/NameSuggest";
 import { WaitingEntries } from "../components/WaitingEntries";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
 import { useEntriesVersion, useQuickAdd } from "../components/QuickAdd/QuickAddContext";
@@ -612,22 +613,17 @@ export function EntriesPage() {
 
           <label style={{ flex: "1 1 180px" }}>
             {t("field.category")}
-            <input
-              list="category-names"
-              aria-label={t("field.category")}
+            <NameSuggest
+              ariaLabel={t("field.category")}
               placeholder={t("entries.categoryPlaceholder")}
               required
               value={categoryName}
-              onChange={(event) => onCategoryNameChange(event.target.value)}
+              onChange={onCategoryNameChange}
+              names={categories
+                .filter((category) => category.kind === kind)
+                .map((category) => category.name)}
             />
           </label>
-          <datalist id="category-names">
-            {categories
-              .filter((category) => category.kind === kind)
-              .map((category) => (
-                <option key={category.id} value={category.name} />
-              ))}
-          </datalist>
 
           <label style={{ flex: "0 0 150px" }}>
             {t("field.date")}
@@ -642,19 +638,14 @@ export function EntriesPage() {
 
           <label style={{ flex: "1 1 140px" }}>
             {t("entries.vendor")}
-            <input
-              list="vendor-names"
-              aria-label={t("entries.vendor")}
+            <NameSuggest
+              ariaLabel={t("entries.vendor")}
               placeholder={t("entries.vendorPlaceholder")}
               value={vendorName}
-              onChange={(event) => setVendorName(event.target.value)}
+              onChange={setVendorName}
+              names={vendors.map((vendor) => vendor.name)}
             />
           </label>
-          <datalist id="vendor-names">
-            {vendors.map((vendor) => (
-              <option key={vendor.id} value={vendor.name} />
-            ))}
-          </datalist>
 
           <label style={{ flex: "1 1 160px" }}>
             {t("field.note")}
