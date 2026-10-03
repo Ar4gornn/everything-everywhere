@@ -54,6 +54,33 @@
 	@sw path /sw.js
 	header @sw Cache-Control "no-cache, no-store, must-revalidate"
 
+	# AD-66: the marketing landing. "/" is the landing for a visitor, who has no ee_app=1
+	# cookie (a routing hint the client sets while a refresh token exists, never a
+	# credential) and no query string. Any query (?invite=, ?mood=1, ?pwa=1) is an app link
+	# and stays on the SPA. The cookie regex tolerates other cookies on either side and
+	# rejects look-alikes such as ee_app=10. This is rewritten to the prerendered
+	# /landing.html, served by the file_server below.
+	@landing {
+		path /
+		not header_regexp Cookie (^|;\s*)ee_app=1(;|$)
+		query ""
+	}
+	# The header is matched BEFORE the rewrite runs (header sorts ahead of rewrite), so it
+	# is only set when the landing is served: the app at "/" for a cookie holder must NOT
+	# carry X-EE-Page, or the service worker refuses to cache it as the app shell.
+	header @landing X-EE-Page "landing"
+	header @landing Cache-Control "no-cache"
+	rewrite @landing /landing.html
+
+	# AD-66: every other landing document, with the same two headers.
+	@landingdocs path /landing.html /fr/ /fr/index.html /privacy/ /privacy/index.html /fr/privacy/ /fr/privacy/index.html
+	header @landingdocs X-EE-Page "landing"
+	header @landingdocs Cache-Control "no-cache"
+
+	# AD-66: the slash-less forms redirect to the directory form the build emits.
+	@landingslash path /fr /privacy /fr/privacy
+	redir @landingslash {path}/ 308
+
 	# index.html likewise: it names the hashed bundles, so a cached copy pins the app to an
 	# old build.
 	@shell path / /index.html /manifest.webmanifest
@@ -68,7 +95,9 @@
 	# not a real file returns index.html rather than a 404.
 	handle {
 		root * /srv
-		try_files {path} /index.html
+		# {path}index.html makes /fr/ and /privacy/ explicit (AD-66); the last entry is
+		# still the SPA fallback for everything else.
+		try_files {path} {path}index.html /index.html
 		file_server
 	}
 }
