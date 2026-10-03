@@ -44,7 +44,6 @@ const holdServer = () => {
     };
   });
 };
-let meReads = 0;
 /** The account cannot be read (the GET before a write fails). */
 let meFails = false;
 /** Another device writes to the account behind this page's back. */
@@ -101,7 +100,6 @@ function mount(places: ClockPlace[], overrides: Partial<Preferences> = {}, langu
       }
       if (url.includes("/api/auth/me")) {
         if (meFails) return json({ detail: "no", code: "error" }, 500);
-        meReads += 1;
         return json(user());
       }
       return json({ items: [] });
@@ -133,7 +131,6 @@ beforeEach(() => {
   capRefuses = false;
   meFails = false;
   gate = null;
-  meReads = 0;
   device.zone = "Europe/Paris";
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
 });
