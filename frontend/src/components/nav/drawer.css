@@ -1,0 +1,172 @@
+/* Epic 52 (AD-65, story 52.1): the phone's More tab and the drawer it opens.
+   Class names are global in this app, so every rule here is qualified by its parent. Colours
+   are text tokens that theme.test.tsx checks on the surface they sit on. */
+
+@media (max-width: 720px) {
+  /* The More button is a <button>, so it undoes the app's primary-pill skin and takes the
+     look of the links beside it (same padding and line height, so the bar stays one height
+     and the + above it still clears). */
+  .bottom-nav .bottom-more {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 9px 4px 7px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--fs-small);
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .bottom-nav .bottom-more:hover:not(:disabled) {
+    background: transparent;
+    color: var(--text);
+  }
+
+  .bottom-nav .bottom-more.on {
+    color: var(--link);
+    font-weight: 700;
+  }
+
+  .bottom-nav .bottom-more .glyph {
+    font-size: var(--fs-h3);
+    line-height: 1;
+  }
+}
+
+/* A native <dialog> pinned to the bottom edge, as the quick-add sheet is: the browser owns
+   the top layer, the inert page and Escape. The padding lives on the inner box, not the
+   dialog, so a tap on the dialog element itself is always the backdrop. */
+dialog.nav-drawer {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 85dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0;
+}
+
+dialog.nav-drawer::backdrop {
+  background: rgb(0 0 0 / 50%);
+}
+
+@media (min-width: 721px) {
+  /* The sidebar replaces the drawer; a window widened while it was open must not keep it. */
+  dialog.nav-drawer {
+    display: none;
+  }
+}
+
+.nav-drawer .nav-drawer-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
+}
+
+.nav-drawer .nav-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.nav-drawer .nav-drawer-head h2 {
+  margin: 0;
+  font-size: var(--fs-h3);
+}
+
+.nav-drawer .nav-drawer-head button.nav-close {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.nav-drawer .nav-drawer-group {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nav-drawer .nav-drawer-group h3 {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nav-drawer .nav-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-drawer .nav-tiles li {
+  display: flex;
+  min-width: 0;
+}
+
+.nav-drawer .nav-tile {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 72px;
+  padding: var(--space-2) var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.nav-drawer .nav-tile .glyph {
+  font-size: var(--fs-h3);
+  line-height: 1;
+}
+
+.nav-drawer .nav-tile .nav-tile-name {
+  font-size: var(--fs-tip);
+  line-height: 1.2;
+}
+
+.nav-drawer .nav-tile .nav-tile-hint {
+  font-size: var(--fs-small);
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.nav-drawer .nav-tile[aria-current="page"] {
+  background: var(--primary-soft);
+  border-color: var(--link);
+  color: var(--link);
+  font-weight: 700;
+}
+
+.nav-drawer .nav-tile[aria-current="page"] .nav-tile-hint {
+  color: var(--link);
+}

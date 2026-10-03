@@ -20,6 +20,14 @@ DEFAULT_TABS = [
     {"id": "grow", "slot": "top"},
     {"id": "recipes", "slot": "top"},
 ]
+# Epic 52 (AD-65): every place once; the bar's four pinned. test_nav_items.py goes deeper.
+DEFAULT_ITEMS = [
+    {"id": place, "pinned": place in ("dashboard", "entries", "habits", "plan")}
+    for place in (
+        "dashboard", "entries", "habits", "plan", "calendar", "books", "notes", "grow",
+        "stock", "recipes", "gym", "clocks", "moon",
+    )
+]
 DEFAULT_CARDS = [
     {"id": card, "on": True}
     for card in (
@@ -59,8 +67,8 @@ DEFAULT = {
     "clocks": [],
     "clock_hours": {"work": ["09:00", "18:00"], "night": ["23:00", "07:00"]},
     "calendar_zone": None,
-    "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
-    "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS},
+    "phone": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS, "items": DEFAULT_ITEMS},
+    "desktop": {"tabs": DEFAULT_TABS, "cards": DEFAULT_CARDS, "items": DEFAULT_ITEMS},
 }
 
 

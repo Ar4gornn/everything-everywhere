@@ -167,7 +167,7 @@ def _merge(stored: list[dict], catalogue: tuple[str, ...], make) -> list[dict]:
     return result
 
 
-def _resolve_layout(stored: object) -> dict:
+def _resolve_layout(name: str, stored: object) -> dict:
     layout = stored if isinstance(stored, dict) else {}
     tabs = _merge(
         [
@@ -189,14 +189,14 @@ def _resolve_layout(stored: object) -> dict:
         CARDS,
         lambda card_id: {"id": card_id, "on": True},
     )
-    return {"tabs": tabs, "cards": cards, "items": _resolve_items(layout, tabs)}
+    return {"tabs": tabs, "cards": cards, "items": _resolve_items(name, layout, tabs)}
 
 
 def _default_items() -> list[dict]:
     return [{"id": item_id, "pinned": item_id in NAV_DEFAULT_PINNED} for item_id in NAV_ITEMS]
 
 
-def _resolve_items(layout: dict, tabs: list[dict]) -> list[dict]:
+def _resolve_items(name: str, layout: dict, tabs: list[dict]) -> list[dict]:
     """The stored ``items`` merged with the catalogue; or, for a layout saved before Epic 52,
     derived from its ``tabs``: the first four bar tabs (in their order) stay pinned, and
     everything else follows in the default order. An account that never customised its tabs
@@ -210,16 +210,25 @@ def _resolve_items(layout: dict, tabs: list[dict]) -> list[dict]:
             and isinstance(item.get("pinned"), bool)
         ]
         items = _merge(clean, NAV_ITEMS, lambda item_id: {"id": item_id, "pinned": False})
-        # A stored list that pins more than a bar holds (an older rule, a hand edit) keeps
-        # the first four; reading never refuses.
+        # A phone's stored list that pins more than a bar holds (an older rule, a hand edit)
+        # keeps the first four; reading never refuses. A desktop ignores `pinned`, and the
+        # write path accepts any number there, so it is read back as it was written.
         seen = 0
         for item in items:
-            if item["pinned"]:
+            if name == "phone" and item["pinned"]:
                 seen += 1
                 if seen > PHONE_PIN_CAP:
                     item["pinned"] = False
         return items
-    if not isinstance(layout.get("tabs"), list) or not layout.get("tabs"):
+    raw_tabs = layout.get("tabs")
+    # Only a tab list that held at least one readable tab says anything about the bar; an
+    # empty or unreadable one is "never customised", as if it were absent.
+    readable = isinstance(raw_tabs, list) and any(
+        isinstance(tab, dict) and isinstance(tab.get("id"), str)
+        and tab.get("slot") in ("bar", "top")
+        for tab in raw_tabs
+    )
+    if not readable:
         return _default_items()
     pinned = [tab["id"] for tab in tabs if tab["slot"] == "bar"][:PHONE_PIN_CAP]
     rest = [item_id for item_id in NAV_ITEMS if item_id not in pinned]
@@ -282,7 +291,7 @@ def resolve(stored: object) -> dict:
             if isinstance(prefs.get("calendar_zone"), str) and is_zone(prefs["calendar_zone"])
             else None
         ),
-        **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
+        **{layout: _resolve_layout(layout, prefs.get(layout)) for layout in LAYOUTS},
     }
 
 

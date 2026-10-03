@@ -1,0 +1,244 @@
+/* Epic 52 (AD-65): the desktop sidebar. Phones never see it; every rule that places it lives
+   inside the desktop query. Class names are global in this app, so each selector is qualified
+   by .sidebar or by .shell > … */
+
+.sidebar {
+  display: none;
+}
+
+@media (min-width: 721px) {
+  /* Two columns: the sidebar spans the rows, the top bar and the page stack in the second.
+     Shell max-width = old content width (1080) + the column + the gap, so the page keeps its
+     readable measure. */
+  .shell {
+    --sidebar-w: 232px;
+    --sidebar-gap: 32px;
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: var(--sidebar-gap);
+    align-items: start;
+    max-width: calc(1080px + var(--sidebar-w) + var(--sidebar-gap));
+  }
+
+  .shell > .topbar,
+  .shell > main {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .shell > .topbar {
+    grid-row: 1;
+  }
+
+  .shell > main {
+    grid-row: 2;
+  }
+
+  /* The sidebar already carries the app name, Settings and the theme switch, so the top bar
+     keeps the one thing it lacks: who is signed in (the email, which is also a way into
+     Settings). The h1 stays in the DOM for the page outline but is visually hidden, the
+     toggle is hidden (the sidebar has one), and the row right-aligns the identity. */
+  .shell > .topbar {
+    justify-content: flex-end;
+  }
+
+  .shell > .topbar .brand {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .shell > .topbar .theme-toggle {
+    display: none;
+  }
+
+  .shell > .topbar .identity {
+    flex: 0 1 auto;
+  }
+
+  .sidebar {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    top: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100dvh;
+    padding: 0 16px 16px 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .sidebar .sidebar-brand {
+    flex: none;
+    padding: 4px 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: var(--fs-h3);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .sidebar .sidebar-brand-mark {
+    display: none;
+  }
+
+  .sidebar .sidebar-groups {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sidebar .sidebar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sidebar .sidebar-heading {
+    margin: 0;
+    padding: 0 8px 4px;
+    color: var(--muted);
+    font-size: var(--fs-small);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  .sidebar .sidebar-link {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    min-height: 40px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    font-size: var(--fs-body);
+    text-decoration: none;
+  }
+
+  .sidebar .sidebar-link:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .sidebar .sidebar-link.on {
+    background: var(--primary-soft);
+    color: var(--link);
+    font-weight: 700;
+  }
+
+  .sidebar .sidebar-link .glyph {
+    text-align: center;
+  }
+
+  .sidebar .sidebar-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .sidebar .sidebar-hint {
+    font-size: var(--fs-small);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: inherit;
+  }
+
+  .sidebar .sidebar-foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar .sidebar-foot .sidebar-link {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .sidebar .sidebar-foot .theme-toggle {
+    align-self: auto;
+    min-height: 40px;
+  }
+}
+
+/* A narrow desktop window (721-960px): an icon rail, so the page keeps its measure. Labels,
+   headings and hints stay in the DOM (visually hidden) and each link carries a title. */
+@media (min-width: 721px) and (max-width: 960px) {
+  .shell {
+    --sidebar-w: 64px;
+    --sidebar-gap: 20px;
+  }
+
+  .sidebar {
+    padding-right: 10px;
+    gap: 12px;
+  }
+
+  .sidebar .sidebar-brand {
+    padding: 4px 0 12px;
+    text-align: center;
+  }
+
+  .sidebar .sidebar-brand-name,
+  .sidebar .sidebar-heading,
+  .sidebar .sidebar-label,
+  .sidebar .sidebar-hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar .sidebar-brand-mark {
+    display: block;
+    font-size: var(--fs-body);
+    letter-spacing: 0.04em;
+  }
+
+  .sidebar .sidebar-groups {
+    gap: 8px;
+  }
+
+  .sidebar .sidebar-group + .sidebar-group {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar .sidebar-link {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 6px 0;
+  }
+
+  .sidebar .sidebar-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sidebar .sidebar-foot .sidebar-link {
+    flex: none;
+  }
+}

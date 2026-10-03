@@ -310,6 +310,10 @@ export function App() {
   // Epic 52 (AD-65): one model for the phone bar, the More drawer and the desktop sidebar.
   const nav = navModel(current, modules);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // A tap on a tile closes the drawer itself; this covers every other way the page changes
+  // (back button, a link in a page) so the sheet never stays over the new one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the path is the trigger
+  useEffect(() => setDrawerOpen(false), [pathname]);
 
   // Notes written with no network are sent when it comes back, and when the app opens —
   // whichever page is showing (Epic 32, AD-48).

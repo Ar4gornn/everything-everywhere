@@ -18,32 +18,37 @@ export const layout = {
     fr: "Enregistrement impossible, la modification a été annulée.",
   },
 
-  "layout.tabs": { en: "Tabs", fr: "Onglets" },
   "layout.phone": { en: "Phone", fr: "Téléphone" },
   "layout.desktop": { en: "Computer", fr: "Ordinateur" },
-  "layout.tabsHint": {
-    en: "A phone fits five tabs and three links at the top, so moving one across swaps it with the last of the other row.",
-    fr: "Un téléphone affiche cinq onglets et trois liens en haut : déplacer un élément d'une rangée à l'autre l'échange avec le dernier de l'autre rangée.",
-  },
-  "layout.bar": { en: "Tab bar", fr: "Barre d'onglets" },
-  "layout.top": { en: "Top bar", fr: "Barre du haut" },
   "layout.up": { en: "Move {name} up", fr: "Monter {name}" },
   "layout.down": { en: "Move {name} down", fr: "Descendre {name}" },
-  "layout.toTop": { en: "Move {name} to the top bar", fr: "Placer {name} dans la barre du haut" },
-  "layout.toBar": { en: "Move {name} to the tab bar", fr: "Placer {name} dans la barre d'onglets" },
-  "layout.toTopSwap": {
-    en: "Move {name} to the top bar, and {other} to the tab bar",
-    fr: "Placer {name} dans la barre du haut, et {other} dans la barre d'onglets",
+
+  // Epic 52 (AD-65): the place editor.
+  "layout.nav.title": { en: "Navigation", fr: "Navigation" },
+  "layout.nav.phoneHint": {
+    en: "The bar holds four places, then More. Everything else is in the More menu, by group: here you choose the order within each group.",
+    fr: "La barre contient quatre rubriques, puis « Plus ». Tout le reste est dans le menu « Plus », par groupe : vous choisissez ici l'ordre au sein de chaque groupe.",
   },
-  "layout.toBarSwap": {
-    en: "Move {name} to the tab bar, and {other} to the top bar",
-    fr: "Placer {name} dans la barre d'onglets, et {other} dans la barre du haut",
+  "layout.nav.desktopHint": {
+    en: "The sidebar shows every place, by group: here you choose the order within each group.",
+    fr: "La barre latérale affiche toutes les rubriques, par groupe : vous choisissez ici l'ordre au sein de chaque groupe.",
   },
-  "layout.hidden": { en: "turned off", fr: "rubrique désactivée" },
+  "layout.nav.bar": { en: "In the bar ({count} of {max})", fr: "Dans la barre ({count} sur {max})" },
+  "layout.nav.barEmpty": {
+    en: "Nothing is pinned: the bar is only More.",
+    fr: "Rien n'est épinglé : la barre ne contient que « Plus ».",
+  },
+  "layout.nav.pin": { en: "Pin {name} to the bar", fr: "Épingler {name} à la barre" },
+  "layout.nav.unpin": { en: "Unpin {name} from the bar", fr: "Retirer {name} de la barre" },
+  "layout.nav.full": {
+    en: "The bar is full ({max} places). Unpin one to pin another.",
+    fr: "La barre est pleine ({max} rubriques). Retirez-en une pour en épingler une autre.",
+  },
+  "layout.nav.off": { en: "(off)", fr: "(désactivée)" },
   "layout.reset": { en: "Reset this layout", fr: "Rétablir cette disposition" },
   "layout.resetConfirm": {
-    en: "Put the {layout} tabs and cards back as they were?",
-    fr: "Remettre les onglets et les cartes ({layout}) comme à l'origine ?",
+    en: "Put the {layout} places and cards back as they were?",
+    fr: "Remettre les rubriques et les cartes ({layout}) comme à l'origine ?",
   },
   "layout.resetYes": { en: "Reset", fr: "Rétablir" },
 

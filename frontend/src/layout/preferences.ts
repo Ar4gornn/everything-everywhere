@@ -14,6 +14,7 @@ import type {
   StreakModuleId,
   User,
 } from "../api/types";
+import { NAV_DEFS } from "../nav/model";
 
 /**
  * The account's layout preferences on the client (Epic 33, AD-49).
@@ -135,19 +136,45 @@ export function itemsOf(layout: Layout): NavItem[] {
   ];
 }
 
-/** Customise (builder C implements): pin a place; refused (returns the list unchanged)
- *  when the bar already holds `PHONE_PIN_CAP`. A newly pinned place goes last in the bar. */
-export function pinItem(items: NavItem[], _id: NavItemId): NavItem[] {
-  return items;
+/** Customise (AD-65): pin a place; refused (returns the list unchanged) when the bar already
+ *  holds `PHONE_PIN_CAP`, or the place is already pinned or unknown. A newly pinned place goes
+ *  last in the bar, i.e. straight after the last pinned place in the list. */
+export function pinItem(items: NavItem[], id: NavItemId): NavItem[] {
+  const item = items.find((i) => i.id === id);
+  if (!item || item.pinned || items.filter((i) => i.pinned).length >= PHONE_PIN_CAP) return items;
+  const rest = items.filter((i) => i.id !== id);
+  const after = rest.map((i) => i.pinned).lastIndexOf(true);
+  return [...rest.slice(0, after + 1), { id, pinned: true }, ...rest.slice(after + 1)];
 }
-/** Unpin a place; it returns to its group in the drawer. */
-export function unpinItem(items: NavItem[], _id: NavItemId): NavItem[] {
-  return items;
+
+/** Unpin a place; it returns to its group in the drawer, at its default place among the
+ *  unpinned (before the first unpinned place that comes later in `NAV_ITEMS`). */
+export function unpinItem(items: NavItem[], id: NavItemId): NavItem[] {
+  const item = items.find((i) => i.id === id);
+  if (!item?.pinned) return items;
+  const rest = items.filter((i) => i.id !== id);
+  const mine = NAV_ITEMS.indexOf(id);
+  const before = rest.findIndex((i) => !i.pinned && NAV_ITEMS.indexOf(i.id) > mine);
+  const at = before === -1 ? rest.length : before;
+  return [...rest.slice(0, at), { id, pinned: false }, ...rest.slice(at)];
 }
+
 /** Move a place one step within its own list: among the pinned (bar order), or among the
  *  unpinned of its group (drawer/sidebar order). A move past either end is a no-op. */
-export function moveItem(items: NavItem[], _id: NavItemId, _step: -1 | 1): NavItem[] {
-  return items;
+export function moveItem(items: NavItem[], id: NavItemId, step: -1 | 1): NavItem[] {
+  const from = items.findIndex((i) => i.id === id);
+  const item = items[from];
+  if (!item) return items;
+  const peers = (other: NavItem) =>
+    other.pinned === item.pinned && (item.pinned || NAV_DEFS[other.id].group === NAV_DEFS[id].group);
+  const lane = items.map((other, index) => (peers(other) ? index : -1)).filter((index) => index >= 0);
+  const to = lane[lane.indexOf(from) + step];
+  const neighbour = to === undefined ? undefined : items[to];
+  if (to === undefined || !neighbour) return items;
+  const next = [...items];
+  next[from] = neighbour;
+  next[to] = item;
+  return next;
 }
 
 /** Epic 48 (AD-64): places besides the account's own zone; the server refuses a 13th. */
@@ -283,65 +310,6 @@ export class PreferenceSaver {
       }
     }
   }
-}
-
-type Tab = Layout["tabs"][number];
-type Slot = Tab["slot"];
-
-/** A phone's tab bar holds five and its top bar three (measured, AD-49); a desktop has room. */
-export const PHONE_CAPS: Record<Slot, number> = { bar: 5, top: 3 };
-
-const other = (slot: Slot): Slot => (slot === "bar" ? "top" : "bar");
-
-/** Tab bar first, then top bar, each in its own order: the one shape the editor writes. */
-export function normalizeTabs(tabs: Tab[]): Tab[] {
-  return [...tabs.filter((t) => t.slot === "bar"), ...tabs.filter((t) => t.slot === "top")];
-}
-
-/** One place up (-1) or down (+1) within its own slot. Unchanged at either end. */
-export function moveTab(tabs: Tab[], id: SectionId, step: -1 | 1): Tab[] {
-  const list = normalizeTabs(tabs);
-  const from = list.findIndex((t) => t.id === id);
-  const to = from + step;
-  const tab = list[from];
-  const neighbour = list[to];
-  if (!tab || !neighbour || neighbour.slot !== tab.slot) return list;
-  list[from] = neighbour;
-  list[to] = tab;
-  return list;
-}
-
-/**
- * Who comes back across when `id` moves to the other slot, or null if nobody has to.
- *
- * On a phone both slots are full whenever every section exists — the caps add up to the
- * eight sections — so a move across is a swap: the last of the full slot takes the moving
- * section's place. Saying who, before the tap, is what makes that a choice rather than a
- * surprise.
- */
-export function swapPartner(tabs: Tab[], id: SectionId, layout: LayoutName): SectionId | null {
-  const tab = tabs.find((t) => t.id === id);
-  if (!tab || layout !== "phone") return null;
-  const target = normalizeTabs(tabs).filter((t) => t.slot === other(tab.slot));
-  return target.length >= PHONE_CAPS[other(tab.slot)] ? (target.at(-1)?.id ?? null) : null;
-}
-
-/** Move `id` to the end of the other slot, swapping per `swapPartner` when that slot is full. */
-export function switchSlot(tabs: Tab[], id: SectionId, layout: LayoutName): Tab[] {
-  const tab = tabs.find((t) => t.id === id);
-  if (!tab) return normalizeTabs(tabs);
-  const partner = swapPartner(tabs, id, layout);
-  const list = normalizeTabs(tabs);
-  if (partner) {
-    // The partner steps into the mover's place; the mover goes last in the partner's slot,
-    // which is exactly where the partner was.
-    return normalizeTabs(
-      list.map((t) =>
-        t.id === id ? { id: partner, slot: tab.slot } : t.id === partner ? { id, slot: other(tab.slot) } : t,
-      ),
-    );
-  }
-  return normalizeTabs([...list.filter((t) => t.id !== id), { id, slot: other(tab.slot) }]);
 }
 
 type Card = Layout["cards"][number];

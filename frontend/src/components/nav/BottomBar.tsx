@@ -2,12 +2,13 @@ import { NavLink } from "react-router-dom";
 
 import { useT } from "../../i18n";
 import { isAt, type NavModel } from "../../nav/model";
+import "./drawer.css";
 
 /**
  * Epic 52 (AD-65): the phone's bottom bar — the pinned places, then More, which opens the
- * drawer. SKELETON: builder A owns this file (look, More's "on" state when the current page
- * is a drawer place, badges none). Keep `aria-label={t("nav.sections")}`: the tour and many
- * tests find the bar by that name.
+ * drawer. More is lit when the current page is one of the drawer's places, so five slots
+ * still say where you are. Keep `aria-label={t("nav.sections")}`: the tour and many tests
+ * find the bar by that name.
  */
 export function BottomBar({
   model,
@@ -21,7 +22,7 @@ export function BottomBar({
   onMore: () => void;
 }) {
   const t = useT();
-  const inDrawer = !model.pinned.some((def) => isAt(def, pathname));
+  const inDrawer = model.drawer.some((group) => group.items.some((def) => isAt(def, pathname)));
   return (
     <nav className="bottom-nav" aria-label={t("nav.sections")}>
       {model.pinned.map((def) => (
@@ -34,7 +35,7 @@ export function BottomBar({
       ))}
       <button
         type="button"
-        className={`bottom-more ${inDrawer && !moreOpen ? "on" : ""}`}
+        className={`bottom-more ${inDrawer ? "on" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={moreOpen}
         onClick={onMore}

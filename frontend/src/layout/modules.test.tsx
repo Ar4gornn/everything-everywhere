@@ -3,14 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { App, navFor } from "../App";
-import type { ModuleId, Preferences } from "../api/types";
+import { App } from "../App";
+import type { ModuleId, NavItem, Preferences } from "../api/types";
 import { AuthProvider } from "../auth/AuthContext";
 import { ToastProvider } from "../components/Toast";
 import { TutorialProvider, useTutorial } from "../components/Tutorial/useTutorial";
 import { LanguageProvider } from "../i18n";
 import { ThemeProvider } from "../theme";
-import { DEFAULT_PREFERENCES, MODULES } from "./preferences";
+import { DEFAULT_PREFERENCES, MODULES, NAV_ITEMS } from "./preferences";
 
 /**
  * Turning a module off (Epic 33, story 33.3): its tab, its pages, and everything that
@@ -83,48 +83,35 @@ function renderAt(
 
 const asked = (fragment: string) => requests.some((r) => r.url.includes(fragment));
 const bottomBar = () => screen.getByRole("navigation", { name: "Sections" });
-const topExtra = () => screen.getByRole("navigation", { name: "More" });
+// Epic 52: the sidebar lists every visible place, whatever the bar holds.
+const sidebar = () => screen.getByRole("navigation", { name: "All places" });
 const tabs = () =>
   within(bottomBar())
     .getAllByRole("link")
     .map((link) => link.textContent?.replace(/^\W+/u, "").trim());
 
-describe("navFor (modules)", () => {
-  const visibleSections = (modules: Record<ModuleId, boolean>) =>
-    navFor(DEFAULT_PREFERENCES.phone, modules).bar;
-  const paths = (modules: Record<ModuleId, boolean>) => visibleSections(modules).map((s) => s.to);
-
-  it("is today's five with everything on", () => {
-    expect(paths(ALL_ON)).toEqual(["/", "/entries", "/habits", "/inventory", "/gym"]);
-  });
-
-  it("drops a section whose module is off", () => {
-    expect(paths(off("gym"))).toEqual(["/", "/entries", "/habits", "/inventory"]);
-    expect(paths(off("stock", "gym"))).toEqual(["/", "/entries", "/habits"]);
-  });
-
-  it("turns the Habits section into Books when only the books are on", () => {
-    const books = visibleSections(off("habits")).find((s) => s.to === "/books");
-    expect(books).toMatchObject({ label: "view.books", also: [] });
-    expect(paths(off("habits", "books"))).toEqual(["/", "/entries", "/inventory", "/gym"]);
-  });
-
-  it("stops lighting a section for a view that is off", () => {
-    expect(visibleSections(off("books")).find((s) => s.to === "/habits")?.also).toEqual([]);
-    expect(visibleSections(off("notes"))[0]?.also).toEqual(["/calendar"]);
-  });
-});
-
 describe("a module that is off", () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => vi.unstubAllGlobals());
 
-  it("has no tab and no top-bar link", async () => {
-    renderAt("/entries", off("gym", "recipes", "stock"));
+  it("is in neither the bar nor the sidebar, and the rest are", async () => {
+    const pinned = DEFAULT_PREFERENCES.desktop.items?.map((i) => ({
+      ...i,
+      pinned: ["dashboard", "entries", "stock", "gym"].includes(i.id),
+    }));
+    renderAt("/entries", off("gym", "recipes", "stock"), undefined, {
+      ...withModules(off("gym", "recipes", "stock")),
+      desktop: { ...DEFAULT_PREFERENCES.desktop, items: pinned },
+    });
     await waitFor(() => expect(bottomBar()).toBeInTheDocument());
-    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits"]);
-    expect(within(topExtra()).queryByRole("link", { name: "Recipes" })).toBeNull();
-    expect(within(topExtra()).getByRole("link", { name: "Plan" })).toBeInTheDocument();
+    // Stock and Gym are pinned, and off: the bar has what is left.
+    expect(tabs()).toEqual(["Dashboard", "Entries"]);
+    for (const name of ["Stock", "Gym", "Recipes"]) {
+      expect(within(sidebar()).queryByRole("link", { name })).toBeNull();
+    }
+    // Plan carries a live hint ("N days left") in its name.
+    expect(within(sidebar()).getByRole("link", { name: /^Plan/ })).toBeInTheDocument();
+    expect(within(sidebar()).getByRole("link", { name: "Books" })).toBeInTheDocument();
   });
 
   it("answers its routes with a page that says so, not a redirect", async () => {
@@ -143,11 +130,12 @@ describe("a module that is off", () => {
     expect(asked("/api/notes")).toBe(false);
   });
 
-  it("leaves the Habits tab as Books, pointing at the shelf", async () => {
+  it("takes Habits out and leaves Books where it was: they are separate places", async () => {
     renderAt("/books", off("habits"));
     await waitFor(() => expect(bottomBar()).toBeInTheDocument());
-    const books = within(bottomBar()).getByRole("link", { name: /Books/ });
-    expect(books).toHaveAttribute("href", "/books");
+    expect(within(bottomBar()).queryByRole("link", { name: /Habits/ })).toBeNull();
+    expect(within(sidebar()).queryByRole("link", { name: "Habits" })).toBeNull();
+    expect(within(sidebar()).getByRole("link", { name: "Books" })).toHaveAttribute("href", "/books");
     // One view left is no choice, so there is no switch on the page.
     await waitFor(() => expect(asked("/api/books")).toBe(true));
     expect(screen.queryByRole("group", { name: "Habits view" })).toBeNull();
@@ -170,7 +158,7 @@ describe("a module that is off", () => {
     renderAt("/", ALL_ON);
     await waitFor(() => expect(asked("/api/books")).toBe(true));
     expect(asked("/api/inventory")).toBe(true);
-    expect(screen.getByRole("link", { name: /Notes/ })).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getByRole("link", { name: /Notes/ })).toBeInTheDocument();
   });
 
   it("loses its calendar layer: no menu entry, no request", async () => {
@@ -205,10 +193,10 @@ describe("Settings → Layout", () => {
     // Settings is heavy (Clocks adds hundreds of options): 1s is not enough under a full run.
     const gym = await screen.findByRole("checkbox", { name: "Gym" }, { timeout: 5000 });
     expect(gym).toBeChecked();
-    expect(within(bottomBar()).getByRole("link", { name: /Gym/ })).toBeInTheDocument();
+    expect(within(sidebar()).getByRole("link", { name: "Gym" })).toBeInTheDocument();
 
     await userEvent.click(gym);
-    expect(within(bottomBar()).queryByRole("link", { name: /Gym/ })).toBeNull();
+    expect(within(sidebar()).queryByRole("link", { name: "Gym" })).toBeNull();
     await waitFor(() =>
       expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({ modules: off("gym") }),
     );
@@ -313,15 +301,7 @@ describe("the module table is complete", () => {
   }
 });
 
-describe("Settings → Layout → tabs (story 33.4)", () => {
-  /** A phone-sized screen: jsdom has no matchMedia, so the layout would be desktop. */
-  function onAPhone() {
-    vi.stubGlobal("matchMedia", () => ({
-      matches: true,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    }));
-  }
+describe("Settings → Layout → places (Epic 52, AD-65)", () => {
   const echo = (body: unknown) =>
     json({
       id: "u1",
@@ -330,17 +310,37 @@ describe("Settings → Layout → tabs (story 33.4)", () => {
       created_at: "",
       preferences: { ...DEFAULT_PREFERENCES, ...(body as object) },
     });
-  const firstPatch = () => requests.find((r) => r.method === "PATCH")?.body as Record<string, unknown>;
+  const firstPatch = () =>
+    requests.find((r) => r.method === "PATCH")?.body as Record<string, { items: NavItem[] }>;
+  const lastPatch = () =>
+    requests.filter((r) => r.method === "PATCH").at(-1)?.body as Record<string, { items: NavItem[] }>;
+  const pinnedIn = (items: NavItem[]) => items.filter((i) => i.pinned).map((i) => i.id);
+
+  const barList = () => screen.findByRole("list", { name: /^In the bar/ }, { timeout: 5000 });
+  const group = (name: string) => screen.getByRole("list", { name });
+  const names = (list: HTMLElement) =>
+    within(list)
+      .getAllByRole("listitem")
+      .map((item) => item.textContent?.replace(/[↑↓⤒⤓]/gu, "").trim());
+
+  /** A phone whose bar and order are the account's own. */
+  function prefsWith(phoneItems: NavItem[]): Preferences {
+    return { ...DEFAULT_PREFERENCES, phone: { ...DEFAULT_PREFERENCES.phone, items: phoneItems } };
+  }
 
   beforeEach(() => {
     window.localStorage.clear();
-    onAPhone();
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it("opens on the layout this screen uses", async () => {
     renderAt("/settings", ALL_ON, echo);
-    expect(await screen.findByRole("button", { name: "Phone" })).toHaveAttribute(
+    expect(await screen.findByRole("button", { name: "Phone" }, { timeout: 5000 })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -350,77 +350,152 @@ describe("Settings → Layout → tabs (story 33.4)", () => {
     );
   });
 
-  it("swaps a tab into the top bar on a phone, and the bars follow at once", async () => {
+  it("shows the bar, then every other place by group", async () => {
     renderAt("/settings", ALL_ON, echo);
-    await userEvent.click(
-      await screen.findByRole("button", {
-        name: "Move Gym to the top bar, and Recipes to the tab bar",
-      }),
-    );
-    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits", "Stock", "Recipes"]);
-    expect(within(topExtra()).getByRole("link", { name: "Gym" })).toBeInTheDocument();
+    expect(names(await barList())).toEqual(["Dashboard", "Entries", "Habits", "Plan"]);
+    expect(screen.getByRole("heading", { name: "In the bar (4 of 4)" })).toBeInTheDocument();
+    expect(names(group("Daily"))).toEqual(["Calendar", "Books", "Notes"]);
+    expect(names(group("Money"))).toEqual(["Grow"]);
+    expect(names(group("Home & body"))).toEqual(["Stock", "Recipes", "Gym"]);
+    expect(names(group("Tools"))).toEqual(["Clocks", "Moon"]);
+  });
 
+  it("refuses a fifth pin, and says why where the person can read it", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    await barList();
+    const pin = screen.getByRole("button", { name: "Pin Gym to the bar" });
+    expect(pin).toBeDisabled();
+    const reason = screen.getByText("The bar is full (4 places). Unpin one to pin another.");
+    expect(reason).toBeVisible();
+    expect(pin).toHaveAttribute("aria-describedby", reason.id);
+  });
+
+  it("unpins a place at once, the bar follows, and the whole list is saved", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    await barList();
+    await userEvent.click(screen.getByRole("button", { name: "Unpin Plan from the bar" }));
+
+    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits"]);
+    expect(names(screen.getByRole("list", { name: /^In the bar/ }))).toEqual([
+      "Dashboard",
+      "Entries",
+      "Habits",
+    ]);
+    expect(screen.queryByText(/The bar is full/)).toBeNull();
     await waitFor(() => expect(firstPatch()).toBeDefined());
     expect(Object.keys(firstPatch())).toEqual(["phone"]);
-    expect((firstPatch().phone as { tabs: unknown }).tabs).toEqual([
-      ...DEFAULT_PREFERENCES.phone.tabs.slice(0, 4),
-      { id: "recipes", slot: "bar" },
-      { id: "plan", slot: "top" },
-      { id: "grow", slot: "top" },
-      { id: "gym", slot: "top" },
-    ]);
+    const items = firstPatch().phone?.items ?? [];
+    expect(items.map((i) => i.id).sort()).toEqual([...NAV_ITEMS].sort());
+    expect(pinnedIn(items)).toEqual(["dashboard", "entries", "habits"]);
   });
 
-  it("reorders with up and down, and cannot move past either end", async () => {
+  it("pins a place into the free slot, last in the bar", async () => {
     renderAt("/settings", ALL_ON, echo);
-    expect(await screen.findByRole("button", { name: "Move Dashboard up" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Move Gym down" })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Move Habits up" }));
-    expect(tabs()).toEqual(["Dashboard", "Habits", "Entries", "Stock", "Gym"]);
+    await barList();
+    await userEvent.click(screen.getByRole("button", { name: "Unpin Entries from the bar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pin Gym to the bar" }));
+
+    expect(tabs()).toEqual(["Dashboard", "Habits", "Plan", "Gym"]);
+    await waitFor(() => expect(lastPatch()?.phone?.items.some((i) => i.id === "gym" && i.pinned)).toBe(true));
+    expect(pinnedIn(lastPatch().phone?.items ?? [])).toEqual(["dashboard", "habits", "plan", "gym"]);
+    // Entries is back in the group it came from, and the full-bar reason is back.
+    expect(names(group("Money"))).toEqual(["Entries", "Grow"]);
+    expect(screen.getByText(/The bar is full/)).toBeInTheDocument();
   });
 
-  it("edits the computer layout from a phone without touching what the phone shows", async () => {
-    // The two layouts differ, so the editor must show — and change — the one chosen.
-    const desktopTabs = [
-      { id: "plan", slot: "bar" },
-      ...DEFAULT_PREFERENCES.desktop.tabs.filter((tab) => tab.id !== "plan"),
-    ] as Preferences["desktop"]["tabs"];
-    const prefs = { ...DEFAULT_PREFERENCES, desktop: { ...DEFAULT_PREFERENCES.desktop, tabs: desktopTabs } };
-    renderAt("/settings", ALL_ON, echo, prefs);
-    await userEvent.click(await screen.findByRole("button", { name: "Computer" }));
-    const bar = screen.getByRole("list", { name: "Tab bar" });
-    expect(within(bar).getAllByRole("listitem")[0]).toHaveTextContent("Plan");
-    // A desktop has room: no swap is offered, the move is a move.
-    await userEvent.click(screen.getByRole("button", { name: "Move Gym to the top bar" }));
-    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits", "Stock", "Gym"]);
+  it("reorders the bar with up and down, and cannot move past either end", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    const bar = await barList();
+    expect(within(bar).getByRole("button", { name: "Move Dashboard up" })).toBeDisabled();
+    expect(within(bar).getByRole("button", { name: "Move Plan down" })).toBeDisabled();
+    await userEvent.click(within(bar).getByRole("button", { name: "Move Habits up" }));
+    expect(tabs()).toEqual(["Dashboard", "Habits", "Entries", "Plan"]);
+  });
+
+  it("reorders inside a group only, and cannot move past either end", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    await barList();
+    const daily = group("Daily");
+    expect(within(daily).getByRole("button", { name: "Move Calendar up" })).toBeDisabled();
+    expect(within(daily).getByRole("button", { name: "Move Notes down" })).toBeDisabled();
+    await userEvent.click(within(daily).getByRole("button", { name: "Move Books up" }));
+    expect(names(group("Daily"))).toEqual(["Books", "Calendar", "Notes"]);
+    // Grow is alone in Money while Entries and Plan are in the bar.
+    const money = group("Money");
+    expect(within(money).getByRole("button", { name: "Move Grow up" })).toBeDisabled();
+    expect(within(money).getByRole("button", { name: "Move Grow down" })).toBeDisabled();
+    await waitFor(() => expect(firstPatch()).toBeDefined());
+    expect(pinnedIn(firstPatch().phone?.items ?? [])).toEqual(["dashboard", "entries", "habits", "plan"]);
+  });
+
+  it("edits the computer layout from a phone: groups only, no bar, no pins", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    await userEvent.click(await screen.findByRole("button", { name: "Computer" }, { timeout: 5000 }));
+    expect(screen.queryByRole("heading", { name: /^In the bar/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Pin / })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Unpin / })).toBeNull();
+    // Every place is in a group on a desktop, pinned or not.
+    expect(names(group("Daily"))).toEqual(["Dashboard", "Habits", "Calendar", "Books", "Notes"]);
+    expect(names(group("Money"))).toEqual(["Entries", "Plan", "Grow"]);
+  });
+
+  it("reorders a desktop group across what a phone would call pinned, and keeps the pins", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    await userEvent.click(await screen.findByRole("button", { name: "Computer" }, { timeout: 5000 }));
+    // Habits is pinned, Calendar is not: on a desktop that makes no difference to the order.
+    await userEvent.click(
+      within(group("Daily")).getByRole("button", { name: "Move Habits down" }),
+    );
+    expect(names(group("Daily"))).toEqual(["Dashboard", "Calendar", "Habits", "Books", "Notes"]);
+
     await waitFor(() => expect(firstPatch()).toBeDefined());
     expect(Object.keys(firstPatch())).toEqual(["desktop"]);
-    expect((firstPatch().desktop as { tabs: { id: string }[] }).tabs.map((tab) => tab.id)).toEqual([
-      "plan", "dashboard", "entries", "habits", "stock", "grow", "recipes", "gym",
-    ]);
+    const items = firstPatch().desktop?.items ?? [];
+    expect(pinnedIn(items).sort()).toEqual(["dashboard", "entries", "habits", "plan"]);
+    expect(items.map((i) => i.id).indexOf("calendar")).toBeLessThan(
+      items.map((i) => i.id).indexOf("habits"),
+    );
+    // The phone's bar is untouched.
+    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits", "Plan"]);
   });
 
-  it("marks a section whose module is off, and still lets it be placed", async () => {
-    renderAt("/settings", off("gym"), echo);
-    const bar = await screen.findByRole("list", { name: "Tab bar" });
-    expect(within(bar).getByText(/turned off/)).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: /Move Gym to the top bar/ })).toBeEnabled();
+  it("marks a place whose module is off, and still lets it be pinned and unpinned", async () => {
+    const pinGym = prefsWith([
+      { id: "gym", pinned: true },
+      ...(DEFAULT_PREFERENCES.phone.items ?? [])
+        .filter((i) => i.id !== "gym")
+        .map((i) => ({ ...i, pinned: i.id === "dashboard" || i.id === "entries" })),
+    ]);
+    renderAt("/settings", off("gym", "moon"), echo, { ...pinGym, modules: off("gym", "moon") });
+    const bar = await barList();
+    // Off, but it still holds a slot in the saved bar, so it is listed and can be freed.
+    expect(within(bar).getByText("(off)")).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Unpin Gym from the bar" })).toBeEnabled();
+    expect(within(group("Tools")).getByText("(off)")).toBeInTheDocument();
+    expect(within(group("Tools")).getByRole("button", { name: "Pin Moon to the bar" })).toBeEnabled();
+    // The live bar does not show it.
+    expect(tabs()).toEqual(["Dashboard", "Entries"]);
   });
 
   it("resets a layout only after asking", async () => {
-    const reversed = [...DEFAULT_PREFERENCES.phone.tabs]
-      .reverse()
-      .map((tab, i) => ({ id: tab.id, slot: i < 5 ? ("bar" as const) : ("top" as const) }));
-    const moved = { ...DEFAULT_PREFERENCES, phone: { ...DEFAULT_PREFERENCES.phone, tabs: reversed } };
-    renderAt("/settings", ALL_ON, echo, moved);
-    await waitFor(() => expect(tabs()[0]).toBe("Recipes"));
+    const custom = prefsWith([
+      { id: "moon", pinned: true },
+      { id: "gym", pinned: true },
+      ...(DEFAULT_PREFERENCES.phone.items ?? [])
+        .filter((i) => i.id !== "moon" && i.id !== "gym")
+        .map((i) => ({ ...i, pinned: false })),
+    ]);
+    renderAt("/settings", ALL_ON, echo, custom);
+    await waitFor(() => expect(tabs()).toEqual(["Moon", "Gym"]));
     await userEvent.click(screen.getByRole("button", { name: "Reset this layout" }));
     expect(
-      screen.getByText("Put the phone tabs and cards back as they were?"),
+      screen.getByText("Put the phone places and cards back as they were?"),
     ).toBeInTheDocument();
     expect(firstPatch()).toBeUndefined();
     await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits", "Stock", "Gym"]);
+    expect(tabs()).toEqual(["Dashboard", "Entries", "Habits", "Plan"]);
+    await waitFor(() => expect(firstPatch()).toBeDefined());
+    expect(pinnedIn(firstPatch().phone?.items ?? [])).toEqual(["dashboard", "entries", "habits", "plan"]);
   });
 });
 

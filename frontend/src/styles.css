@@ -591,42 +591,6 @@ h1 {
   margin: 0;
 }
 
-.nav {
-  display: flex;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-/* Always visible, including on a phone where .nav is hidden: these are the sections that
-   did not fit the bottom bar, so hiding them too would strand them. */
-.nav-extra {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.nav a,
-.nav-extra a {
-  padding: var(--space-1) 12px;
-  border-radius: var(--pill);
-  border: 1px solid transparent;
-  color: var(--muted);
-  text-decoration: none;
-  font-size: var(--fs-body);
-}
-
-.nav a:hover,
-.nav-extra a:hover {
-  color: var(--text);
-  background: var(--surface);
-}
-
-.nav a[aria-current="page"],
-.nav-extra a[aria-current="page"] {
-  background: var(--primary-soft);
-  color: var(--link);
-  font-weight: 700;
-}
-
 .identity {
   display: flex;
   align-items: center;
@@ -1433,14 +1397,12 @@ tr.history td {
 
   /* The top bar's links and buttons are 27-31px tall, drawn that way so the bar stays one
      slim row. A transparent overhang gives each a 43-47px target without moving anything. */
-  .nav-extra a,
   .identity a,
   .theme-toggle {
     position: relative;
   }
 
   /* ::before, because ::after on the last two is their `data-tip` tooltip. */
-  .nav-extra a::before,
   .identity a::before,
   .theme-toggle::before {
     content: "";
@@ -1473,18 +1435,6 @@ tr.history td {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-  }
-
-  /* Replaced by the bottom bar, which is reachable by thumb. */
-  .nav {
-    display: none;
-  }
-
-  /* .nav-extra stays: it holds the sections the bottom bar has no room for. */
-
-  .nav-extra a {
-    padding: 4px 8px;
-    font-size: var(--fs-small);
   }
 
   .identity {
@@ -2202,14 +2152,6 @@ tr.muted td {
  * Calendar (Epic 22) and habits (Epic 23)
  * ------------------------------------------------------------------------ */
 
-/* A section with two views marks its tab active on both of them, so standing in the
-   calendar does not look like standing outside the app. Mirrors the aria-current rules. */
-.nav a.on,
-.nav-extra a.on {
-  background: var(--primary-soft);
-  color: var(--link);
-  font-weight: 700;
-}
 
 /* The view switch is a pair of links rather than buttons, because each view has a real
    URL. They still have to look like the chips everywhere else. */
@@ -3744,16 +3686,6 @@ button.pin:not(.on) span {
 }
 
 /* --------------------------------------------------------------- appearance */
-
-/* The light/dark toggle joined the phone top bar, and at 320px in French it overlapped the
-   last link by 2px: 188 (links) + 8 + 44 (toggle) + 6 + 44 (pill) is 290 of 280. Narrower
-   link padding on the narrowest phones gives back 12px. The identity group's floor is both
-   of its buttons, so if the row ever runs out again it wraps rather than overlaps. */
-@media (max-width: 360px) {
-  .nav-extra a {
-    padding: 4px 6px;
-  }
-}
 
 @media (max-width: 720px) {
   .identity {
