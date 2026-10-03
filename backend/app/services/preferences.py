@@ -10,8 +10,10 @@ two slot names) are the request schema's; everything that needs to know the cata
 below — unknown ids, duplicates, completeness, the phone's caps — is here, with a code.
 """
 
+import re
 import unicodedata
 import uuid
+import zoneinfo
 
 from sqlalchemy import bindparam, update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -40,17 +42,30 @@ CORE_SECTIONS = frozenset({"dashboard", "entries", "plan", "grow"})
 
 #: What can be switched off. Off hides the UI only; data and endpoints are untouched.
 MODULES: tuple[str, ...] = (
-    "habits", "books", "mood", "stock", "gym", "recipes", "notes", "moon",
+    "habits", "books", "mood", "stock", "gym", "recipes", "notes", "moon", "clocks",
 )
 
 #: Which way the moon is drawn (Epic 47, AD-63 §4). Absent or null means "from the account's
 #: time zone", which only the client works out.
 MOON_HEMISPHERES: tuple[str, ...] = ("north", "south")
 
+#: Epic 48 (AD-64): at most this many places besides the account's own zone.
+CLOCKS_MAX = 12
+#: A place's label, after trimming.
+CLOCK_LABEL_MAX = 32
+#: The default hours a clock is shaded by, until the person sets their own (Settings).
+#: Each range is [start, end) in local wall time; end <= start wraps past midnight, and
+#: start == end is an empty range.
+CLOCK_HOURS_DEFAULT: dict[str, list[str]] = {
+    "work": ["09:00", "18:00"],
+    "night": ["23:00", "07:00"],
+}
+
 #: Dashboard cards in today's render order, all shown by default.
 CARDS: tuple[str, ...] = (
     "stats",
     "streaks",
+    "clocks",
     "gym",
     "pending",
     "leftover",
@@ -200,8 +215,83 @@ def resolve(stored: object) -> dict:
         "moon_hemisphere": (
             prefs["moon_hemisphere"] if prefs.get("moon_hemisphere") in MOON_HEMISPHERES else None
         ),
+        "clocks": _resolve_clocks(prefs.get("clocks")),
+        "clock_hours": _resolve_hours(prefs.get("clock_hours")) or CLOCK_HOURS_DEFAULT,
+        "calendar_zone": (
+            prefs["calendar_zone"]
+            if isinstance(prefs.get("calendar_zone"), str) and is_zone(prefs["calendar_zone"])
+            else None
+        ),
         **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
     }
+
+
+#: A wall-clock time on the 15-minute grid the clocks' slider moves on.
+HHMM = re.compile(r"^(?:[01]\d|2[0-3]):(?:00|15|30|45)$")
+
+
+def is_zone(name: str) -> bool:
+    """A zone this server's tz database knows (the ``check_timezone`` rule, as a bool)."""
+    try:
+        zoneinfo.ZoneInfo(name)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+        return False
+    return True
+
+
+def clean_clock_label(raw: str) -> str:
+    """Trimmed, 1-32 characters, no control characters. Raises ``ValueError`` only."""
+    label = raw.strip()
+    if not 1 <= len(label) <= CLOCK_LABEL_MAX:
+        raise ValueError(f"between 1 and {CLOCK_LABEL_MAX} characters")
+    if any(unicodedata.category(c) in _REFUSED_CATEGORIES for c in label):
+        raise ValueError("no control characters")
+    return label
+
+
+def _resolve_hours(stored: object) -> dict | None:
+    """A stored hours object if both ranges are well formed, else None. Read, never refused."""
+    if not isinstance(stored, dict):
+        return None
+    hours = {}
+    for key in ("work", "night"):
+        pair = stored.get(key)
+        if not (
+            isinstance(pair, list)
+            and len(pair) == 2
+            and all(isinstance(v, str) and HHMM.match(v) for v in pair)
+        ):
+            return None
+        hours[key] = list(pair)
+    return hours
+
+
+def _resolve_clocks(stored: object) -> list[dict]:
+    """Stored places in stored order, skipping any that no longer resolve (a zone gone from
+    the tz database, a malformed row, a repeated id) rather than failing ``/me``."""
+    if not isinstance(stored, list):
+        return []
+    places: list[dict] = []
+    seen: set[str] = set()
+    for item in stored:
+        if not isinstance(item, dict):
+            continue
+        place_id, zone, label = item.get("id"), item.get("zone"), item.get("label")
+        if not (isinstance(place_id, str) and isinstance(zone, str) and isinstance(label, str)):
+            continue
+        if place_id in seen or not is_zone(zone):
+            continue
+        try:
+            label = clean_clock_label(label)
+        except ValueError:
+            continue
+        seen.add(place_id)
+        places.append(
+            {"id": place_id, "zone": zone, "label": label, "hours": _resolve_hours(item.get("hours"))}
+        )
+        if len(places) == CLOCKS_MAX:
+            break
+    return places
 
 
 def _no_duplicates(ids: list[str], what: str) -> None:
@@ -268,9 +358,26 @@ def validate(patch: dict) -> None:
         _check_notifications(patch["notifications"])
     if "streaks" in patch:
         _check_streaks(patch["streaks"])
+    if "clocks" in patch:
+        _check_clocks(patch["clocks"])
+    if patch.get("calendar_zone") is not None:
+        _check_zone(patch["calendar_zone"])
     for layout in LAYOUTS:
         if layout in patch:
             _check_layout(layout, patch[layout])
+
+
+def _check_zone(name: str) -> None:
+    if not is_zone(name):
+        raise Invalid(f"{name!r} is not a time zone this server knows", "invalid_timezone")
+
+
+def _check_clocks(places: list[dict]) -> None:
+    """Epic 48 (AD-64). Shape (lengths, the HH:MM grid, the cap) is the schema's; here, that
+    each zone is one this server knows and that no id is listed twice."""
+    for place in places:
+        _check_zone(place["zone"])
+    _no_duplicates([place["id"] for place in places], "clock")
 
 
 def update_preferences(session: Session, user_id: uuid.UUID, patch: dict) -> None:

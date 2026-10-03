@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import { useOptionalAuth } from "../auth/AuthContext";
+import { ClocksCard } from "../components/ClocksCard";
 import { MoonLine } from "../components/MoonLine";
 import type {
   Book,
@@ -404,6 +405,8 @@ export function DashboardPage() {
       ),
     quote: () => <QuoteCard collapseKey="dashboard.quote" />,
     streaks: () => <StreakCard collapseKey="dashboard.streaks" />,
+    // Epic 48: draws nothing while there are no places.
+    clocks: () => <ClocksCard />,
     gym: () => <GymCard collapseKey="dashboard.gym" />,
     restock: () =>
       lowItems &&

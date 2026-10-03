@@ -24,6 +24,8 @@ export interface View {
 export const DASHBOARD_VIEWS: readonly View[] = [
   { to: "/", label: "view.summary" },
   { to: "/calendar", label: "view.calendar" },
+  // Epic 48 (AD-64): the clocks, a third view of the same section.
+  { to: "/clocks", label: "view.clocks", module: "clocks" },
 ];
 
 export const HABITS_VIEWS: readonly View[] = [

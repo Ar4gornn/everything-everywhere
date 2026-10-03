@@ -88,7 +88,16 @@ export interface IssuedInvite {
 }
 
 /** Epic 33 (AD-49): what can be switched off. Off hides the UI; the data stays. */
-export type ModuleId = "habits" | "books" | "mood" | "stock" | "gym" | "recipes" | "notes" | "moon";
+export type ModuleId =
+  | "habits"
+  | "books"
+  | "mood"
+  | "stock"
+  | "gym"
+  | "recipes"
+  | "notes"
+  | "moon"
+  | "clocks";
 /** The eight navigation sections. Dashboard, Entries, Plan and Grow are never hidden. */
 export type SectionId =
   | "dashboard"
@@ -102,6 +111,7 @@ export type SectionId =
 export type CardId =
   | "stats"
   | "streaks"
+  | "clocks"
   | "gym"
   | "pending"
   | "leftover"
@@ -120,6 +130,28 @@ export interface Layout {
    *  desktop; "top": the smaller row beside it. A phone holds at most 5 and 3. */
   tabs: { id: SectionId; slot: "bar" | "top" }[];
   cards: { id: CardId; on: boolean }[];
+}
+
+/** Epic 48 (AD-64): `"HH:MM"` on the 15-minute grid. */
+export type WallTime = string;
+
+/** Each range is [start, end) in the place's wall time; end <= start wraps past midnight,
+ *  start === end is empty. Night wins where the two overlap. */
+export interface ClockHours {
+  work: [WallTime, WallTime];
+  night: [WallTime, WallTime];
+}
+
+/** One place on the clocks. The account's own zone is never listed: it is always first. */
+export interface ClockPlace {
+  /** Made on the device (`newPlaceId`); names the row for order and React keys. */
+  id: string;
+  /** IANA zone, e.g. "Europe/Paris". */
+  zone: string;
+  /** The person's word for it ("Mum", "Office"), 1-32 characters. */
+  label: string;
+  /** Null: the account's `clock_hours`. */
+  hours: ClockHours | null;
 }
 
 /** Epic 36 (AD-52): what the daily digest may talk about. */
@@ -148,6 +180,13 @@ export interface Preferences {
   points_name: string | null;
   /** Epic 47: which way the moon is drawn; null means from the account's time zone. */
   moon_hemisphere?: "north" | "south" | null;
+  /** Epic 48 (AD-64): the places on the clocks, in the person's order. Optional: a server
+   *  older than Epic 48 does not send it, and `preferencesOf` fills the default. */
+  clocks?: ClockPlace[];
+  /** The default shading hours; a place's own `hours` overrides them. */
+  clock_hours?: ClockHours;
+  /** The zone the calendar also shows times in, or null for none. */
+  calendar_zone?: string | null;
   phone: Layout;
   desktop: Layout;
 }

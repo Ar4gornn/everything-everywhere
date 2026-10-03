@@ -25,6 +25,8 @@ import { preferencesOf, shownStreaks } from "./preferences";
  * | notes   | /notes, /notes/:id | dashboard Notes link, floating note button             |
  * | moon    | /moon              | dashboard title line, calendar day glyphs + panel,     |
  * |         |                    | Settings → Moon, push digest kind `moon`               |
+ * | clocks  | /clocks            | Dashboard view chip, dashboard Clocks card,            |
+ * |         |                    | Settings → Clocks, calendar "also in" zone             |
  */
 export const MODULE_NAME: Record<ModuleId, MessageKey> = {
   habits: "module.habits",
@@ -35,6 +37,7 @@ export const MODULE_NAME: Record<ModuleId, MessageKey> = {
   recipes: "module.recipes",
   notes: "module.notes",
   moon: "moon.module",
+  clocks: "clocks.module",
 };
 
 /** A section's name in the nav and in the tab editor (Epic 33). */
@@ -53,6 +56,7 @@ export const SECTION_LABEL: Record<SectionId, MessageKey> = {
 export const CARD_LABEL: Record<CardId, MessageKey> = {
   stats: "card.stats",
   streaks: "streaks.title",
+  clocks: "clocks.card",
   gym: "gymCore.cardName",
   pending: "dash.toConfirm",
   leftover: "leftover.title",
@@ -71,6 +75,7 @@ export const CARD_MODULE: Partial<Record<CardId, ModuleId>> = {
   quote: "books",
   restock: "stock",
   gym: "gym",
+  clocks: "clocks",
 };
 
 /** The module that hides a section, if any. Habits is special-cased: Books can keep it. */

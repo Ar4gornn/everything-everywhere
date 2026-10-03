@@ -350,6 +350,9 @@ def set_preferences(
     # `exclude_none` would swallow the one key whose null means something: clear the hemisphere.
     if "moon_hemisphere" in payload.model_fields_set:
         patch["moon_hemisphere"] = payload.moon_hemisphere
+    # Same for the calendar's second zone (Epic 48): null switches it off.
+    if "calendar_zone" in payload.model_fields_set:
+        patch["calendar_zone"] = payload.calendar_zone
     return auth_service.set_preferences(session, user_id, patch)
 
 

@@ -58,6 +58,7 @@ const SettingsPage = page(() => import("./pages/SettingsPage"), "SettingsPage");
 const NotesPage = page(() => import("./pages/NotesPage"), "NotesPage");
 const NotePage = page(() => import("./pages/NotePage"), "NotePage");
 const MoonPage = page(() => import("./pages/MoonPage"), "MoonPage");
+const ClocksPage = page(() => import("./pages/ClocksPage"), "ClocksPage");
 const InvitesPage = page(() => import("./pages/InvitesPage"), "InvitesPage");
 // Epic 46: the one page with a default export (it is also rendered before sign-in).
 const InstallPage = lazy(() => import("./pages/InstallPage"));
@@ -445,6 +446,8 @@ export function App() {
           <Route path="/notes/:noteId" element={<ModuleGate module="notes"><NotePage /></ModuleGate>} />
           {/* Epic 47: reached from the dashboard line and the calendar's day panel, not a tab. */}
           <Route path="/moon" element={<ModuleGate module="moon"><MoonPage /></ModuleGate>} />
+          {/* Epic 48: the Dashboard section's third view (ViewSwitch), not a tab. */}
+          <Route path="/clocks" element={<ModuleGate module="clocks"><ClocksPage /></ModuleGate>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

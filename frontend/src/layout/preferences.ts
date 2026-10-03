@@ -1,5 +1,7 @@
 import type {
   CardId,
+  ClockHours,
+  ClockPlace,
   Layout,
   LayoutName,
   ModuleId,
@@ -29,10 +31,21 @@ const SECTIONS: [SectionId, "bar" | "top"][] = [
   ["grow", "top"],
   ["recipes", "top"],
 ];
-export const MODULES: ModuleId[] = ["habits", "books", "mood", "stock", "gym", "recipes", "notes", "moon"];
+export const MODULES: ModuleId[] = [
+  "habits",
+  "books",
+  "mood",
+  "stock",
+  "gym",
+  "recipes",
+  "notes",
+  "moon",
+  "clocks",
+];
 export const CARDS: CardId[] = [
   "stats",
   "streaks",
+  "clocks",
   "gym",
   "pending",
   "leftover",
@@ -78,12 +91,23 @@ function defaultLayout() {
   };
 }
 
+/** Epic 48 (AD-64): places besides the account's own zone; the server refuses a 13th. */
+export const CLOCKS_MAX = 12;
+/** Until the person sets their own in Settings. Mirrors `CLOCK_HOURS_DEFAULT` server-side. */
+export const CLOCK_HOURS_DEFAULT: ClockHours = {
+  work: ["09:00", "18:00"],
+  night: ["23:00", "07:00"],
+};
+
 export const DEFAULT_PREFERENCES: Preferences = {
   modules: Object.fromEntries(MODULES.map((id) => [id, true])) as Record<ModuleId, boolean>,
   notifications: Object.fromEntries(NOTIFICATIONS) as Record<NotificationKind, boolean>,
   streaks: Object.fromEntries(STREAKS.map((id) => [id, false])) as Record<StreakModuleId, boolean>,
   points_name: null,
   moon_hemisphere: null,
+  clocks: [],
+  clock_hours: CLOCK_HOURS_DEFAULT,
+  calendar_zone: null,
   phone: defaultLayout(),
   desktop: defaultLayout(),
 };
@@ -274,4 +298,14 @@ export function moveCard(cards: Card[], id: CardId, step: -1 | 1): Card[] {
   list[from] = neighbour;
   list[to] = card;
   return list;
+}
+
+/** Epic 48 (AD-64): the places, defaulted for a server older than Epic 48. */
+export function clocksOf(prefs: Preferences): ClockPlace[] {
+  return prefs.clocks ?? [];
+}
+
+/** The default shading hours, defaulted the same way. */
+export function clockHoursOf(prefs: Preferences): ClockHours {
+  return prefs.clock_hours ?? CLOCK_HOURS_DEFAULT;
 }

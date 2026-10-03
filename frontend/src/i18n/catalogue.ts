@@ -44,6 +44,9 @@ import { quickAdd } from "./messages/quickAdd";
 import { offlineEntries } from "./messages/offlineEntries";
 import { install } from "./messages/install";
 import { moon } from "./messages/moon";
+import { clocks } from "./messages/clocks";
+import { clocksPage } from "./messages/clocksPage";
+import { clocksSettings } from "./messages/clocksSettings";
 import { installGuide } from "./messages/installGuide";
 
 export const LANGUAGES = ["en", "fr"] as const;
@@ -77,6 +80,9 @@ export const messages = {
   ...offlineEntries,
   ...install,
   ...moon,
+  ...clocks,
+  ...clocksPage,
+  ...clocksSettings,
   ...installGuide,
   ...errors,
 };

@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 from app.core.months import MAX_START_DAY
-from app.services.preferences import clean_points_name
+from app.services.preferences import CLOCKS_MAX, HHMM, clean_clock_label, clean_points_name
 
 Currency = Literal["USD", "EUR"]
 WeightUnit = Literal["kg", "lb"]
@@ -92,6 +92,38 @@ def _points_name(value: object) -> str:
     return clean_points_name(value)
 
 
+#: Epic 48 (AD-64): a wall-clock time on the 15-minute grid the slider moves on.
+_HHMM = Annotated[str, Field(pattern=HHMM.pattern)]
+
+
+class ClockHours(BaseModel):
+    """[start, end) per range; end <= start wraps past midnight; start == end is empty."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    work: tuple[_HHMM, _HHMM]
+    night: tuple[_HHMM, _HHMM]
+
+
+def _clock_label(value: object) -> str:
+    """Runs before the type check and may raise only ``ValueError`` (a 422, not a 500)."""
+    if not isinstance(value, str):
+        raise ValueError("must be text")
+    return clean_clock_label(value)
+
+
+class ClockPlace(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: Made on the device; it only names the row (order, React keys).
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    #: An IANA zone; checked against the server's tz database in the service.
+    zone: str = Field(min_length=1, max_length=64)
+    label: Annotated[str, BeforeValidator(_clock_label)]
+    #: Null: the account's default hours (`clock_hours`).
+    hours: ClockHours | None = None
+
+
 class PreferencesUpdate(BaseModel):
     """Each top-level key present replaces that subtree; absent keys are untouched."""
 
@@ -110,6 +142,13 @@ class PreferencesUpdate(BaseModel):
     # Epic 47 (AD-63 §4): which way the moon is drawn. A typo ("nord") is a 422; an explicit
     # null clears it back to "from the time zone" (the route keeps it when it was sent).
     moon_hemisphere: Literal["north", "south"] | None = None
+    # Epic 48 (AD-64): the places on the clocks, in the person's order (own zone not listed).
+    clocks: list[ClockPlace] | None = Field(default=None, max_length=CLOCKS_MAX)
+    # The default shading hours; a place's own `hours` overrides them.
+    clock_hours: ClockHours | None = None
+    # The zone the calendar also shows times in; an explicit null switches it off (the
+    # route keeps it when it was sent).
+    calendar_zone: str | None = Field(default=None, min_length=1, max_length=64)
     phone: LayoutIn | None = None
     desktop: LayoutIn | None = None
 
@@ -127,6 +166,9 @@ class PreferencesOut(BaseModel):
     streaks: dict[str, bool]
     points_name: str | None
     moon_hemisphere: Literal["north", "south"] | None
+    clocks: list[ClockPlace]
+    clock_hours: ClockHours
+    calendar_zone: str | None
     phone: LayoutOut
     desktop: LayoutOut
 
