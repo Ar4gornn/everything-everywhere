@@ -2,6 +2,9 @@
 @import "@fontsource/lato/latin-400.css";
 @import "@fontsource/lato/latin-700.css";
 
+/* Colours: only tokens that theme.test.tsx checks as text pairs.
+   --text/--muted/--link on --bg and --surface; --on-primary on --primary. */
+
 * {
   box-sizing: border-box;
 }
@@ -14,4 +17,379 @@ body {
   font-size: var(--fs-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+p {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* Skip link: off screen until focused. */
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -100px;
+  z-index: 10;
+  padding: 12px 16px;
+  border-radius: var(--pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+.skip:focus {
+  top: 8px;
+}
+
+/* Header */
+.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-right: auto;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.lang {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lang a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.lang a[aria-current="page"] {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Buttons and links that act as buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 20px;
+  border: 1px solid transparent;
+  border-radius: var(--pill);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.btn-quiet {
+  border-color: var(--border-strong);
+  color: var(--link);
+}
+
+.btn-link {
+  padding-left: 4px;
+  padding-right: 4px;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.btn:hover {
+  text-decoration: underline;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+/* Hero */
+.hero {
+  padding: var(--space-5) 0;
+}
+
+.hero-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.hero-text {
+  display: grid;
+  gap: var(--space-3);
+  align-content: center;
+  justify-items: start;
+}
+
+h1 {
+  font-size: var(--fs-h2);
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.note {
+  color: var(--muted);
+  font-size: var(--fs-tip);
+}
+
+/* A phone screenshot in a rounded frame; absent until the images land. */
+.shot {
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 28px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Feature sections */
+.feature {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+}
+
+.feature h2,
+.strip h2,
+.cta h2 {
+  font-size: var(--fs-h3);
+}
+
+.lead {
+  margin-top: var(--space-2);
+  color: var(--muted);
+}
+
+.body {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.items li {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.items h3 {
+  font-size: 18px;
+}
+
+.items p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+}
+
+/* Data strip and closing call to action */
+.strip {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: 20px;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+
+.cta {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+}
+
+.cta .actions {
+  margin-top: var(--space-3);
+}
+
+.cta .note {
+  margin-top: var(--space-3);
+}
+
+/* Footer */
+.foot {
+  padding: var(--space-3) 0 var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.foot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.foot .links {
+  margin-top: 0;
+  margin-right: auto;
+}
+
+.copy {
+  color: var(--muted);
+  font-size: var(--fs-tip);
+}
+
+/* Privacy page */
+.prose {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 720px;
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-5);
+}
+
+.prose .doc {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.prose h2 {
+  font-size: var(--fs-h3);
+}
+
+.prose p a {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 720px) {
+  .hero {
+    padding: var(--space-6) 0;
+  }
+
+  .hero.has-media .hero-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    align-items: center;
+    gap: var(--space-5);
+  }
+
+  .hero.has-media .shot {
+    margin: 0 0 0 auto;
+  }
+
+  h1 {
+    font-size: var(--fs-h1);
+  }
+
+  .feature,
+  .strip,
+  .cta {
+    padding: var(--space-6) 0;
+  }
+
+  .feature h2,
+  .strip h2,
+  .cta h2 {
+    font-size: var(--fs-h2);
+  }
+
+  .feature.has-media .body {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+    gap: var(--space-5);
+  }
+
+  .feature.has-media .items {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
 }
