@@ -34,7 +34,7 @@ function json(body: unknown): Response {
   });
 }
 
-function mount(places: ClockPlace[]) {
+function mount(places: ClockPlace[], language = "en") {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   const fetchMock = vi.fn(async (url: string) =>
     url.includes("/api/auth/me")
@@ -43,7 +43,7 @@ function mount(places: ClockPlace[]) {
           email: "sam@example.com",
           currency: "USD",
           created_at: "",
-          language: "en",
+          language,
           timezone: "Europe/Paris",
           preferences: { ...DEFAULT_PREFERENCES, clocks: places },
         })
@@ -98,7 +98,7 @@ describe("the Clocks card", () => {
     expect(screen.queryByText("Fifth")).toBeNull();
   });
 
-  it("leaves the city out when the name says it, and tags a place with its own hours", async () => {
+  it("leaves the city out when the name says it, and keeps the custom-hours tag off the card", async () => {
     mount([
       place("a", "Europe/London", "london"),
       { ...place("b", "Asia/Tokyo", "Office"), hours: { work: ["08:00", "16:00"], night: ["22:00", "06:00"] } },
@@ -107,8 +107,27 @@ describe("the Clocks card", () => {
     const lines = within(list).getAllByRole("listitem");
     expect(lines[1]?.querySelector(".clocks-zone")).toBeNull();
     expect(lines[2]?.querySelector(".clocks-zone")?.textContent).toBe("Tokyo");
-    expect(lines[2]).toHaveTextContent("Own hours");
-    expect(lines[1]).not.toHaveTextContent("Own hours");
+    expect(lines[2]).not.toHaveTextContent("Custom hours");
+    expect(list.querySelector(".clocks-tag")).toBeNull();
+  });
+
+  it("says how many more places the page has, linked to it", async () => {
+    mount(FIVE);
+    const more = await screen.findByRole("link", { name: "2 more places on the Clocks page" });
+    expect(more).toHaveTextContent("+2 more");
+    expect(more).toHaveAttribute("href", "/clocks");
+  });
+
+  it("says nothing more at three places or fewer", async () => {
+    mount(FIVE.slice(0, 3));
+    await screen.findByText("Gran");
+    expect(screen.queryByText(/more/)).toBeNull();
+  });
+
+  it("uses the French singular for one more place", async () => {
+    mount(FIVE.slice(0, 4), "fr");
+    const more = await screen.findByRole("link", { name: "1 autre lieu sur la page Horloges" });
+    expect(more).toHaveTextContent("+1 autre");
   });
 
   it("links its title to the clocks page", async () => {

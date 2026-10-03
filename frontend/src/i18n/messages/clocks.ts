@@ -12,7 +12,7 @@ export const clocks = {
   "clocks.you": { en: "You", fr: "Vous" },
   "clocks.shade.night": { en: "Night", fr: "Nuit" },
   "clocks.shade.work": { en: "Working", fr: "Au travail" },
-  "clocks.shade.free": { en: "Free", fr: "Libre" },
+  "clocks.shade.free": { en: "Free time", fr: "Temps libre" },
   "clocks.sameTime": { en: "Same time", fr: "Même heure" },
   "clocks.tomorrow": { en: "tomorrow", fr: "demain" },
   "clocks.yesterday": { en: "yesterday", fr: "hier" },

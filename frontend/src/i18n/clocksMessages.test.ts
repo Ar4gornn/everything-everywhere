@@ -12,7 +12,7 @@ describe("the Clocks messages", () => {
   });
 
   it("name the own-hours action after the place, in both languages", () => {
-    expect(clocksPage["clocks.page.ownHours"].fr).toBe("Horaires de ce lieu");
+    expect(clocksPage["clocks.page.ownHours"].fr).toBe("Horaires personnalisés");
     expect(clocksSettings["clocks.settings.workStart"]).toEqual({
       en: "Working hours start",
       fr: "Heures de travail, début",

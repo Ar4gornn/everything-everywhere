@@ -5968,6 +5968,10 @@ dialog.sheet::backdrop {
 }
 
 /* ===== Epic 48 (AD-64): Clocks page and dashboard card. Every class is `.clocks-` ===== */
+.clocks-page {
+  max-width: 640px;
+}
+
 .clocks-page .clocks-top {
   display: flex;
   flex-wrap: wrap;
@@ -5983,14 +5987,24 @@ dialog.sheet::backdrop {
   padding: 0;
 }
 
-/* name | time | meta, so every row's time sits in the same column. The name column may
-   shrink to nothing and wraps anywhere; the meta column is capped so it cannot starve it. */
+/* The list is the grid and every row a subgrid of it, so name | time | meta are three
+   tracks shared by all rows: the times line up whatever each row's name or meta holds.
+   The name track may shrink to nothing and wraps anywhere; the meta is capped (max-width
+   clamps its max-content contribution) so it cannot starve the name. */
+.clocks-list,
+.clocks-lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  column-gap: var(--space-2);
+}
+
 .clocks-row,
 .clocks-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
-  gap: var(--space-1) var(--space-2);
+  row-gap: var(--space-1);
   min-width: 0;
   padding: var(--space-2) 0;
   border-top: 1px solid var(--border);
@@ -6005,6 +6019,21 @@ dialog.sheet::backdrop {
 .clocks-line .clocks-name {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The name and the page's Edit toggle share one line. */
+.clocks-row .clocks-name-line,
+.clocks-line .clocks-name-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.clocks-row .clocks-label,
+.clocks-line .clocks-label {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -6069,19 +6098,24 @@ dialog.sheet::backdrop {
   color: var(--on-secondary);
 }
 
-/* The Edit toggle, the failure message and the editor each take a full row. */
-.clocks-row > .clocks-edit,
+/* The failure message and the editor each take a full row, across all three tracks. */
 .clocks-row > .error,
 .clocks-row > .clocks-panel {
   grid-column: 1 / -1;
 }
 
-.clocks-row > .clocks-edit {
-  justify-self: start;
-}
-
 .clocks-row > .error {
   margin: 0;
+}
+
+.clocks-page .clocks-edit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  min-width: 44px;
+  justify-content: center;
 }
 
 .clocks-page .clocks-panel {
@@ -6098,10 +6132,10 @@ dialog.sheet::backdrop {
   min-width: 0;
 }
 
-.clocks-page .clocks-edit,
 .clocks-page .clocks-actions button,
 .clocks-page .clocks-slider button,
-.clocks-page .clocks-rename button {
+.clocks-page .clocks-rename button,
+.clocks-page .clocks-undo button {
   min-height: 44px;
   max-width: 100%;
 }
@@ -6113,8 +6147,9 @@ dialog.sheet::backdrop {
   min-width: 0;
 }
 
+/* The whole row, so a 32-character name is visible while it is edited. */
 .clocks-page .clocks-rename input {
-  flex: 1 1 8rem;
+  flex: 1 1 100%;
   min-width: 0;
   min-height: 44px;
 }
@@ -6140,6 +6175,10 @@ dialog.sheet::backdrop {
   min-height: 44px;
 }
 
+.clocks-page .clocks-slider-title {
+  margin: 0 0 var(--space-2);
+}
+
 .clocks-page .clocks-slider {
   display: grid;
   gap: var(--space-2);
@@ -6151,8 +6190,25 @@ dialog.sheet::backdrop {
   min-height: 44px;
 }
 
+.clocks-page .clocks-slider button {
+  justify-self: start;
+}
+
 .clocks-page .clocks-readout {
   margin: 0;
+  min-width: 0;
+}
+
+.clocks-page .clocks-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.clocks-page .clocks-undo:empty {
+  display: none;
 }
 
 .clocks-page .clocks-field {
@@ -6191,8 +6247,137 @@ dialog.sheet::backdrop {
   text-align: left;
 }
 
+.clocks-page .clocks-more-results {
+  margin: var(--space-2) 0 0;
+}
+
 .clocks-page .clocks-add {
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+
+/* The card's "+N more" line, under the list. */
+.clocks-more {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-small);
+}
+
+/* Phones: the time and the meta share the second track, the meta under the time, so the
+   name keeps most of the width; the Edit toggle is its icon alone; the slider is compact
+   and stays under the top edge while the list scrolls. */
+@media (max-width: 720px) {
+  .clocks-list,
+  .clocks-lines {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .clocks-row .clocks-name,
+  .clocks-line .clocks-name {
+    grid-row: span 2;
+  }
+
+  .clocks-row .clocks-time,
+  .clocks-line .clocks-time,
+  .clocks-row .clocks-meta,
+  .clocks-line .clocks-meta {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  /* Narrow enough that the difference and the shade stack, so the name keeps the width. */
+  .clocks-row .clocks-meta,
+  .clocks-line .clocks-meta {
+    max-width: 6rem;
+  }
+
+  .clocks-page .clocks-edit-word,
+  .clocks-page .clocks-back-word,
+  .clocks-page .clocks-slider-title,
+  .clocks-page .clocks-slider-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .clocks-page .clocks-slider-card {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    padding: var(--space-2) var(--space-3);
+    box-shadow: 0 2px 0 var(--border);
+  }
+
+  .clocks-page .clocks-slider {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "readout back"
+      "range range";
+    align-items: center;
+    gap: 0 var(--space-2);
+  }
+
+  .clocks-page .clocks-slider input[type="range"] {
+    grid-area: range;
+  }
+
+  .clocks-page .clocks-readout {
+    grid-area: readout;
+  }
+
+  .clocks-page .clocks-slider button {
+    grid-area: back;
+    min-width: 44px;
+  }
+
+  /* A control focused in the list must not land under the sticky slider. */
+  .clocks-page .clocks-list :is(button, input, select) {
+    scroll-margin-top: 8.5rem;
+  }
+}
+
+/* Settings → Clocks: one grid for both hour rows (name | from | to), so the selects line
+   up; on a phone the name takes its own line above its pair. */
+.clocks-settings-hours {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.clocks-settings-range {
+  display: contents;
+}
+
+.clocks-settings-name {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+/* `label` is a grid app-wide: flex, so the word sits beside its select. */
+label.clocks-settings-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clocks-settings-hours .clocks-settings-pick select {
+  width: 5.5rem;
+}
+
+@media (min-width: 560px) {
+  .clocks-settings-hours {
+    grid-template-columns: max-content max-content max-content;
+  }
+
+  .clocks-settings-name {
+    grid-column: auto;
+  }
 }

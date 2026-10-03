@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ClockHours, WallTime } from "../api/types";
-import { canonicalZone, fromMinutes, zoneCity } from "../clocks/time";
+import { useOptionalAuth } from "../auth/AuthContext";
+import { canonicalZone, fromMinutes, homeZone, zoneCity } from "../clocks/time";
 import { useT } from "../i18n";
 import { clockHoursOf, clocksOf } from "../layout/preferences";
 import { useModule } from "../layout/modules";
@@ -27,6 +28,7 @@ export function ClocksSettingsCard() {
 function ClocksSettings() {
   const t = useT();
   const { preferences, update } = usePreferences();
+  const home = canonicalZone(homeZone(useOptionalAuth()?.user ?? null));
   const [failed, setFailed] = useState(false);
   const hours = clockHoursOf(preferences);
   const places = clocksOf(preferences);
@@ -70,6 +72,8 @@ function ClocksSettings() {
   const options: { zone: string; labels: string[] }[] = [];
   for (const place of places) {
     const key = canonicalZone(place.zone);
+    // Your own zone is already the time every row shows: offering it again adds nothing.
+    if (key === home) continue;
     const found = options.find((option) => option.zone === key);
     if (found) found.labels.push(place.label);
     else options.push({ zone: key, labels: [place.label] });
@@ -84,6 +88,7 @@ function ClocksSettings() {
   const current = zone ? canonicalZone(zone) : "";
   // A zone saved earlier whose place was since removed still has to show, or the select lies.
   const removed = current !== "" && !options.some((option) => option.zone === current);
+  const isHome = current !== "" && current === home;
 
   return (
     <Card title={t("clocks.settings.title")}>
@@ -91,15 +96,16 @@ function ClocksSettings() {
       <p className="hint" style={{ marginTop: 0 }}>
         {t("clocks.settings.hoursHint")}
       </p>
+      {/* One grid for both rows (label | from | to), so the selects line up in columns. */}
+      <div className="clocks-settings-hours">
       {rows.map(({ range, label, aria }) => (
-        <div key={range} className="row" style={{ flexWrap: "wrap", gap: "8px 12px", marginBottom: 8 }}>
-          <span style={{ fontWeight: 600, minWidth: 120 }}>{t(label)}</span>
+        <div key={range} className="clocks-settings-range">
+          <span className="clocks-settings-name">{t(label)}</span>
           {([0, 1] as const).map((index) => (
-            // `label` is a grid app-wide: say flex outright so the word sits beside its select.
-            <label key={index} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            // `label` is a grid app-wide: the class says flex so the word sits beside its select.
+            <label key={index} className="clocks-settings-pick">
               <span>{t(index === 0 ? "clocks.settings.from" : "clocks.settings.to")}</span>
               <select
-                style={{ width: "6.5rem" }}
                 aria-label={t(aria[index])}
                 value={hours[range][index]}
                 onChange={(event) => setHours(range, index, event.target.value)}
@@ -114,6 +120,7 @@ function ClocksSettings() {
           ))}
         </div>
       ))}
+      </div>
       <h3 style={{ fontSize: 15, margin: "16px 0 6px" }}>{t("clocks.settings.calendarZone")}</h3>
       <p className="hint" style={{ marginTop: 0 }}>
         {places.length > 0 ? t("clocks.settings.calendarZoneHint") : t("clocks.settings.noPlaces")}
@@ -133,7 +140,7 @@ function ClocksSettings() {
       </select>
       {removed ? (
         <p className="hint" role="status">
-          {t("clocks.settings.removedPlace")}
+          {t(isHome ? "clocks.settings.sameAsHome" : "clocks.settings.removedPlace")}
         </p>
       ) : null}
       <p>

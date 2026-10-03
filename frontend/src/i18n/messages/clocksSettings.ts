@@ -18,6 +18,7 @@ export const clocksSettings = {
     en: "Not one of your places any more",
     fr: "Ce n’est plus l’un de vos lieux",
   },
+  "clocks.settings.sameAsHome": { en: "Same as your own time", fr: "Identique à votre propre heure" },
   "clocks.settings.from": { en: "from", fr: "de" },
   "clocks.settings.to": { en: "to", fr: "à" },
   "clocks.settings.calendarZone": { en: "Calendar: also show times in", fr: "Calendrier : afficher aussi les heures à" },

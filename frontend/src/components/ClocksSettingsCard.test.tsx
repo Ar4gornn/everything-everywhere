@@ -131,7 +131,7 @@ describe("ClocksSettingsCard", () => {
       clocks: [
         ...PLACES,
         { id: "p3", zone: "America/New_York", label: "Dad", hours: null },
-        { id: "p4", zone: "Europe/Paris", label: "paris", hours: null },
+        { id: "p4", zone: "Europe/London", label: "london", hours: null },
       ],
     });
     render();
@@ -140,7 +140,7 @@ describe("ClocksSettingsCard", () => {
       "Off",
       "Sam's flat, Dad · New York",
       "Office · Kolkata",
-      "Paris",
+      "London",
     ]);
   });
 
@@ -164,15 +164,37 @@ describe("ClocksSettingsCard", () => {
     expect(screen.getByText("Not one of your places any more")).toBeInTheDocument();
   });
 
-  it("lays each from/to label out as a flex row, not the app-wide grid", async () => {
+  it("puts both hour rows in one grid, so the from and to selects line up", async () => {
     mockApi();
     render();
     const from = await screen.findByLabelText("Working hours start");
-    const label = from.closest("label") as HTMLElement;
-    expect(label.style.display).toBe("flex");
-    expect(label.style.alignItems).toBe("center");
-    const to = screen.getByLabelText("Working hours end") as HTMLSelectElement;
-    expect(to.style.width).toBe((from as HTMLSelectElement).style.width);
+    const night = screen.getByLabelText("Night hours start");
+    const grid = from.closest(".clocks-settings-hours");
+    expect(grid).not.toBeNull();
+    expect(grid).toContainElement(night);
+    expect(from.closest("label")).toHaveClass("clocks-settings-pick");
+  });
+
+  it("does not offer a place in your own zone", async () => {
+    mockApi({
+      clocks: [...PLACES, { id: "p5", zone: "Europe/Paris", label: "Gran", hours: null }],
+    });
+    render();
+    const select = await screen.findByLabelText("Calendar: also show times in");
+    const texts = Array.from(select.querySelectorAll("option")).map((o) => o.textContent);
+    expect(texts).toEqual(["Off", "Sam's flat · New York", "Office · Kolkata"]);
+  });
+
+  it("still shows your own zone when it was saved, and says it is your time", async () => {
+    mockApi({
+      clocks: [...PLACES, { id: "p5", zone: "Europe/Paris", label: "Gran", hours: null }],
+      calendar_zone: "Europe/Paris",
+    });
+    render();
+    const select = (await screen.findByLabelText("Calendar: also show times in")) as HTMLSelectElement;
+    expect(select.value).toBe("Europe/Paris");
+    expect(screen.getByText("Same as your own time")).toBeInTheDocument();
+    expect(screen.queryByText("Not one of your places any more")).toBeNull();
   });
 
   it("links to the Clocks page", async () => {

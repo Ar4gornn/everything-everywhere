@@ -8,8 +8,9 @@ import { clockHoursOf, clocksOf, preferencesOf } from "../layout/preferences";
 import { ClockLine, useDayWord } from "./ClockLine";
 import { Card } from "./ui";
 
-/** Epic 48 (AD-64): the account's own time and the first three places, one line each.
- *  Nothing at all while there are no places, so an account that never adds one sees no card. */
+/** Epic 48 (AD-64): the account's own time and the first three places, one line each, then
+ *  "+N more" linking to the page. Nothing at all while there are no places, so an account
+ *  that never adds one sees no card. The "Custom hours" tag is the page's, not the card's. */
 const SHOWN = 3;
 
 export function ClocksCard() {
@@ -25,6 +26,8 @@ export function ClocksCard() {
   const defaults = clockHoursOf(preferences);
   const home = homeZone(user);
   const homeReading = readClock(home, now, home, defaults);
+  // The rest are on the page: say how many, rather than leaving them out silently.
+  const more = places.length - SHOWN;
 
   return (
     <Card
@@ -59,11 +62,17 @@ export function ClocksCard() {
               dayWord={dayWord(reading.dayShift)}
               diff={formatDiff(reading.diff) ?? t("clocks.sameTime")}
               shade={reading.shade}
-              ownHours={place.hours !== null}
             />
           );
         })}
       </ul>
+      {more > 0 && (
+        <p className="clocks-more">
+          <Link to="/clocks" aria-label={t.n("clocks.card.moreLabel", more)}>
+            {t.n("clocks.card.more", more)}
+          </Link>
+        </p>
+      )}
     </Card>
   );
 }

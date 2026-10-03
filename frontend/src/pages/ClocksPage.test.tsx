@@ -110,7 +110,7 @@ describe("the list", () => {
     const tokyo = rowOf("tk");
     expect(tokyo.getByText("19:00")).toBeInTheDocument();
     expect(tokyo.getByText("+7h")).toBeInTheDocument();
-    expect(tokyo.getByText("Free")).toBeInTheDocument();
+    expect(tokyo.getByText("Free time")).toBeInTheDocument();
   });
 
   it("says tomorrow when the place's date is ahead of yours", async () => {
@@ -132,15 +132,15 @@ describe("a row's look", () => {
   it("tags a place that has its own hours, collapsed", async () => {
     mount([{ ...NY, hours: { work: ["08:00", "16:00"], night: ["22:00", "06:00"] } }, TOKYO]);
     await screen.findByText("Mum");
-    expect(rowOf("ny").getByText("Own hours")).toBeInTheDocument();
-    expect(rowOf("tk").queryByText("Own hours")).toBeNull();
+    expect(rowOf("ny").getByText("Custom hours")).toBeInTheDocument();
+    expect(rowOf("tk").queryByText("Custom hours")).toBeNull();
   });
 
   it("carries the shade on each badge, one value per look", async () => {
     mount([NY, TOKYO]);
     await screen.findByText("Mum");
     expect(rowOf("ny").getByText("Night")).toHaveAttribute("data-shade", "night");
-    expect(rowOf("tk").getByText("Free")).toHaveAttribute("data-shade", "free");
+    expect(rowOf("tk").getByText("Free time")).toHaveAttribute("data-shade", "free");
     expect(rowOf("home").getByText("Working")).toHaveAttribute("data-shade", "work");
   });
 
@@ -254,7 +254,10 @@ describe("writes send the whole list", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(patches).toHaveLength(1));
     expect(lastPatch()).toEqual([{ ...NY, label: "Mother" }, TOKYO]);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Mother" })).toHaveFocus());
+    // The row is still open, so its toggle now reads Done.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Done editing Mother" })).toHaveFocus(),
+    );
   });
 
   it("cancels a rename with Escape and puts focus back on Edit", async () => {
@@ -265,7 +268,9 @@ describe("writes send the whole list", () => {
     await user.click(screen.getByRole("button", { name: "Rename Mum" }));
     await user.keyboard("{Escape}");
     expect(screen.queryByLabelText("New name for Mum")).toBeNull();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Mum" })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Done editing Mum" })).toHaveFocus(),
+    );
     expect(patches).toHaveLength(0);
   });
 
@@ -334,7 +339,7 @@ describe("writes send the whole list", () => {
     mount([NY]);
     await screen.findByText("Mum");
     await edit(user, "Mum");
-    await user.click(screen.getByRole("button", { name: "Own hours for Mum" }));
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
     await user.selectOptions(screen.getByLabelText("Mum: Work starts"), "05:00");
     await user.selectOptions(screen.getByLabelText("Mum: Night ends"), "05:30");
     // Nothing is written while the draft is open.
@@ -346,7 +351,7 @@ describe("writes send the whole list", () => {
     ]);
     // Mum is at 06:00, no longer night, and inside the new working hours.
     expect(rowOf("ny").getByText("Working")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Own hours for Mum" }));
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
     await user.click(screen.getByRole("button", { name: "Use default" }));
     await waitFor(() => expect(patches).toHaveLength(2));
     expect(lastPatch()).toEqual([{ ...NY, hours: null }]);
@@ -357,12 +362,12 @@ describe("writes send the whole list", () => {
     mount([NY]);
     await screen.findByText("Mum");
     await edit(user, "Mum");
-    await user.click(screen.getByRole("button", { name: "Own hours for Mum" }));
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
     await user.selectOptions(screen.getByLabelText("Mum: Work starts"), "05:00");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByLabelText("Mum: Work starts")).toBeNull();
     expect(patches).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "Own hours for Mum" }));
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
     expect(screen.getByLabelText("Mum: Work starts")).toHaveValue("09:00");
   });
 
@@ -371,7 +376,7 @@ describe("writes send the whole list", () => {
     mount([NY]);
     await screen.findByText("Mum");
     await edit(user, "Mum");
-    await user.click(screen.getByRole("button", { name: "Own hours for Mum" }));
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
     expect(within(screen.getByLabelText("Mum: Work ends")).getAllByRole("option")).toHaveLength(96);
   });
 
@@ -496,5 +501,292 @@ describe("the module", () => {
     mount([NY], { modules: { ...DEFAULT_PREFERENCES.modules, clocks: false } });
     expect(await screen.findByText("Clocks is turned off")).toBeInTheDocument();
     expect(screen.queryByLabelText("Shift in 15-minute steps")).toBeNull();
+  });
+});
+
+const LONDON: ClockPlace = { id: "ld", zone: "Europe/London", label: "Gran", hours: null };
+
+describe("focus", () => {
+  it("returns to the row's toggle after custom hours are saved, cancelled or reset", async () => {
+    const user = userEvent.setup();
+    mount([{ ...NY, hours: { work: ["08:00", "16:00"], night: ["22:00", "06:00"] } }]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    const toggle = screen.getByRole("button", { name: "Done editing Mum" });
+    for (const action of ["Save", "Cancel", "Use default"]) {
+      await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+      await user.click(screen.getByRole("button", { name: action }));
+      await waitFor(() => expect(toggle).toHaveFocus());
+      expect(screen.queryByLabelText("Mum: Work starts")).toBeNull();
+    }
+  });
+
+  it("goes to the Name field when a search result is picked", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    await waitFor(() => expect(screen.getByLabelText("Name")).toHaveFocus());
+  });
+
+  it("goes to the new row's Edit after a successful add", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Tokyo" })).toHaveFocus());
+  });
+
+  it("goes to the next row's Edit after a remove, else the previous, else the search", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Gran" })).toHaveFocus());
+    await edit(user, "Gran");
+    await user.click(screen.getByRole("button", { name: "Remove Gran" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Mum" })).toHaveFocus());
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Remove Mum" }));
+    await waitFor(() => expect(screen.getByLabelText("Search time zones")).toHaveFocus());
+  });
+
+  it("goes to the slider after Back to now, which disables itself", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    const slider = screen.getByLabelText("Shift in 15-minute steps");
+    fireEvent.change(slider, { target: { value: "4" } });
+    await user.click(screen.getByRole("button", { name: "Back to now" }));
+    expect(slider).toHaveFocus();
+  });
+});
+
+describe("a failed add at eleven places", () => {
+  const eleven: ClockPlace[] = Array.from({ length: 11 }, (_, i) => ({
+    id: `p${i}`,
+    zone: "Asia/Tokyo",
+    label: `Place ${i}`,
+    hours: null,
+  }));
+
+  it("keeps the same form, its text, the error and the focus", async () => {
+    const user = userEvent.setup();
+    mount(eleven);
+    await screen.findByText("Place 10");
+    await user.type(screen.getByLabelText("Search time zones"), "paris");
+    await user.click(await screen.findByRole("button", { name: /Paris — Europe\/Paris/ }));
+    const name = screen.getByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Aunt");
+    patchFails = true;
+    const addButton = screen.getByRole("button", { name: "Add" });
+    await user.click(addButton);
+    const alert = await screen.findByRole("alert");
+    // Never unmounted: the very same input and button, with the text and the focus.
+    expect(screen.getByLabelText("Name")).toBe(name);
+    expect(name).toHaveValue("Aunt");
+    expect(screen.getByRole("button", { name: "Add" })).toBe(addButton);
+    expect(addButton).toHaveFocus();
+    expect(alert.closest(".card")).toContainElement(name);
+    expect(screen.queryByText(/the most there can be/)).toBeNull();
+  });
+});
+
+describe("row errors", () => {
+  /** A refused rename: the row stays open, with the form and the error in it. */
+  const failRename = async (user: ReturnType<typeof userEvent.setup>) => {
+    patchFails = true;
+    await user.click(screen.getByRole("button", { name: "Rename Mum" }));
+    await user.keyboard("Mother");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await rowOf("ny").findByRole("alert")).toBeInTheDocument();
+    patchFails = false;
+  };
+
+  it("clear when the row is collapsed", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await failRename(user);
+    await user.click(screen.getByRole("button", { name: "Done editing Mum" }));
+    expect(rowOf("ny").queryByRole("alert")).toBeNull();
+  });
+
+  it("clear on a rename's Cancel", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await failRename(user);
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(rowOf("ny").queryByRole("alert")).toBeNull();
+  });
+
+  it("clear on a rename's Escape", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await failRename(user);
+    await user.click(screen.getByLabelText("New name for Mum"));
+    await user.keyboard("{Escape}");
+    expect(rowOf("ny").queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("names", () => {
+  it("refuses a name with nothing visible in it, with the reason", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    for (const blank of ["ㅤ", "​", "⠀", "‎"]) {
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: blank } });
+      expect(screen.getByRole("alert")).toHaveTextContent(/visible|control or text-direction/);
+      expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+    }
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "ㅤ" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "A name needs at least one visible character.",
+    );
+  });
+});
+
+describe("the Add form", () => {
+  it("starts over on Escape, back in the search", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    const search = screen.getByLabelText("Search time zones");
+    await user.type(search, "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    await user.keyboard("{Escape}");
+    expect(search).toHaveValue("");
+    expect(screen.queryByLabelText("Name")).toBeNull();
+    expect(search).toHaveFocus();
+  });
+
+  it("keeps the chosen zone and name while the search is edited, until another is picked", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    const search = screen.getByLabelText("Search time zones");
+    await user.type(search, "tokyo");
+    await user.click(await screen.findByRole("button", { name: /Tokyo — Asia\/Tokyo/ }));
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Sis");
+    await user.clear(search);
+    await user.type(search, "seoul");
+    expect(screen.getByText("Chosen zone: Asia/Tokyo")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("Sis");
+    await user.click(await screen.findByRole("button", { name: /Seoul — Asia\/Seoul/ }));
+    expect(screen.getByText("Chosen zone: Asia/Seoul")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("Seoul");
+  });
+
+  it("finds a city by its alias, says so, and names the place after it", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "delhi");
+    const result = await screen.findByRole("button", {
+      name: /^Delhi → Kolkata — Asia\/Kolkata · /,
+    });
+    await user.click(result);
+    expect(screen.getByLabelText("Name")).toHaveValue("Delhi");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(lastPatch()?.[1]).toMatchObject({ zone: "Asia/Kolkata", label: "Delhi" });
+  });
+
+  it("says how many matches there are when it shows only some", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "a");
+    expect(
+      await screen.findByText(/^Showing 20 of \d+\. Type more to narrow the list\.$/),
+    ).toBeInTheDocument();
+    const results = screen.getByRole("list", { name: "Matching zones" });
+    expect(within(results).getAllByRole("listitem")).toHaveLength(20);
+  });
+
+  it("suggests a nearer city or a region when nothing matches", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await user.type(screen.getByLabelText("Search time zones"), "qqqq");
+    expect(
+      await screen.findByText("No match. Try the nearest big city, or a region like Asia/Kolkata."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("words", () => {
+  it("does not point below on an empty account, where the Add card is above", async () => {
+    mount([]);
+    expect(
+      await screen.findByText("No places yet. Add one to see its time next to yours."),
+    ).toBeInTheDocument();
+  });
+
+  it("labels the toggle Edit, then Done, in French too", async () => {
+    const user = userEvent.setup();
+    mount([NY], {}, "fr");
+    await screen.findByText("Mum");
+    const toggle = screen.getByRole("button", { name: "Modifier Mum" });
+    expect(toggle).toHaveTextContent("Modifier");
+    await user.click(toggle);
+    expect(toggle).toHaveAccessibleName("Fermer les réglages de Mum");
+    expect(toggle).toHaveTextContent("Fermer");
+  });
+
+  it("puts a space before the French colon of the readout", async () => {
+    mount([NY], {}, "fr");
+    await screen.findByText("Mum");
+    expect(screen.getByTestId("clocks-readout").parentElement).toHaveTextContent(
+      /^Votre heure : Maintenant$/,
+    );
+  });
+});
+
+describe("undo a remove", () => {
+  it("puts the place back where it was, with its hours, in one write", async () => {
+    const user = userEvent.setup();
+    const own: ClockPlace = {
+      ...TOKYO,
+      hours: { work: ["08:00", "16:00"], night: ["22:00", "06:00"] },
+    };
+    mount([NY, own, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(await screen.findByText("Removed Office.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo removing Office" }));
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(lastPatch()).toEqual([NY, own, LONDON]);
+    expect(screen.queryByText("Removed Office.")).toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Office" })).toHaveFocus());
+  });
+
+  it("goes away with the next write", async () => {
+    const user = userEvent.setup();
+    mount([NY, TOKYO, LONDON]);
+    await screen.findByText("Mum");
+    await edit(user, "Office");
+    await user.click(screen.getByRole("button", { name: "Remove Office" }));
+    expect(await screen.findByText("Removed Office.")).toBeInTheDocument();
+    await edit(user, "Gran");
+    await user.click(screen.getByRole("button", { name: "Move Gran up" }));
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(screen.queryByText("Removed Office.")).toBeNull();
   });
 });

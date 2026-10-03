@@ -13,11 +13,31 @@ function rule(selector: string): string {
 }
 
 describe("the clocks stylesheet", () => {
-  it("lays every row out as name | time | meta so the times line up", () => {
-    expect(rule(".clocks-row,\n.clocks-line")).toContain(
-      "grid-template-columns: minmax(0, 1fr) auto auto;",
-    );
+  it("makes the time one track shared by every row: the list is the grid, each row a subgrid", () => {
+    const list = rule(".clocks-list,\n.clocks-lines");
+    expect(list).toContain("display: grid;");
+    expect(list).toContain("grid-template-columns: minmax(0, 1fr) max-content max-content;");
+    const row = rule(".clocks-row,\n.clocks-line");
+    expect(row).toContain("grid-template-columns: subgrid;");
+    expect(row).toContain("grid-column: 1 / -1;");
+    // A row must not define its own tracks, or its time column is its own again.
+    expect(row).not.toMatch(/grid-template-columns: (?!subgrid)/);
     expect(rule(".clocks-row .clocks-time,\n.clocks-line .clocks-time")).toContain("tabular-nums");
+    // The editor and the error span every track.
+    expect(rule(".clocks-row > .error,\n.clocks-row > .clocks-panel")).toContain(
+      "grid-column: 1 / -1;",
+    );
+  });
+
+  it("keeps the slider under the top edge on a phone, and focus clear of it", () => {
+    const phone = block.slice(block.indexOf("@media (max-width: 720px)"));
+    const card = phone.slice(phone.indexOf(".clocks-page .clocks-slider-card {"));
+    expect(card.slice(0, card.indexOf("}"))).toContain("position: sticky;");
+    expect(phone).toContain("scroll-margin-top:");
+  });
+
+  it("caps the page at a readable width on a wide screen", () => {
+    expect(rule(".clocks-page")).toContain("max-width: 640px;");
   });
 
   it("gives work, free and night three different fills", () => {

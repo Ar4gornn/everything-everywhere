@@ -57,7 +57,9 @@ def test_places_round_trip_in_the_persons_order(client, user_a):
     assert _prefs(client, user_a)["clocks"] == places
 
 
-@pytest.mark.parametrize("bad", ["\u202eevil", "a\u2066b", "a\u202ab", "a\u2069b"])
+@pytest.mark.parametrize(
+    "bad", ["\u202eevil", "a\u2066b", "a\u202ab", "a\u2069b", "a\u200eb", "a\u200fb", "a\u061cb"]
+)
 def test_a_label_with_a_direction_override_is_refused(client, user_a, bad):
     assert _patch(client, user_a, {"clocks": [_place(label=bad)]}).status_code == 422
 
@@ -67,6 +69,28 @@ def test_a_zero_width_joiner_in_a_label_is_still_allowed(client, user_a):
     answer = _patch(client, user_a, {"clocks": [_place(label=label)]})
     assert answer.status_code == 200, answer.text
     assert answer.json()["preferences"]["clocks"][0]["label"] == label
+
+
+@pytest.mark.parametrize(
+    "blank",
+    [
+        "​",  # zero-width space (Cf)
+        "‍‍",  # zero-width joiners alone
+        "ㅤ",  # Hangul filler
+        "⠀⠀",  # blank Braille pattern
+        "ᅟᅠ",  # Hangul choseong/jungseong fillers
+        "ﾠ",  # halfwidth Hangul filler
+        " 　",  # no-break and ideographic spaces (strip() leaves nothing anyway)
+        "﻿⁠",  # BOM and word joiner (Cf)
+    ],
+)
+def test_a_label_with_nothing_visible_is_refused(client, user_a, blank):
+    assert _patch(client, user_a, {"clocks": [_place(label=blank)]}).status_code == 422
+
+
+def test_a_visible_character_beside_a_filler_is_enough(client, user_a):
+    answer = _patch(client, user_a, {"clocks": [_place(label="ㅤx")]})
+    assert answer.status_code == 200, answer.text
 
 
 def test_two_places_may_share_a_zone(client, user_a):

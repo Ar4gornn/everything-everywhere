@@ -13,6 +13,8 @@ import {
   readClock,
   sameZone,
   searchZones,
+  findZones,
+  placeAliases,
   shadeAt,
   toMinutes,
   wallDate,
@@ -220,6 +222,12 @@ describe("zoneCity", () => {
     expect(zoneCity("Europe/Paris")).toBe("Paris");
     expect(zoneCity("UTC")).toBe("UTC");
   });
+  it("names a legacy id after its current one", () => {
+    expect(zoneCity("Asia/Calcutta")).toBe("Kolkata");
+    expect(zoneCity("Europe/Kiev")).toBe("Kyiv");
+    expect(zoneHint("Mum", "Asia/Calcutta")).toBe("Kolkata");
+    expect(zoneHint("kolkata", "Asia/Calcutta")).toBeNull();
+  });
 });
 
 describe("zoneHint / sameZone", () => {
@@ -323,6 +331,63 @@ describe("searchZones", () => {
 
   it("returns nothing for an empty query", () => {
     expect(searchZones("  ", zones)).toEqual([]);
+  });
+
+  it("ignores dots and apostrophes", () => {
+    const z = ["America/St_Johns", "Europe/Paris"];
+    expect(searchZones("st. john's", z)).toEqual(["America/St_Johns"]);
+    expect(searchZones("st john’s", z)).toEqual(["America/St_Johns"]);
+  });
+});
+
+describe("findZones", () => {
+  const zones = allZones();
+
+  it("finds a city by its place alias and says which name matched", () => {
+    expect(findZones("delhi", zones).matches).toEqual([{ zone: "Asia/Kolkata", alias: "Delhi" }]);
+    expect(findZones("Bombay", zones).matches).toEqual([{ zone: "Asia/Kolkata", alias: "Bombay" }]);
+    expect(findZones("san fran", zones).matches).toEqual([
+      { zone: "America/Los_Angeles", alias: "San Francisco" },
+    ]);
+    expect(findZones("washington", zones).matches).toEqual([
+      { zone: "America/New_York", alias: "Washington DC" },
+    ]);
+    expect(findZones("montréal", zones).matches).toEqual([
+      { zone: "America/Toronto", alias: "Montreal" },
+    ]);
+    expect(findZones("gmt", zones).matches[0]).toEqual({ zone: "UTC", alias: "GMT" });
+  });
+
+  it("puts a zone's own city before an alias match, and lists a zone once", () => {
+    const found = findZones("kolkata", zones).matches;
+    expect(found).toEqual([{ zone: "Asia/Kolkata", alias: null }]);
+    const mo = findZones("mo", zones).matches.map((m) => m.zone);
+    expect(new Set(mo).size).toBe(mo.length);
+  });
+
+  it("names the legacy city as the alias", () => {
+    expect(findZones("calcutta", zones).matches).toEqual([
+      { zone: "Asia/Kolkata", alias: "Calcutta" },
+    ]);
+  });
+
+  it("counts every match before the cut", () => {
+    const { matches, total } = findZones("a", zones, 20);
+    expect(matches).toHaveLength(20);
+    expect(total).toBeGreaterThan(20);
+    expect(findZones("delhi", zones).total).toBe(1);
+  });
+
+  it("maps every alias to a zone this engine knows, under its current name", () => {
+    for (const [name, zone] of Object.entries(placeAliases)) {
+      expect(canonicalZone(zone), name).toBe(zone);
+      expect(zones, name).toContain(zone);
+    }
+    expect(Object.keys(placeAliases).length).toBeGreaterThanOrEqual(60);
+    // No ambiguous abbreviations.
+    for (const abbreviation of ["PST", "EST", "CET", "IST", "CST", "BST"]) {
+      expect(Object.keys(placeAliases)).not.toContain(abbreviation);
+    }
   });
 });
 

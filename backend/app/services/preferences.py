@@ -90,7 +90,14 @@ POINTS_NAME_MAX = 24
 # Cs: a lone surrogate is valid in a Python str but not in JSON, and jsonb refuses it -> 500.
 _REFUSED_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
 #: U+202A-U+202E (embeddings, overrides) and U+2066-U+2069 (isolates): clock labels only.
-_BIDI_CONTROLS = frozenset(chr(c) for c in (*range(0x202A, 0x202F), *range(0x2066, 0x206A)))
+#: Also the bare direction marks U+200E, U+200F and U+061C, which reorder text the same way.
+_BIDI_CONTROLS = frozenset(
+    chr(c) for c in (*range(0x202A, 0x202F), *range(0x2066, 0x206A), 0x200E, 0x200F, 0x061C)
+)
+#: Characters that draw nothing although Unicode files them as letters or symbols: the
+#: Hangul fillers and the blank Braille pattern. A label made only of these (or of spaces
+#: and format characters) would be a place with an invisible name.
+_BLANK_LOOKING = frozenset("ᅟᅠㅤﾠ⠀")
 
 #: What the daily digest may talk about, and the default for each (Epic 36, AD-52). The
 #: three that existed before stay on; the two new ones are opt-in, so the digest keeps
@@ -252,7 +259,15 @@ def clean_clock_label(raw: str) -> str:
     # joiner stays allowed, emoji sequences need it.
     if any(c in _BIDI_CONTROLS for c in label):
         raise ValueError("no direction-control characters")
+    if not any(_visible(c) for c in label):
+        raise ValueError("at least one visible character")
     return label
+
+
+def _visible(c: str) -> bool:
+    """Does this character draw something? Spaces, format characters (Cf) and the blank
+    fillers do not."""
+    return not (c.isspace() or unicodedata.category(c) == "Cf" or c in _BLANK_LOOKING)
 
 
 def _resolve_hours(stored: object) -> dict | None:

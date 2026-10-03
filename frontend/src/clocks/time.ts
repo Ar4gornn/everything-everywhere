@@ -185,10 +185,17 @@ export function homeZone(user: Pick<User, "timezone"> | null | undefined): strin
   return "UTC";
 }
 
-/** `"America/Argentina/Buenos_Aires"` → `"Buenos Aires"`; `"UTC"` → `"UTC"`. */
-export function zoneCity(zone: string): string {
+/** The last part of an id, as written: `"America/Argentina/Buenos_Aires"` → `"Buenos Aires"`. */
+function rawCity(zone: string): string {
   const last = zone.split("/").pop() ?? zone;
   return last.replace(/_/g, " ");
+}
+
+/** `"America/Argentina/Buenos_Aires"` → `"Buenos Aires"`; `"UTC"` → `"UTC"`. A legacy id is
+ *  named after its current one (`Asia/Calcutta` → `"Kolkata"`), so a place saved under an
+ *  old spelling reads the same everywhere. */
+export function zoneCity(zone: string): string {
+  return rawCity(canonicalZone(zone));
 }
 
 /** The city to print beside a place's name, or null when the name already says it
@@ -250,12 +257,143 @@ export function canonicalZone(zone: string): string {
   return LEGACY_ZONES[zone] ?? zone;
 }
 
+/**
+ * Places people type that are not the city a zone is named after, each to one canonical
+ * zone: big cities that share a zone with another, and countries with a single zone.
+ * Deliberately no abbreviations (PST, CET, IST...): several of them name more than one
+ * offset. "Washington DC", not "Washington": the state is on Pacific time.
+ */
+const PLACE_ALIASES: Readonly<Record<string, string>> = {
+  Delhi: "Asia/Kolkata",
+  "New Delhi": "Asia/Kolkata",
+  Mumbai: "Asia/Kolkata",
+  Bombay: "Asia/Kolkata",
+  Bangalore: "Asia/Kolkata",
+  Bengaluru: "Asia/Kolkata",
+  Chennai: "Asia/Kolkata",
+  Madras: "Asia/Kolkata",
+  Hyderabad: "Asia/Kolkata",
+  India: "Asia/Kolkata",
+  Beijing: "Asia/Shanghai",
+  Peking: "Asia/Shanghai",
+  Guangzhou: "Asia/Shanghai",
+  Shenzhen: "Asia/Shanghai",
+  China: "Asia/Shanghai",
+  Osaka: "Asia/Tokyo",
+  Kyoto: "Asia/Tokyo",
+  Japan: "Asia/Tokyo",
+  "South Korea": "Asia/Seoul",
+  Busan: "Asia/Seoul",
+  Philippines: "Asia/Manila",
+  Hanoi: "Asia/Ho_Chi_Minh",
+  Vietnam: "Asia/Ho_Chi_Minh",
+  Thailand: "Asia/Bangkok",
+  Bali: "Asia/Makassar",
+  Pakistan: "Asia/Karachi",
+  Lahore: "Asia/Karachi",
+  Islamabad: "Asia/Karachi",
+  Bangladesh: "Asia/Dhaka",
+  Nepal: "Asia/Kathmandu",
+  "Abu Dhabi": "Asia/Dubai",
+  UAE: "Asia/Dubai",
+  "Saudi Arabia": "Asia/Riyadh",
+  Jeddah: "Asia/Riyadh",
+  Mecca: "Asia/Riyadh",
+  "Tel Aviv": "Asia/Jerusalem",
+  Israel: "Asia/Jerusalem",
+  Lebanon: "Asia/Beirut",
+  "San Francisco": "America/Los_Angeles",
+  Seattle: "America/Los_Angeles",
+  "San Diego": "America/Los_Angeles",
+  "Las Vegas": "America/Los_Angeles",
+  California: "America/Los_Angeles",
+  "Washington DC": "America/New_York",
+  Boston: "America/New_York",
+  Miami: "America/New_York",
+  Atlanta: "America/New_York",
+  Philadelphia: "America/New_York",
+  Dallas: "America/Chicago",
+  Houston: "America/Chicago",
+  Austin: "America/Chicago",
+  "New Orleans": "America/Chicago",
+  Minneapolis: "America/Chicago",
+  Ottawa: "America/Toronto",
+  Quebec: "America/Toronto",
+  Montreal: "America/Toronto",
+  Rio: "America/Sao_Paulo",
+  "Rio de Janeiro": "America/Sao_Paulo",
+  Brasilia: "America/Sao_Paulo",
+  Brazil: "America/Sao_Paulo",
+  "Cape Town": "Africa/Johannesburg",
+  "South Africa": "Africa/Johannesburg",
+  Egypt: "Africa/Cairo",
+  Nigeria: "Africa/Lagos",
+  Abuja: "Africa/Lagos",
+  Lyon: "Europe/Paris",
+  Marseille: "Europe/Paris",
+  Toulouse: "Europe/Paris",
+  Nice: "Europe/Paris",
+  Bordeaux: "Europe/Paris",
+  France: "Europe/Paris",
+  Munich: "Europe/Berlin",
+  Frankfurt: "Europe/Berlin",
+  Hamburg: "Europe/Berlin",
+  Cologne: "Europe/Berlin",
+  Germany: "Europe/Berlin",
+  Barcelona: "Europe/Madrid",
+  Seville: "Europe/Madrid",
+  Valencia: "Europe/Madrid",
+  Spain: "Europe/Madrid",
+  Milan: "Europe/Rome",
+  Venice: "Europe/Rome",
+  Florence: "Europe/Rome",
+  Naples: "Europe/Rome",
+  Italy: "Europe/Rome",
+  Geneva: "Europe/Zurich",
+  Switzerland: "Europe/Zurich",
+  UK: "Europe/London",
+  "United Kingdom": "Europe/London",
+  England: "Europe/London",
+  Scotland: "Europe/London",
+  Wales: "Europe/London",
+  Manchester: "Europe/London",
+  Edinburgh: "Europe/London",
+  Glasgow: "Europe/London",
+  Ireland: "Europe/Dublin",
+  Netherlands: "Europe/Amsterdam",
+  Rotterdam: "Europe/Amsterdam",
+  Belgium: "Europe/Brussels",
+  Portugal: "Europe/Lisbon",
+  Greece: "Europe/Athens",
+  Turkey: "Europe/Istanbul",
+  Ankara: "Europe/Istanbul",
+  "St Petersburg": "Europe/Moscow",
+  Krakow: "Europe/Warsaw",
+  "New Zealand": "Pacific/Auckland",
+  Wellington: "Pacific/Auckland",
+  Canberra: "Australia/Sydney",
+  GMT: "UTC",
+};
+
+/** Every other name a zone answers to: its legacy ids' cities and the place aliases. */
 const ALIASES = new Map<string, string[]>();
-for (const [legacy, current] of Object.entries(LEGACY_ZONES)) {
-  const list = ALIASES.get(current) ?? [];
-  list.push(legacy);
-  ALIASES.set(current, list);
+function addAlias(zone: string, name: string) {
+  const list = ALIASES.get(zone) ?? [];
+  if (!list.includes(name)) list.push(name);
+  ALIASES.set(zone, list);
 }
+for (const [legacy, current] of Object.entries(LEGACY_ZONES)) {
+  if (rawCity(legacy) !== rawCity(current)) addAlias(current, rawCity(legacy));
+}
+for (const [name, zone] of Object.entries(PLACE_ALIASES)) addAlias(zone, name);
+/** Current id -> its legacy ids, so "asia/calc" still finds Asia/Kolkata. */
+const LEGACY_IDS = new Map<string, string[]>();
+for (const [legacy, current] of Object.entries(LEGACY_ZONES)) {
+  LEGACY_IDS.set(current, [...(LEGACY_IDS.get(current) ?? []), legacy]);
+}
+
+/** The alias table, for tests: name -> zone. */
+export const placeAliases = PLACE_ALIASES;
 
 const FALLBACK_ZONES = [
   "UTC",
@@ -318,28 +456,58 @@ function normalise(s: string): string {
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
+    .replace(/[.'’]/g, "")
     .replace(/[_/\s]+/g, " ")
     .trim();
 }
 
+/** One search result: the zone, and the name it was found by when that is not the zone's
+ *  own city ("Delhi" for Asia/Kolkata), so the list can say "Delhi → Kolkata". */
+export interface ZoneMatch {
+  zone: string;
+  alias: string | null;
+}
+
 /**
  * Zones matching what the person typed: case- and accent-insensitive, spaces and
- * underscores equal, matched against the whole id, the city, and the legacy spelling
- * ("calcutta" finds Asia/Kolkata). City-prefix
- * matches first, then other matches, each alphabetical; at most `limit`.
+ * underscores equal, dots and apostrophes ignored ("st. john's" finds America/St_Johns),
+ * matched against the whole id, the city, the legacy spelling ("calcutta" finds
+ * Asia/Kolkata) and the place aliases ("delhi" finds Asia/Kolkata). City-prefix matches
+ * first (the zone's own city before an alias), then other matches, each alphabetical; at
+ * most `limit`, with `total` the number before the cut.
  */
-export function searchZones(query: string, zones: readonly string[], limit = 20): string[] {
+export function findZones(
+  query: string,
+  zones: readonly string[],
+  limit = 20,
+): { matches: ZoneMatch[]; total: number } {
   const q = normalise(query);
-  if (!q || limit <= 0) return [];
-  const prefix: string[] = [];
-  const other: string[] = [];
+  if (!q || limit <= 0) return { matches: [], total: 0 };
+  const prefix: ZoneMatch[] = [];
+  const other: ZoneMatch[] = [];
   for (const zone of zones) {
-    const names = [zone, ...(ALIASES.get(zone) ?? [])];
-    if (names.some((name) => normalise(zoneCity(name)).startsWith(q))) prefix.push(zone);
-    else if (names.some((name) => normalise(name).includes(q))) other.push(zone);
+    const aliases = ALIASES.get(zone) ?? [];
+    if (normalise(rawCity(zone)).startsWith(q)) {
+      prefix.push({ zone, alias: null });
+      continue;
+    }
+    const byAlias = aliases.find((name) => normalise(name).startsWith(q));
+    if (byAlias) prefix.push({ zone, alias: byAlias });
+    else if ([zone, ...(LEGACY_IDS.get(zone) ?? [])].some((id) => normalise(id).includes(q)))
+      other.push({ zone, alias: null });
+    else {
+      const inside = aliases.find((name) => normalise(name).includes(q));
+      if (inside) other.push({ zone, alias: inside });
+    }
   }
-  const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  return [...prefix.sort(byId), ...other.sort(byId)].slice(0, limit);
+  const byId = (a: ZoneMatch, b: ZoneMatch) => (a.zone < b.zone ? -1 : a.zone > b.zone ? 1 : 0);
+  const all = [...prefix.sort(byId), ...other.sort(byId)];
+  return { matches: all.slice(0, limit), total: all.length };
+}
+
+/** `findZones`, zones only. */
+export function searchZones(query: string, zones: readonly string[], limit = 20): string[] {
+  return findZones(query, zones, limit).matches.map((match) => match.zone);
 }
 
 /**
