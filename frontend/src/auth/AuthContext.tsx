@@ -19,6 +19,7 @@ import {
   storeTokens,
 } from "../api/client";
 import type { Currency, Language, PreferencesPatch, User } from "../api/types";
+import { setMarker } from "../session/marker";
 import { PreferenceSaver, preferencesOf } from "../layout/preferences";
 import { clearEntriesStore } from "../entries/outbox";
 import { clearGymStore } from "../gym/store";
@@ -183,6 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // AD-66: the one boot-time place. People signed in before the marker cookie existed get
+    // it here, so the proxy stops showing them the landing page at `/`.
+    if (readRefreshToken()) setMarker();
     if (!readToken()) {
       setLoading(false);
       return;

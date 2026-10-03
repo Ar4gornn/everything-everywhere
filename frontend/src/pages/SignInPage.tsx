@@ -26,6 +26,25 @@ function takeInviteFromUrl(): string {
   }
 }
 
+/**
+ * AD-66: the landing page's "Have an invite? Create an account" link is `/signin?mode=register`.
+ * Read once and stripped, like the invite above. An invite in the same URL wins (the caller
+ * checks it first); stripping is unconditional so the param never lingers.
+ */
+function takeRegisterModeFromUrl(): boolean {
+  try {
+    const url = new URL(window.location.href);
+    const wanted = url.searchParams.get("mode") === "register";
+    if (wanted) {
+      url.searchParams.delete("mode");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
+    return wanted;
+  } catch {
+    return false;
+  }
+}
+
 export function SignInPage() {
   const { signIn, register } = useAuth();
   // The full context rather than `useT`: this is the one screen where the reader has no
@@ -33,8 +52,9 @@ export function SignInPage() {
   const { t, lang, setLanguage } = useLanguage();
   // Lazy, so the URL is read (and cleaned) once rather than on every render.
   const [linkedInvite] = useState(takeInviteFromUrl);
+  const [linkedRegister] = useState(takeRegisterModeFromUrl);
   const [mode, setMode] = useState<"signin" | "register" | "recover">(
-    linkedInvite ? "register" : "signin",
+    linkedInvite || linkedRegister ? "register" : "signin",
   );
   const [recoveryCode, setRecoveryCode] = useState("");
   const [email, setEmail] = useState("");

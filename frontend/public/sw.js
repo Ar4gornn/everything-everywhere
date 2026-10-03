@@ -133,9 +133,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Keep the shell fresh whenever the network is available.
-          const copy = response.clone();
-          caches.open(SHELL).then((cache) => cache.put(SHELL_URL, copy));
+          // Keep the shell fresh whenever the network is available. AD-66: only an ok,
+          // non-opaque response without X-EE-Page. A landing page or an error page must
+          // never become the offline app shell, or the installed app opens onto it.
+          if (response.ok && response.type !== "opaqueredirect" && !response.headers.get("X-EE-Page")) {
+            const copy = response.clone();
+            caches.open(SHELL).then((cache) => cache.put(SHELL_URL, copy));
+          }
           return response;
         })
         .catch(() => caches.match(SHELL_URL).then((hit) => hit || Response.error())),

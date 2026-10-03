@@ -114,6 +114,26 @@ describe("SignInPage", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  it("opens the register form on ?mode=register and strips it (AD-66)", () => {
+    mockApi();
+    window.history.replaceState(null, "", "/signin?mode=register&x=1");
+    render(<SignInPage />);
+
+    expect(screen.getByRole("button", { name: "Create account" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?x=1");
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("lets an invite code win over ?mode=register", () => {
+    mockApi();
+    window.history.replaceState(null, "", "/signin?mode=register&invite=abc-DEF_123");
+    render(<SignInPage />);
+
+    expect((screen.getByLabelText("Invite code") as HTMLInputElement).value).toBe("abc-DEF_123");
+    expect(window.location.search).toBe("");
+    window.history.replaceState(null, "", "/");
+  });
+
   it("opens on sign-in without an invite link", () => {
     mockApi();
     render(<SignInPage />);

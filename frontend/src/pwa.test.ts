@@ -24,7 +24,10 @@ describe("web app manifest", () => {
     expect(manifest.name).toBe("Everything Everywhere");
     // Truncated on a home screen beyond ~12 characters.
     expect(String(manifest.short_name).length).toBeLessThanOrEqual(12);
-    expect(manifest.start_url).toBe("/");
+    // AD-66: the landing page owns `/` for visitors, so a launch carries a query and the
+    // proxy shows the app. `id` pins the install identity, which was the implicit "/".
+    expect(manifest.id).toBe("/");
+    expect(manifest.start_url).toBe("/?pwa=1");
     expect(manifest.scope).toBe("/");
   });
 
@@ -106,5 +109,53 @@ describe("service worker", () => {
     // Caching an opaque cross-origin response or an error page poisons the cache.
     expect(sw).toContain("response.ok");
     expect(sw).toContain('response.type === "basic"');
+  });
+});
+
+describe("service worker navigation cache (AD-66)", () => {
+  type Listener = (event: { request: unknown; respondWith: (p: Promise<Response>) => void }) => void;
+
+  /** Runs the real sw.js against a fake `self`/`caches`, and answers one navigation. */
+  async function navigate(response: Response): Promise<{ stored: string[] }> {
+    const listeners: Record<string, Listener> = {};
+    const stored: string[] = [];
+    const caches = {
+      open: async () => ({ put: async (key: string) => void stored.push(key), add: async () => undefined }),
+      match: async () => undefined,
+      keys: async () => [],
+      delete: async () => true,
+    };
+    const fake = {
+      addEventListener: (type: string, fn: Listener) => {
+        listeners[type] = fn;
+      },
+      location: { origin: "https://ee.test" },
+      skipWaiting: () => undefined,
+      clients: { claim: () => undefined },
+    };
+    new Function("self", "caches", "fetch", sw)(fake, caches, async () => response);
+    let answer: Promise<Response> | undefined;
+    listeners.fetch?.({
+      request: { method: "GET", url: "https://ee.test/", mode: "navigate" },
+      respondWith: (p) => {
+        answer = p;
+      },
+    });
+    await answer;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return { stored };
+  }
+
+  it("stores an ok app response as the shell", async () => {
+    expect((await navigate(new Response("<html>app</html>", { status: 200 }))).stored).toEqual(["/index.html"]);
+  });
+
+  it("does not store a landing page (X-EE-Page)", async () => {
+    const landing = new Response("<html>landing</html>", { status: 200, headers: { "X-EE-Page": "landing" } });
+    expect((await navigate(landing)).stored).toEqual([]);
+  });
+
+  it("does not store a 404", async () => {
+    expect((await navigate(new Response("nope", { status: 404 }))).stored).toEqual([]);
   });
 });

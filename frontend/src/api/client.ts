@@ -6,6 +6,7 @@
  * Expo client reuse this module rather than reimplementing the contract.
  */
 
+import { clearMarker, setMarker } from "../session/marker";
 import type {
   WorkoutComplete,
   SetInput,
@@ -166,6 +167,9 @@ export function writeRefreshToken(token: string | null): void {
   } catch {
     /* see readToken */
   }
+  // AD-66: mirror "a refresh token exists" into the routing cookie. The boot-time half
+  // lives in the auth provider, which migrates people already signed in.
+  if (token !== null) setMarker();
 }
 
 export function storeTokens(token: Token): void {
@@ -176,6 +180,7 @@ export function storeTokens(token: Token): void {
 export function clearTokens(): void {
   writeToken(null);
   writeRefreshToken(null);
+  clearMarker();
 }
 
 // One refresh in flight at a time. Without this, a page that fires five requests on mount
