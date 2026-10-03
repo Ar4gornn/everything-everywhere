@@ -165,6 +165,10 @@ don't use"): all nine modules are on for a new account; turning one off hides it
 - A year filter on Entries.
 - A mood CSV (no button).
 - Bank sync, shared or household accounts, native apps, anything "AI-powered".
+- "Free": Alex never confirmed it, so it was removed in QA (2026-10-04). Add it to §3.1 only
+  if he confirms it.
+- Anything about what the server logs hold beyond "can include" the source address
+  (uvicorn access logs, rotated 10 MB × 5; Caddy writes none).
 
 ## 4. Architecture — AD-66
 
@@ -410,3 +414,18 @@ See §7. The QA agent fixes nothing; it reports.
 - The Browser pane refuses `127.0.0.1`. Use `localhost:<port>` with a same-origin dist
   (`VITE_API_BASE_URL=` empty).
 - Never `git checkout -- <file>` to undo a mutation. Restore the saved bytes and assert.
+
+## 9. Outcome (2026-10-04) and follow-ups
+
+Built in waves A–C by Sonnet builders. A separate Sonnet agent ran QA on the local prod
+stack: verdict ship-with-fixes, no high findings. Fixes are in `2f58ae4`.
+
+Deliberately not done; candidates for a later story:
+- `Vary: Cookie` on `/`. It only matters behind a CDN or shared cache, and there is none
+  today.
+- Strip `?pwa=1` from the URL after launch. Cosmetic; only `mood` is stripped.
+- Carry the language chosen on the landing into the app's sign-in page.
+- Any query on `/` (for example `?utm_source=`) shows the app. This is by design (AD-66).
+- At 375 px the header's Sign in wraps under the wordmark. No overflow; cosmetic.
+- The screenshots are light-theme only, so they look pale on dark themes.
+- A delete-account endpoint. Until it exists, the privacy page says to ask via GitHub.
