@@ -12,6 +12,8 @@ import type {
 } from "../api/types";
 import { HabitHeatmap } from "../charts/HabitHeatmap";
 import { MoodStrip, MoodTally } from "../charts/MoodStrip";
+import { useOptionalAuth } from "../auth/AuthContext";
+import { homeZone } from "../clocks/time";
 import { Card, Empty, ErrorBanner } from "../components/ui";
 import { CheckInButton } from "../components/CheckInButton";
 import { HABITS_VIEWS, ViewSwitch } from "../components/ViewSwitch";
@@ -305,6 +307,9 @@ function scheduleOf(habit: Habit): Schedule {
 
 export function HabitsPage() {
   const t = useT();
+  // The calendar reads a check-in time as a wall time in the account's zone, so the box is
+  // prefilled from the clock there, not from the device's.
+  const accountZone = homeZone(useOptionalAuth()?.user ?? null);
   const dates = useDates();
   const toast = useToast();
 
@@ -432,7 +437,7 @@ export function HabitsPage() {
         // Untouched, the box is the clock. **Emptied, it is null** — "did it, did not say
         // when", which is a real state this model has. Sending the empty string instead was
         // a 422 carrying a pydantic sentence, for a thing the person was entitled to do.
-        done_at: typed === undefined ? nowTime() : typed || null,
+        done_at: typed === undefined ? nowTime(new Date(), accountZone) : typed || null,
       });
       // Back to the clock for the next one. A box that silently kept 08:00 all day would
       // record the afternoon dose at the time of the morning one — the exact confusion
@@ -614,7 +619,7 @@ export function HabitsPage() {
                       type="time"
                       className="at"
                       aria-label={t("habits.timeFor", { name: row.name })}
-                      value={at[row.habit_id] ?? nowTime()}
+                      value={at[row.habit_id] ?? nowTime(new Date(), accountZone)}
                       onChange={(event) =>
                         setAt((was) => ({ ...was, [row.habit_id]: event.target.value }))
                       }

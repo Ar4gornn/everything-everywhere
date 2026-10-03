@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ClockHours, WallTime } from "../api/types";
@@ -40,6 +40,10 @@ function ClocksSettings() {
   const { preferences, update } = usePreferences();
   const home = canonicalZone(homeZone(useOptionalAuth()?.user ?? null));
   const [failed, setFailed] = useState(false);
+  // Your own zone being saved: says so, and a second pick meanwhile does nothing.
+  const [savingHome, setSavingHome] = useState(false);
+  const savingHomeNow = useRef(false);
+  const homeLine = useRef<HTMLParagraphElement>(null);
   const saveHomeZone = useSaveHomeZone();
   const zones = useMemo(() => allZones(), []);
   const [query, setQuery] = useState("");
@@ -58,12 +62,24 @@ function ClocksSettings() {
   }
 
   async function pickHome(zone: string) {
+    if (savingHomeNow.current) return;
+    savingHomeNow.current = true;
+    setSavingHome(true);
     setFailed(false);
     try {
       await saveHomeZone(zone);
       setQuery("");
+      // The result list goes with the query: focus lands on the line that now shows the zone
+      // rather than on the page, unless the person has already moved on elsewhere.
+      const line = homeLine.current;
+      const active = document.activeElement;
+      if (line && (!active || active === document.body || line.closest(".card")?.contains(active)))
+        line.focus();
     } catch {
       setFailed(true);
+    } finally {
+      savingHomeNow.current = false;
+      setSavingHome(false);
     }
   }
 
@@ -122,7 +138,7 @@ function ClocksSettings() {
         {t("clocks.settings.homeZoneHint")}
       </p>
       <p className="hint">{t("clocks.settings.homeZoneDigest")}</p>
-      <p className="clocks-settings-home">
+      <p ref={homeLine} tabIndex={-1} className="clocks-settings-home">
         <strong>{t("clocks.settings.homeZoneNow", { city: zoneCity(home), zone: home })}</strong>
       </p>
       <input
@@ -133,6 +149,11 @@ function ClocksSettings() {
         autoComplete="off"
         onChange={(event) => setQuery(event.target.value)}
       />
+      {savingHome && (
+        <p className="hint" role="status">
+          {t("clocks.page.saving")}
+        </p>
+      )}
       {searching && found.length === 0 && <p className="hint">{t("clocks.page.noMatch")}</p>}
       {found.length > 0 && (
         <ul className="clocks-settings-results" aria-label={t("clocks.settings.homeZoneResults")}>
@@ -145,6 +166,7 @@ function ClocksSettings() {
                   type="button"
                   className="quiet clocks-settings-result"
                   aria-label={t("clocks.settings.homeZonePick", { name, zone: candidate })}
+                  aria-disabled={savingHome || undefined}
                   onClick={() => void pickHome(candidate)}
                 >
                   <strong>{name}</strong> <span className="hint">— {candidate}</span>

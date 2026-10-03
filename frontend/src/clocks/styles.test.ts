@@ -82,16 +82,33 @@ describe("the clocks stylesheet", () => {
     expect(phone).toMatch(/\.clocks-row \{\s*position: relative;/);
   });
 
-  it("lets the meta share one line while it fits, and wrap rather than starve the name", () => {
+  it("on a phone puts the meta on its own line under the name, so the name column is stable (round 5)", () => {
     const phone = block.slice(block.indexOf("@media (max-width: 720px)"));
-    const meta = phone.slice(
-      phone.indexOf("  .clocks-row .clocks-meta,\n  .clocks-line .clocks-meta {\n    max-width"),
+    const at = (selector: string) => {
+      const start = phone.indexOf(`  ${selector} {`);
+      expect(start, `no phone rule for ${selector}`).toBeGreaterThan(-1);
+      return phone.slice(start, phone.indexOf("}", start));
+    };
+    const meta = at(".clocks-row .clocks-meta,\n  .clocks-line .clocks-meta");
+    expect(meta).toContain("grid-column: 1 / 3;");
+    expect(meta).toContain("justify-self: start;");
+    expect(meta).toContain("justify-content: flex-start;");
+    expect(meta).toContain("max-width: none;");
+    const name = at(".clocks-row .clocks-name,\n  .clocks-line .clocks-name");
+    expect(name).toContain("grid-row: auto;");
+    expect(name).toContain("overflow-wrap: break-word;");
+    expect(name).not.toContain("span 2");
+    expect(at(".clocks-row .clocks-label,\n  .clocks-line .clocks-label")).toContain(
+      "overflow-wrap: break-word;",
     );
-    const rem = Number(/max-width: ([\d.]+)rem;/.exec(meta)?.[1]);
-    expect(rem).toBeGreaterThanOrEqual(10);
+    expect(at(".clocks-row .clocks-time,\n  .clocks-line .clocks-time")).toContain("grid-column: 2;");
     expect(rule(".clocks-row .clocks-meta,\n.clocks-line .clocks-meta")).toContain(
       "flex-wrap: wrap;",
     );
+  });
+
+  it("gives the Undo line a row of its own in the list grid", () => {
+    expect(rule(".clocks-page .clocks-undo-row")).toContain("grid-column: 1 / -1;");
   });
 
   it("keeps the sticky slider opaque and square, with room kept for a two-line readout", () => {

@@ -133,6 +133,9 @@ const moodHistory = {
   days_answered: 3,
 };
 
+/** The account's time zone for the fake `/me`; unset, the account has none. */
+let accountZone: string | undefined;
+
 function mockApi(mood: unknown = moodHistory) {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   const calls: { url: string; method: string; body: string }[] = [];
@@ -166,7 +169,9 @@ function mockApi(mood: unknown = moodHistory) {
     const method = init?.method ?? "GET";
     const body = String(init?.body ?? "");
     calls.push({ url, method, body });
-    if (url.includes("/api/auth/me")) return json(me);
+    if (url.includes("/api/auth/me")) {
+      return json(accountZone ? { ...me, timezone: accountZone } : me);
+    }
     if (url.includes("/api/mood/history")) {
       return mood === null ? json({ detail: "Not Found" }, 404) : json(mood);
     }
@@ -285,6 +290,32 @@ describe("HabitsPage", () => {
     });
     const posted = calls.find((c) => c.method === "POST" && c.url.includes("/h1/checkins"));
     expect(JSON.parse(posted?.body ?? "{}").done_at).toBeNull();
+  });
+
+  it("prefills the time box from the account's zone, not the device's (round 5)", async () => {
+    // The calendar reads a check-in time as a wall time in the account's zone, so a box
+    // filled from the device clock was wrong whenever the two zones differ.
+    // 2026-09-07 10:30 UTC is 22:30 in Auckland (+12).
+    accountZone = "Pacific/Auckland";
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-09-07T10:30:00Z") });
+    try {
+      const { calls } = mockApi();
+      render(<HabitsPage />);
+      const box = (await screen.findByLabelText(
+        "Time for the next check-in of Run",
+      )) as HTMLInputElement;
+      expect(box.value).toBe("22:30");
+      // Untouched, the box is also what is sent.
+      await userEvent.click(screen.getByRole("button", { name: "Check in Run" }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.method === "POST" && c.url.includes("/h1/checkins"))).toBe(true),
+      );
+      const posted = calls.find((c) => c.method === "POST" && c.url.includes("/h1/checkins"));
+      expect(JSON.parse(posted?.body ?? "{}").done_at).toBe("22:30");
+    } finally {
+      vi.useRealTimers();
+      accountZone = undefined;
+    }
   });
 
   it("returns the time box to the clock after a check-in", async () => {

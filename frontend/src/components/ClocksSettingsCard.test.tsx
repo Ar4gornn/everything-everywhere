@@ -42,6 +42,9 @@ const PLACES = [
   { id: "p2", zone: "Asia/Kolkata", label: "Office", hours: null },
 ];
 
+/** While set, the notification-schedule write waits for it (a slow server). */
+let scheduleGate: Promise<void> | null = null;
+
 function mockApi(patch: Partial<Preferences> = {}) {
   window.localStorage.setItem("everything-everywhere.token", "test-token");
   let user = me({ ...DEFAULT_PREFERENCES, ...patch });
@@ -52,6 +55,7 @@ function mockApi(patch: Partial<Preferences> = {}) {
       return json(user);
     }
     if (url.startsWith("/api/auth/me/notification-schedule")) {
+      if (scheduleGate) await scheduleGate;
       user = { ...user, timezone: body.timezone, digest_time: body.digest_time };
       return json(user);
     }
@@ -147,6 +151,36 @@ describe("ClocksSettingsCard", () => {
     // The profile was re-read, so the card shows the new zone and the search is cleared.
     expect(await screen.findByText("Now: Tokyo (Asia/Tokyo)")).toBeInTheDocument();
     expect(screen.getByLabelText("Search time zones")).toHaveValue("");
+  });
+
+  it("says Saving… while your zone saves, then focuses the line that shows it (round 5)", async () => {
+    const fetchMock = mockApi();
+    const user = userEvent.setup();
+    render();
+    expect(await screen.findByText("Now: Paris (Europe/Paris)")).toBeInTheDocument();
+    let open: () => void = () => undefined;
+    scheduleGate = new Promise<void>((resolve) => {
+      open = () => resolve();
+    });
+    try {
+      await user.type(screen.getByLabelText("Search time zones"), "tokyo");
+      const pick = await screen.findByRole("button", { name: "Use Tokyo (Asia/Tokyo)" });
+      await user.click(pick);
+      await user.click(pick);
+      expect(await screen.findByText("Saving…")).toBeInTheDocument();
+    } finally {
+      scheduleGate = null;
+      open();
+    }
+    const line = (await screen.findByText("Now: Tokyo (Asia/Tokyo)")).closest("p");
+    await waitFor(() => expect(line).toHaveFocus());
+    expect(screen.queryByText("Saving…")).toBeNull();
+    // The second press while saving was not a second write.
+    expect(
+      fetchMock.mock.calls.filter(([url]) =>
+        String(url).startsWith("/api/auth/me/notification-schedule"),
+      ),
+    ).toHaveLength(1);
   });
 
   it("says when the search finds nothing, and that the digest keeps its hour (round 4)", async () => {

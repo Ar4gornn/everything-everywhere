@@ -127,7 +127,27 @@ export function timeLabel(value: string | null): string | null {
   return value === null ? null : value.slice(0, 5);
 }
 
-/** `"08:00"` for an input's default, from a real clock. */
-export function nowTime(now = new Date()): string {
+/**
+ * `"08:00"` for an input's default, from a real clock. With a `zone` it is the time on the
+ * wall of that zone: a check-in time is read by the calendar as a wall time in the
+ * account's zone, so it is prefilled from there, not from the device's clock.
+ */
+export function nowTime(now = new Date(), zone?: string): string {
+  if (zone) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: zone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(now);
+      const part = (type: string) => parts.find((p) => p.type === type)?.value;
+      const hour = part("hour");
+      const minute = part("minute");
+      if (hour && minute) return `${hour}:${minute}`;
+    } catch {
+      // An unknown zone falls back to the device clock below.
+    }
+  }
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }

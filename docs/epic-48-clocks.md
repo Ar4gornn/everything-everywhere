@@ -220,3 +220,9 @@ overlap; `inRange` wrap and empty; `shadeAt` night-over-work; `searchZones` acce
   unknown stored zone are dropped on read, not a 500; other users' preferences untouched.
 - Frontend preference/module tests updated for the new module and card (`clocks` has no
   endpoints, so it joins `moon` in the module test's API exclusion).
+
+### Round 5 (2026-10-03)
+- **Undo in place**: the Undo line replaces the most recently removed row (same index, `role="status"`), and focus moves to Undo, so it is visible wherever the remove happened on a phone.
+- **Phone rows**: name | time | edit tracks; the meta (day word, diff, shade, tag) is on its own line under the name. Names get ~150px at 320 and wrap only between words; the slider no longer reflows the list.
+- **Focus** returns to a row only if it is still inside that row; custom hours and the Settings home-zone picker guard double submits and say "Saving…".
+- **Habit check-in time** is prefilled in the account zone (`nowTime(now, zone)`), so the calendar conversion is right when the device zone differs.

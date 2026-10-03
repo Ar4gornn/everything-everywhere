@@ -618,3 +618,29 @@ describe("region links (round 4)", () => {
     expect(findZones("pacific", allZones()).matches.some((m) => m.zone === "America/Los_Angeles")).toBe(false);
   });
 });
+
+describe("borough aliases and 'in' ordering (round 5)", () => {
+  const zones = allZones();
+
+  it("finds New York by its boroughs", () => {
+    for (const name of ["Brooklyn", "Queens", "Manhattan", "Bronx", "Staten Island"]) {
+      expect(findZones(name, zones).matches[0], name).toEqual({
+        zone: "America/New_York",
+        alias: name,
+      });
+    }
+  });
+
+  it("lists country and alias prefixes by name length, then alphabetically: India before Indonesia", () => {
+    const found = findZones("in", zones, 50).matches;
+    const india = found.findIndex((m) => m.alias === "India");
+    const indonesia = found.findIndex((m) => m.alias === "Indonesia");
+    expect(india).toBeGreaterThan(-1);
+    expect(indonesia).toBeGreaterThan(-1);
+    expect(india).toBeLessThan(indonesia);
+    // Indonesia's own zones stay together, in their fixed order.
+    const id = found.filter((m) => m.alias === "Indonesia").map((m) => m.zone);
+    expect(id).toEqual(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]);
+    expect(found.slice(indonesia, indonesia + 3).map((m) => m.zone)).toEqual(id);
+  });
+});

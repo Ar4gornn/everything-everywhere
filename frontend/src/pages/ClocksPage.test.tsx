@@ -593,19 +593,27 @@ describe("focus", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit Tokyo" })).toHaveFocus());
   });
 
-  it("goes to the next row's Edit after a remove, else the previous, else the search", async () => {
+  it("goes to the Undo button after a remove, whichever row it was (round 5)", async () => {
     const user = userEvent.setup();
     mount([NY, TOKYO, LONDON]);
     await screen.findByText("Mum");
     await edit(user, "Office");
     await user.click(screen.getByRole("button", { name: "Remove Office" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Gran" })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Undo removing Office" })).toHaveFocus(),
+    );
     await edit(user, "Gran");
     await user.click(screen.getByRole("button", { name: "Remove Gran" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Mum" })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Undo removing Office and Gran" })).toHaveFocus(),
+    );
     await edit(user, "Mum");
     await user.click(screen.getByRole("button", { name: "Remove Mum" }));
-    await waitFor(() => expect(screen.getByLabelText("Search time zones")).toHaveFocus());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Undo removing Office, Gran and Mum" }),
+      ).toHaveFocus(),
+    );
   });
 
   it("goes to the slider after Back to now, which disables itself", async () => {
@@ -1154,7 +1162,7 @@ describe("a slow server: changes show at once (round 4)", () => {
     expect(patches).toHaveLength(0);
   });
 
-  it("removes at once: the row goes, Undo shows and focus is on the next row", async () => {
+  it("removes at once: the row goes, Undo shows and has focus", async () => {
     const user = userEvent.setup();
     mount([NY, TOKYO, LONDON]);
     await screen.findByText("Mum");
@@ -1163,7 +1171,7 @@ describe("a slow server: changes show at once (round 4)", () => {
     await user.click(screen.getByRole("button", { name: "Remove Office" }));
     expect(order()).toEqual(["ny", "ld"]);
     expect(screen.getByText("Removed Office.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Gran" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Undo removing Office" })).toHaveFocus();
     expect(patches).toHaveLength(0);
     openGate();
     await waitFor(() => expect(patches).toHaveLength(1));
@@ -1282,6 +1290,9 @@ describe("refused writes re-read the account (round 4)", () => {
     expect(alert.closest(".card")).toHaveTextContent("Add a place");
     // The tab re-read the account: Gran is there.
     expect(await screen.findByText("Gran")).toBeInTheDocument();
+    // One message, not two: the standing "you have 12" sentence stays out while it shows.
+    expect(screen.getByRole("alert")).toHaveTextContent("changed on another device");
+    expect(screen.queryByText(/the most there can be/)).toBeNull();
   });
 
   it("keeps the plain message for any other refusal of an add", async () => {
@@ -1342,17 +1353,29 @@ describe("focus and notices (round 4)", () => {
     );
   });
 
-  it("puts the Undo line at the top of the list card, before the rows", async () => {
+  it("puts the Undo line where the removed row was, so it shows under the finger (round 5)", async () => {
     const user = userEvent.setup();
-    mount([NY, TOKYO]);
+    mount([NY, TOKYO, LONDON]);
     await screen.findByText("Mum");
     await edit(user, "Office");
     await user.click(screen.getByRole("button", { name: "Remove Office" }));
-    const line = (await screen.findByText("Removed Office.")).closest('[role="status"]');
-    const list = screen.getByRole("list", { name: "Places" });
-    expect(
-      (line?.compareDocumentPosition(list) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const status = (await screen.findByText("Removed Office.")).closest('[role="status"]');
+    const items = Array.from(
+      screen.getByRole("list", { name: "Places" }).children,
+    ) as HTMLElement[];
+    // You, Mum, the Undo line (Office's index), Gran.
+    expect(items).toHaveLength(4);
+    expect(items[2]?.contains(status)).toBe(true);
+    expect(items[2]?.getAttribute("data-place")).toBeNull();
+    expect(items[3]?.getAttribute("data-place")).toBe("ld");
+    // A second remove moves the line to that row's place: one line, one Undo.
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Remove Mum" }));
+    const after = Array.from(
+      screen.getByRole("list", { name: "Places" }).children,
+    ) as HTMLElement[];
+    expect(after[1]?.textContent).toContain("Removed Office and Mum.");
+    expect(screen.getAllByRole("button", { name: /^Undo removing/ })).toHaveLength(1);
   });
 
   it("offers one Undo for two removes, and puts both back in one write", async () => {
@@ -1400,5 +1423,97 @@ describe("focus and notices (round 4)", () => {
       });
       expect(screen.queryByText("This place was changed on another device.")).toBeNull();
     });
+  });
+});
+
+describe("round 5 (phone fixes)", () => {
+  it("does not pull focus out of the search when a slow rename finishes", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Rename Mum" }));
+    await user.keyboard("Mother");
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const search = screen.getByLabelText("Search time zones");
+    search.focus();
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(1));
+    await settle();
+    expect(screen.queryByRole("button", { name: "Saving…" })).toBeNull();
+    expect(search).toHaveFocus();
+  });
+
+  it("does not pull focus out of the search when slow custom hours finish", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+    await user.selectOptions(screen.getByLabelText("Mum: Work starts"), "05:00");
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const search = screen.getByLabelText("Search time zones");
+    search.focus();
+    openGate();
+    await waitFor(() => expect(patches).toHaveLength(1));
+    await settle();
+    expect(screen.queryByRole("group", { name: "Custom hours for Mum" })).toBeNull();
+    expect(search).toHaveFocus();
+  });
+
+  it("still returns focus to Edit when it is left where the save was pressed", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+    await user.selectOptions(screen.getByLabelText("Mum: Work starts"), "05:00");
+    holdServer();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    openGate();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Done editing Mum" })).toHaveFocus());
+  });
+
+  it("saves custom hours once for three quick presses, saying Saving…", async () => {
+    const user = userEvent.setup();
+    mount([NY]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+    await user.selectOptions(screen.getByLabelText("Mum: Work starts"), "05:00");
+    holdServer();
+    const save = screen.getByRole("button", { name: "Save" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeInTheDocument();
+    openGate();
+    await waitFor(() => expect(patches.length).toBeGreaterThan(0));
+    await settle();
+    expect(patches).toHaveLength(1);
+  });
+
+  it("resets to the default once for three quick presses", async () => {
+    const user = userEvent.setup();
+    const own: ClockPlace = { ...NY, hours: { work: ["05:00", "18:00"], night: ["23:00", "05:30"] } };
+    mount([own]);
+    await screen.findByText("Mum");
+    await edit(user, "Mum");
+    await user.click(screen.getByRole("button", { name: "Custom hours for Mum" }));
+    holdServer();
+    const reset = screen.getByRole("button", { name: "Use default" });
+    // Three presses before a render (the row drops the button as soon as the change shows).
+    act(() => {
+      reset.click();
+      reset.click();
+      reset.click();
+    });
+    openGate();
+    await waitFor(() => expect(patches.length).toBeGreaterThan(0));
+    await settle();
+    expect(patches).toHaveLength(1);
+    expect(lastPatch()).toEqual([{ ...NY, hours: null }]);
   });
 });

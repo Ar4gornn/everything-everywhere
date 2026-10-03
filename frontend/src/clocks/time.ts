@@ -381,6 +381,11 @@ const PLACE_ALIASES: Readonly<Record<string, string>> = {
   Texas: "America/Chicago",
   Florida: "America/New_York",
   NYC: "America/New_York",
+  Brooklyn: "America/New_York",
+  Queens: "America/New_York",
+  Manhattan: "America/New_York",
+  Bronx: "America/New_York",
+  "Staten Island": "America/New_York",
   "Washington DC": "America/New_York",
   Boston: "America/New_York",
   Miami: "America/New_York",
@@ -660,24 +665,34 @@ export function findZones(
   const seen = new Set<string>();
   // Countries named exactly ("brazil"), then countries whose name a word of it starts.
   const exactCountry: ZoneMatch[] = [];
-  const country: ZoneMatch[] = [];
+  // Countries whose name a word starts, and aliases a word starts: each group is one name
+  // with its zones, ordered shortest name first so "in" lists India before Indonesia.
+  const groups: { name: string; items: ZoneMatch[] }[] = [];
   for (const exact of [true, false]) {
     for (const { names, zones: cities } of COUNTRIES) {
       const hit = exact
         ? names.some((name) => foldName(name) === q)
         : names.some((name) => wordMatch(foldName(name), q) > 0);
       if (!hit) continue;
+      const matched =
+        names.find((name) => wordMatch(foldName(name), q) === 1) ??
+        names.find((name) => wordMatch(foldName(name), q) > 0) ??
+        names[0] ??
+        "";
+      const items: ZoneMatch[] = [];
       for (const zone of cities) {
         if (!known.has(zone) || seen.has(zone)) continue;
         seen.add(zone);
-        (exact ? exactCountry : country).push({ zone, alias: names[0] ?? null });
+        (exact ? exactCountry : items).push({ zone, alias: names[0] ?? null });
       }
+      if (!exact && items.length > 0) groups.push({ name: matched, items });
     }
   }
   // A place alias said exactly ("india", "rio") is what the person meant: it comes before
   // every word-start match (Indianapolis, Rio Branco), right after an exact country.
   const exactAlias: ZoneMatch[] = [];
   const prefix: ZoneMatch[] = [];
+  const aliasPrefix: { name: string; items: ZoneMatch[] }[] = [];
   const other: ZoneMatch[] = [];
   for (const zone of zones) {
     if (seen.has(zone)) continue;
@@ -693,7 +708,7 @@ export function findZones(
     }
     const byAlias = aliases.find((name) => wordMatch(foldName(name), q) === 1);
     if (byAlias) {
-      prefix.push({ zone, alias: byAlias });
+      aliasPrefix.push({ name: byAlias, items: [{ zone, alias: byAlias }] });
       continue;
     }
     if ([zone, ...(LEGACY_IDS.get(zone) ?? [])].some((id) => wordMatch(foldName(id), q) > 0)) {
@@ -704,10 +719,23 @@ export function findZones(
     if (inside) other.push({ zone, alias: inside });
   }
   const byId = (a: ZoneMatch, b: ZoneMatch) => (a.zone < b.zone ? -1 : a.zone > b.zone ? 1 : 0);
+  // Country and alias prefixes together: shortest name first, then alphabetical.
+  const named = [...groups, ...aliasPrefix]
+    .map((group) => ({ ...group, folded: foldName(group.name) }))
+    .sort((a, b) =>
+      a.folded.length !== b.folded.length
+        ? a.folded.length - b.folded.length
+        : a.folded < b.folded
+          ? -1
+          : a.folded > b.folded
+            ? 1
+            : 0,
+    )
+    .flatMap((group) => group.items);
   const all = [
     ...exactCountry,
     ...exactAlias.sort(byId),
-    ...country,
+    ...named,
     ...prefix.sort(byId),
     ...other.sort(byId),
   ];

@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -110,7 +111,7 @@ function hourValue(hours: ClockHours, key: HourKey): string {
  *  only just been rendered (a new place, the neighbour of a removed one). */
 const editButtonOf = (id: string) =>
   document.querySelector<HTMLButtonElement>(`[data-place="${id}"] .clocks-edit`);
-const searchInput = () => document.getElementById("clocks-search");
+const undoButton = () => document.getElementById("clocks-undo-button");
 const homeLabel = () =>
   document.querySelector<HTMLElement>('[data-place="home"] .clocks-label');
 
@@ -298,11 +299,10 @@ export function ClocksPage() {
   const remove = (index: number) => {
     const place = places[index];
     if (!place) return;
-    // At once: the row goes, focus moves to the next row's Edit (else the previous one's, else
-    // the search), and the Undo line offers it back.
-    const neighbour = places[index + 1] ?? places[index - 1];
+    // At once: the row goes and the Undo line takes its place, with focus on Undo (it is right
+    // there; Tab away and the timer runs). Refused: the row is back and focus returns to it.
     setRemoved((list) => [...list, { place, index }]);
-    focusSoon(() => (neighbour ? editButtonOf(neighbour.id) : searchInput()));
+    focusSoon(() => undoButton());
     void run(
       (list) =>
         list.some((p) => p.id === place.id) ? list.filter((p) => p.id !== place.id) : null,
@@ -433,6 +433,27 @@ export function ClocksPage() {
       ? (removedLabels[0] ?? "")
       : `${removedLabels.slice(0, -1).join(", ")}${t("clocks.page.and")}${removedLabels[removedLabels.length - 1]}`;
 
+  // The Undo line stands where the most recently removed row was, so it appears under the
+  // finger that removed it (a phone list is taller than the screen).
+  const lastRemoved = removed[removed.length - 1];
+  const undoAt = lastRemoved ? Math.min(lastRemoved.index, places.length) : -1;
+  const undoRow = lastRemoved ? (
+    <li key="undo" className="clocks-undo-row">
+      <div className="clocks-undo" role="status">
+        <span>{t("clocks.page.removed", { label: removedText })}</span>{" "}
+        <button
+          id="clocks-undo-button"
+          type="button"
+          className="quiet"
+          aria-label={t("clocks.page.undoOf", { label: removedText })}
+          onClick={undo}
+        >
+          {t("toast.undo")}
+        </button>
+      </div>
+    </li>
+  ) : null;
+
   const listCard = (
     <Card title={t("clocks.page.list")}>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: hover and focus only hold a timer; nothing here is operated */}
@@ -446,22 +467,6 @@ export function ClocksPage() {
             setHold((h) => ({ ...h, focus: false }));
         }}
       >
-      {/* Right under the heading, so Undo is near in the tab order, not after twelve rows. */}
-      <div className="clocks-undo" role="status">
-        {removed.length > 0 && (
-          <>
-            <span>{t("clocks.page.removed", { label: removedText })}</span>{" "}
-            <button
-              type="button"
-              className="quiet"
-              aria-label={t("clocks.page.undoOf", { label: removedText })}
-              onClick={undo}
-            >
-              {t("toast.undo")}
-            </button>
-          </>
-        )}
-      </div>
       {changedElsewhere && (
         <p className="clocks-hint" role="status">
           {t("clocks.page.changedElsewhere")}
@@ -500,8 +505,9 @@ export function ClocksPage() {
           const hours = hoursFor(place, defaults);
           const reading = readClock(place.zone, now, home, hours, real);
           return (
+            <Fragment key={place.id}>
+              {undoRow && undoAt === index ? undoRow : null}
             <PlaceRow
-              key={place.id}
               place={place}
               index={index}
               count={places.length}
@@ -519,8 +525,10 @@ export function ClocksPage() {
               onMove={(by) => move(place.id, by)}
               onRemove={() => remove(index)}
             />
+            </Fragment>
           );
         })}
+        {undoRow && undoAt >= places.length ? undoRow : null}
       </ul>
       {places.length === 0 && <Empty>{t("clocks.page.empty")}</Empty>}
       </div>
@@ -588,6 +596,10 @@ function PlaceRow({
   const savingNow = useRef(false);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [hoursDraft, setHoursDraft] = useState(hours);
+  // The hours editor's save on its way: which button says "Saving…", and a ref so presses
+  // before a render are still one request.
+  const [hoursBusy, setHoursBusy] = useState<"save" | "default" | null>(null);
+  const hoursBusyNow = useRef(false);
   const editRef = useRef<HTMLButtonElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const upRef = useRef<HTMLButtonElement>(null);
@@ -596,7 +608,22 @@ function PlaceRow({
   const moved = useRef<("up" | "down")[]>([]);
   const renamedBefore = useRef(false);
 
+  /**
+   * Hand focus back to Edit, but only if it is still in this row (or nowhere: the control that
+   * had it has just unmounted). A save that took seconds must not pull focus out of whatever
+   * the person moved on to, the search field say.
+   */
+  const focusEdit = () => {
+    const edit = editRef.current;
+    if (!edit) return;
+    const active = document.activeElement;
+    const here =
+      !active || active === document.body || Boolean(edit.closest("li")?.contains(active));
+    if (here) edit.focus();
+  };
+
   // Rename opens on the name, selected; closing it (save or cancel) hands focus back to Edit.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when `renaming` changes
   useEffect(() => {
     if (renaming) {
       renamedBefore.current = true;
@@ -604,7 +631,7 @@ function PlaceRow({
       nameRef.current?.select();
     } else if (renamedBefore.current) {
       renamedBefore.current = false;
-      editRef.current?.focus();
+      focusEdit();
     }
   }, [renaming]);
 
@@ -647,7 +674,17 @@ function PlaceRow({
   /** Close the hours editor (saved, cancelled or reset) and hand focus back to Edit. */
   const closeHours = () => {
     setHoursOpen(false);
-    editRef.current?.focus();
+    focusEdit();
+  };
+
+  const saveHours = async (next: ClockHours | null, which: "save" | "default") => {
+    if (hoursBusyNow.current) return;
+    hoursBusyNow.current = true;
+    setHoursBusy(which);
+    const ok = await onHours(next);
+    hoursBusyNow.current = false;
+    setHoursBusy(null);
+    if (ok) closeHours();
   };
 
   const cancelHours = () => {
@@ -837,11 +874,10 @@ function PlaceRow({
               <span className="clocks-actions">
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (await onHours(hoursDraft)) closeHours();
-                  }}
+                  aria-disabled={hoursBusy !== null || undefined}
+                  onClick={() => void saveHours(hoursDraft, "save")}
                 >
-                  {t("clocks.page.save")}
+                  {t(hoursBusy === "save" ? "clocks.page.saving" : "clocks.page.save")}
                 </button>
                 <button type="button" className="quiet" onClick={cancelHours}>
                   {t("clocks.page.cancel")}
@@ -850,11 +886,10 @@ function PlaceRow({
                   <button
                     type="button"
                     className="quiet"
-                    onClick={async () => {
-                      if (await onHours(null)) closeHours();
-                    }}
+                    aria-disabled={hoursBusy !== null || undefined}
+                    onClick={() => void saveHours(null, "default")}
                   >
-                    {t("clocks.page.useDefault")}
+                    {t(hoursBusy === "default" ? "clocks.page.saving" : "clocks.page.useDefault")}
                   </button>
                 )}
               </span>
@@ -975,9 +1010,12 @@ function AddPlace({
         onKeyDown={onKeyDown}
       >
         {full ? (
-          <p className="clocks-hint" role="status">
-            {t("clocks.page.full", { max: CLOCKS_MAX })}
-          </p>
+          // "Changed on another device" below already says the list is full: one message.
+          failed === "full" ? null : (
+            <p className="clocks-hint" role="status">
+              {t("clocks.page.full", { max: CLOCKS_MAX })}
+            </p>
+          )
         ) : (
           <>
             <p className="clocks-hint">{t("clocks.page.searchHint")}</p>
