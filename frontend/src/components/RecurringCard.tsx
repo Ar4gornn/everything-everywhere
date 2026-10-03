@@ -22,6 +22,7 @@ import { dueEvent } from "../ics";
 import { AddToCalendar } from "./AddToCalendar";
 import { ListRow, useOpenRow } from "./ListRow";
 import { Card, Empty, ErrorBanner, TableWrap } from "./ui";
+import { NameSuggest } from "./NameSuggest";
 import { NotifyBell, usePushEnabled } from "./NotifyBell";
 import { useToast } from "./Toast";
 
@@ -397,22 +398,17 @@ export function RecurringCard({ onChanged }: { onChanged?: () => void }) {
         </label>
         <label style={{ flex: "1 1 160px" }}>
           {t("field.category")}
-          <input
-            list="recurring-category-names"
-            aria-label={t("recurring.category")}
+          <NameSuggest
+            ariaLabel={t("recurring.category")}
             placeholder={t("entries.categoryPlaceholder")}
             required
             value={categoryName}
-            onChange={(event) => setCategoryName(event.target.value)}
+            onChange={setCategoryName}
+            names={categories
+              .filter((category) => category.kind === kind)
+              .map((category) => category.name)}
           />
         </label>
-        <datalist id="recurring-category-names">
-          {categories
-            .filter((category) => category.kind === kind)
-            .map((category) => (
-              <option key={category.id} value={category.name} />
-            ))}
-        </datalist>
         <label style={{ flex: "0 0 150px" }}>
           {t("recurring.howOften")}
           <select

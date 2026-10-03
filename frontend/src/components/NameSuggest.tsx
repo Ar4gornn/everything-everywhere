@@ -38,9 +38,10 @@ type Props = {
   ariaLabel: string;
   placeholder?: string;
   required?: boolean;
+  maxLength?: number;
 };
 
-export function NameSuggest({ value, onChange, names, ariaLabel, placeholder, required }: Props) {
+export function NameSuggest({ value, onChange, names, ariaLabel, placeholder, required, maxLength }: Props) {
   const t = useT();
   const groupId = useId();
   const [focused, setFocused] = useState(false);
@@ -57,6 +58,7 @@ export function NameSuggest({ value, onChange, names, ariaLabel, placeholder, re
         aria-label={ariaLabel}
         placeholder={placeholder}
         required={required}
+        maxLength={maxLength}
         value={value}
         autoComplete="off"
         onChange={(event) => {

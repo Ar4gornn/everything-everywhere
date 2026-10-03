@@ -186,6 +186,29 @@ describe("InventoryPage", () => {
     });
   });
 
+  it("a space chip fills the field and is what the item is created into", async () => {
+    const fetchMock = mockApi();
+    const user = userEvent.setup();
+    render(<InventoryPage />);
+    await screen.findByRole("table", { name: "Fridge items" });
+
+    const form = screen.getByRole("form", { name: "Add an item" });
+    await user.click(within(form).getByLabelText("Name"));
+    await user.paste("Jump leads");
+    await user.type(within(form).getByLabelText("Space"), "Ga");
+    await user.click(within(form).getByRole("button", { name: "Garage" }));
+    expect(within(form).getByLabelText("Space")).toHaveValue("Garage");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(JSON.parse(String(posted?.[1]?.body))).toMatchObject({
+        name: "Jump leads",
+        space_name: "Garage",
+      });
+    });
+  });
+
   it("shows the server's explanation when a space delete is refused", async () => {
     mockApi();
     const user = userEvent.setup();

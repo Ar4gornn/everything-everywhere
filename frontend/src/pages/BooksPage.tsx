@@ -13,6 +13,7 @@ import {
 } from "../api/types";
 import { BookQuotes } from "../components/BookQuotes";
 import { Card, Empty, ErrorBanner } from "../components/ui";
+import { NameSuggest } from "../components/NameSuggest";
 import { useToast } from "../components/Toast";
 import { CheckInButton } from "../components/CheckInButton";
 import { HABITS_VIEWS, ViewSwitch } from "../components/ViewSwitch";
@@ -598,15 +599,16 @@ export function BooksPage() {
             maxLength: 200,
             required: true,
           })}
-          {field("series_name", "books.fieldSeries", {
-            maxLength: 200,
-            list: "book-series-names",
-          })}
-          <datalist id="book-series-names">
-            {seriesNames.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
+          <label>
+            {t("books.fieldSeries")}
+            <NameSuggest
+              ariaLabel={t("books.fieldSeries")}
+              maxLength={200}
+              value={draft.series_name}
+              onChange={(value) => setDraft((was) => ({ ...was, series_name: value }))}
+              names={seriesNames}
+            />
+          </label>
           {field("series_order", "books.fieldSeriesOrder", {
             type: "number",
             min: 1,

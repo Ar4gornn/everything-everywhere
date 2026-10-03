@@ -82,11 +82,30 @@ describe("NameSuggest", () => {
   });
 });
 
-describe("no native datalist on the two Entries entry forms", () => {
-  for (const file of ["pages/EntriesPage.tsx", "components/QuickAdd/QuickAddSheet.tsx"]) {
+describe("maxLength", () => {
+  it("is passed to the input", () => {
+    render(
+      <LanguageProvider>
+        <NameSuggest ariaLabel="Vendor" value="" onChange={() => {}} names={NAMES} maxLength={80} />
+      </LanguageProvider>,
+    );
+    expect(screen.getByLabelText("Vendor")).toHaveAttribute("maxlength", "80");
+  });
+});
+
+describe("no native datalist on any name field", () => {
+  for (const file of [
+    "pages/EntriesPage.tsx",
+    "components/QuickAdd/QuickAddSheet.tsx",
+    "components/RecurringCard.tsx",
+    "components/ShoppingList.tsx",
+    "pages/BooksPage.tsx",
+    "pages/gym/ExerciseAdder.tsx",
+    "pages/InventoryPage.tsx",
+  ]) {
     it(file, () => {
       const source = readFileSync(join(process.cwd(), "src", file), "utf8");
-      expect(source).not.toMatch(/<datalist|list=\{?"/);
+      expect(source).not.toMatch(/<datalist|\blist=/);
     });
   }
 });

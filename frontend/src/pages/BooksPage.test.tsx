@@ -327,6 +327,25 @@ describe("BooksPage", () => {
     expect(sent.finished_on).toBe("2024-08-20");
   });
 
+  it("a series chip fills the series box and is what gets sent", async () => {
+    const { calls } = mockApi();
+    const user = userEvent.setup();
+    render();
+    await screen.findByText("Guards! Guards!");
+
+    await user.click(screen.getByLabelText("Title"));
+    await user.paste("Mort");
+    await user.click(screen.getByLabelText("Author"));
+    await user.paste("Terry Pratchett");
+    await user.click(screen.getByLabelText("Series (optional)"));
+    await user.click(screen.getByRole("button", { name: "Discworld" }));
+    expect(screen.getByLabelText("Series (optional)")).toHaveValue("Discworld");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(bodies(calls, "POST")).toHaveLength(1));
+    expect(bodies(calls, "POST")[0].series_name).toBe("Discworld");
+  });
+
   it("names the failure in the reader's words when the server refuses", async () => {
     mockApi();
     const user = userEvent.setup();

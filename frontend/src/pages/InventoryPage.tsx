@@ -10,6 +10,7 @@ import { ListRow, useOpenRow } from "../components/ListRow";
 import { ShoppingList } from "../components/ShoppingList";
 import { NotifyBell, usePushEnabled } from "../components/NotifyBell";
 import { Card, Empty, ErrorBanner, TableWrap } from "../components/ui";
+import { NameSuggest } from "../components/NameSuggest";
 import { useToast } from "../components/Toast";
 import { isNonNegativeMoney, normalizeMoney } from "../money";
 import { useMoney } from "../useMoney";
@@ -581,20 +582,15 @@ export function InventoryPage() {
           </label>
           <label style={{ flex: "1 1 150px" }}>
             {t("stock.space")}
-            <input
-              list="space-names"
-              aria-label={t("stock.space")}
+            <NameSuggest
+              ariaLabel={t("stock.space")}
               placeholder={t("stock.spacePlaceholder")}
               required
               value={spaceName}
-              onChange={(event) => setSpaceName(event.target.value)}
+              onChange={setSpaceName}
+              names={spaces.map((space) => space.name)}
             />
           </label>
-          <datalist id="space-names">
-            {spaces.map((space) => (
-              <option key={space.id} value={space.name} />
-            ))}
-          </datalist>
           <label style={{ flex: "0 0 110px" }}>
             {t("stock.remindAt")}
             <input

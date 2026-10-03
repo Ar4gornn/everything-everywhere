@@ -206,6 +206,26 @@ describe("RecurringCard", () => {
     });
   });
 
+  it("a category chip fills the field and is what gets sent", async () => {
+    const fetchMock = mockApi();
+    const user = userEvent.setup();
+    render(<RecurringCard />);
+    await screen.findByRole("table", { name: "Recurring templates" });
+
+    const form = screen.getByRole("form", { name: "Add a recurring entry" });
+    await user.type(within(form).getByLabelText("Recurring amount"), "1200.00");
+    await user.type(within(form).getByLabelText("Recurring category"), "Re");
+    await user.click(within(form).getByRole("button", { name: "Rent" }));
+    expect(within(form).getByLabelText("Recurring category")).toHaveValue("Rent");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      expect(posts(fetchMock, "/api/recurring/templates")[0]?.body).toMatchObject({
+        category_name: "Rent",
+      });
+    });
+  });
+
   it("shows nothing to confirm when there are no proposals", async () => {
     mockApi({ pending: [] });
     render(<RecurringCard />);

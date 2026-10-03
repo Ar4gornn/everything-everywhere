@@ -1,6 +1,7 @@
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import type { Exercise, ExerciseKind } from "../../api/types";
+import { NameSuggest } from "../../components/NameSuggest";
 import { useT } from "../../i18n";
 
 export interface ExerciseChoice {
@@ -29,7 +30,6 @@ export function ExerciseAdder({
   submitLabel: string;
 }) {
   const t = useT();
-  const listId = useId();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ExerciseKind>("reps");
   const wanted = name.trim().toLowerCase();
@@ -50,19 +50,15 @@ export function ExerciseAdder({
     <form className="gym-adder" onSubmit={(event) => void submit(event)}>
       <label>
         {t("gym.exerciseName")}
-        <input
-          list={listId}
+        <NameSuggest
+          ariaLabel={t("gym.exerciseName")}
           value={name}
           maxLength={80}
           placeholder={t("gym.exercisePlaceholder")}
-          onChange={(event) => setName(event.target.value)}
+          onChange={setName}
+          names={exercises.map((exercise) => exercise.name)}
         />
       </label>
-      <datalist id={listId}>
-        {exercises.map((exercise) => (
-          <option key={exercise.id} value={exercise.name} />
-        ))}
-      </datalist>
       <label>
         {t("gym.kind")}
         <select

@@ -93,6 +93,17 @@ describe("Routine editor", () => {
     );
   });
 
+  it("an exercise chip fills the name, so it is added by id and its kind is locked", async () => {
+    renderGym("/gym/routines/r1");
+    await userEvent.type(await screen.findByLabelText("Exercise name"), "row");
+    await userEvent.click(screen.getByRole("button", { name: "Rowing" }));
+    expect(screen.getByLabelText("Exercise name")).toHaveValue("Rowing");
+    expect(screen.getByText("Uses your existing Rowing")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Counts in" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Add to routine" }));
+    await waitFor(() => expect(mocks.addRoutineLine).toHaveBeenCalledWith("r1", { exercise_id: "e3" }));
+  });
+
   it("renames the routine", async () => {
     renderGym("/gym/routines/r1");
     const save = await screen.findByRole("button", { name: "Save details" });

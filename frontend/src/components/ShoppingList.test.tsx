@@ -112,6 +112,22 @@ describe("ShoppingList", () => {
     });
   });
 
+  it("a category chip fills the field and is sent with the purchase", async () => {
+    const fetchMock = mockApi();
+    const user = userEvent.setup();
+    render(<ShoppingList />);
+    await screen.findByRole("table", { name: "Shopping list" });
+
+    await user.click(screen.getByLabelText("File spending under"));
+    await user.click(screen.getByRole("button", { name: "Groceries" }));
+    expect(screen.getByLabelText("File spending under")).toHaveValue("Groceries");
+    await user.click(screen.getByRole("button", { name: "Bought Milk" }));
+
+    await waitFor(() => {
+      expect(purchases(fetchMock)[0]).toMatchObject({ category_name: "Groceries" });
+    });
+  });
+
   it("restocks without an entry when the cost is left blank", async () => {
     const fetchMock = mockApi();
     const user = userEvent.setup();

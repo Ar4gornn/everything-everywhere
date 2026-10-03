@@ -11,6 +11,7 @@ import { errorMessage } from "../i18n/errors";
 import { useLoad } from "../useLoad";
 import { ListRow, useOpenRow } from "./ListRow";
 import { Card, ErrorBanner, TableWrap } from "./ui";
+import { NameSuggest } from "./NameSuggest";
 import { useToast } from "./Toast";
 
 const CATEGORY_KEY = "everything-everywhere.shopping.category";
@@ -192,19 +193,14 @@ export function ShoppingList({ onChanged }: { onChanged?: () => void }) {
       <div className="row" style={{ marginBottom: 8 }}>
         <label style={{ flex: "1 1 200px" }}>
           {t("shopping.fileUnder")}
-          <input
-            list="shopping-category-names"
-            aria-label={t("shopping.fileUnder")}
+          <NameSuggest
+            ariaLabel={t("shopping.fileUnder")}
             placeholder={t("shopping.fileUnderPlaceholder")}
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onChange={setCategory}
+            names={categories.map((entry) => entry.name)}
           />
         </label>
-        <datalist id="shopping-category-names">
-          {categories.map((entry) => (
-            <option key={entry.id} value={entry.name} />
-          ))}
-        </datalist>
       </div>
 
       {phone ? (
