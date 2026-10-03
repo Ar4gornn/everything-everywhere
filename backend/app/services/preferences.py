@@ -287,7 +287,12 @@ def _resolve_clocks(stored: object) -> list[dict]:
             continue
         seen.add(place_id)
         places.append(
-            {"id": place_id, "zone": zone, "label": label, "hours": _resolve_hours(item.get("hours"))}
+            {
+                "id": place_id,
+                "zone": zone,
+                "label": label,
+                "hours": _resolve_hours(item.get("hours")),
+            }
         )
         if len(places) == CLOCKS_MAX:
             break

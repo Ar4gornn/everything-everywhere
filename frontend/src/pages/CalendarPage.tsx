@@ -24,7 +24,9 @@ import { QuoteCard } from "../components/QuoteCard";
 import { Card, Empty, ErrorBanner } from "../components/ui";
 import { timeLabel } from "../schedule";
 import { DASHBOARD_VIEWS, ViewSwitch } from "../components/ViewSwitch";
+import { convertWallTime, homeZone, zoneCity } from "../clocks/time";
 import { useModules } from "../layout/modules";
+import { clocksOf, preferencesOf } from "../layout/preferences";
 import { fromCents, toCents } from "../money";
 import { formatEnergy, sumEnergy, trim } from "../nutrition";
 import { useMoney } from "../useMoney";
@@ -1177,6 +1179,24 @@ function DayDetail({
 }) {
   const money = useMoney();
   const on = (key: LayerKey) => active.includes(key);
+  const modules = useModules();
+  const user = useOptionalAuth()?.user;
+  const prefs = preferencesOf(user);
+  const alsoZone = modules.clocks ? (prefs.calendar_zone ?? null) : null;
+
+  /** Epic 48 (AD-64): `Paris 14:00`, plus tomorrow/yesterday, for a check-in's time. */
+  const alsoIn = (day: string, doneAt: string): string | null => {
+    if (!alsoZone) return null;
+    try {
+      const there = convertWallTime(day, timeLabel(doneAt) as string, homeZone(user), alsoZone);
+      const place = clocksOf(prefs).find((p) => p.zone === alsoZone)?.label ?? zoneCity(alsoZone);
+      const when =
+        there.dayShift === 1 ? ` ${t("clocks.tomorrow")}` : there.dayShift === -1 ? ` ${t("clocks.yesterday")}` : "";
+      return `${place} ${there.time}${when}`;
+    } catch {
+      return null;
+    }
+  };
 
   /** A meal's own energy, already derived on the server; blank when it carried none. */
   const kcalOf = (meal: Meal): string | null => {
@@ -1254,7 +1274,13 @@ function DayDetail({
           <Link to="/habits">{row.habit_name}</Link>
           {/* One row per occurrence since Epic 26, so three doses are three lines rather
               than one line with a multiplier — and each one can say what time it was. */}
-          {row.done_at ? <span className="hint"> {timeLabel(row.done_at)}</span> : null}
+          {row.done_at ? (
+            <span className="hint">
+              {" "}
+              {timeLabel(row.done_at)}
+              {alsoIn(row.done_on, row.done_at) ? ` · ${alsoIn(row.done_on, row.done_at)}` : ""}
+            </span>
+          ) : null}
           {row.note ? <span className="hint"> — {row.note}</span> : null}
         </li>,
       );

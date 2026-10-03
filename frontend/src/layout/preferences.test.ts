@@ -59,11 +59,11 @@ describe("the defaults", () => {
       { id: "recipes", slot: "top" },
     ];
     const cards = [
-      "stats", "streaks", "gym", "pending", "leftover", "reading", "quote", "restock",
+      "stats", "streaks", "clocks", "gym", "pending", "leftover", "reading", "quote", "restock",
       "budgets", "savings", "trends", "categories",
     ].map((id) => ({ id, on: true }));
     expect(DEFAULT_PREFERENCES).toEqual({
-      modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true, moon: true },
+      modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true, moon: true, clocks: true },
       notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false, streak: false, moon: false },
       // Epic 41: every tab streak is opt-in, and the list is pinned against the server's.
       streaks: {
@@ -73,6 +73,10 @@ describe("the defaults", () => {
       points_name: null,
       // Epic 47: null is "from the account's time zone", as the server resolves it.
       moon_hemisphere: null,
+      // Epic 48: no places, the default hours, no second zone on the calendar.
+      clocks: [],
+      clock_hours: { work: ["09:00", "18:00"], night: ["23:00", "07:00"] },
+      calendar_zone: null,
       phone: { tabs, cards },
       desktop: { tabs, cards },
     });

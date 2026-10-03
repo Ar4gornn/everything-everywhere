@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CalendarPage } from "./CalendarPage";
 import { AuthProvider } from "../auth/AuthContext";
+import { DEFAULT_PREFERENCES } from "../layout/preferences";
 import { monthOf } from "../months";
 
 /**
@@ -124,6 +125,8 @@ interface Options {
   windowed?: boolean;
   /** One rest day, and nothing else of gym's, on 2026-09-02 (Epic 43). */
   restDay?: boolean;
+  /** Epic 48: two timed check-ins on the 2nd, an account in Paris, and these preferences. */
+  clocks?: { calendar_zone: string | null; places?: unknown[]; moduleOff?: boolean };
 }
 
 function mockApi(options: Options = {}) {
@@ -132,7 +135,18 @@ function mockApi(options: Options = {}) {
   const fetchMock = vi.fn(async (url: string) => {
     seen.push(url);
     if (url.includes("/api/auth/me")) {
-      return json({ ...me, budget_start_day: options.startDay ?? 26 });
+      const extra = options.clocks
+        ? {
+            timezone: "Europe/Paris",
+            preferences: {
+              ...DEFAULT_PREFERENCES,
+              modules: { ...DEFAULT_PREFERENCES.modules, clocks: !options.clocks.moduleOff },
+              clocks: options.clocks.places ?? [],
+              calendar_zone: options.clocks.calendar_zone,
+            },
+          }
+        : {};
+      return json({ ...me, budget_start_day: options.startDay ?? 26, ...extra });
     }
     if (url.includes("/api/inventory/changes")) {
       if (options.failStock) return json({ detail: "boom" }, 500);
@@ -200,6 +214,16 @@ function mockApi(options: Options = {}) {
       });
     }
     if (url.includes("/api/habits/checkins")) {
+      if (options.clocks) {
+        const row = { habit_id: "hb1", habit_name: "Run", done_on: "2026-09-02", note: null };
+        return json({
+          items: [
+            { ...row, id: "h1", done_at: "13:00:00" },
+            { ...row, id: "h2", done_at: "23:30:00" },
+            { ...row, id: "h3", done_at: null },
+          ],
+        });
+      }
       return json({
         items: [
           {
@@ -510,6 +534,54 @@ describe("CalendarPage", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Stock" }));
     expect(day.querySelectorAll(".cal-line[data-layer]")).toHaveLength(2);
     expect(within(day).queryByText(/more$/)).toBeNull();
+  });
+
+  // --------------------------------------------------------------- Epic 48
+
+  async function openSecond() {
+
+    await setMonth("2026-09");
+    await userEvent.click(await screen.findByRole("gridcell", { name: /^2026-09-02/ }));
+  }
+
+  it("shows a check-in's time in the chosen zone too, with the day it lands on", async () => {
+    mockApi({
+      startDay: 1,
+      clocks: {
+        calendar_zone: "Asia/Tokyo",
+        places: [{ id: "p1", zone: "Asia/Tokyo", label: "Tokyo office", hours: null }],
+      },
+    });
+    render(<CalendarPage />);
+    await openSecond();
+
+    // Paris is UTC+2 in September, Tokyo UTC+9: seven hours on, and 23:30 crosses midnight.
+    expect(await screen.findByText(/13:00 · Tokyo office 20:00$/)).toBeInTheDocument();
+    expect(screen.getByText(/23:30 · Tokyo office 06:30 tomorrow$/)).toBeInTheDocument();
+  });
+
+  it("names the zone by its city when it is no longer one of the places", async () => {
+    mockApi({ startDay: 1, clocks: { calendar_zone: "America/New_York" } });
+    render(<CalendarPage />);
+    await openSecond();
+    // New York is UTC-4: 13:00 is 07:00, and 23:30 is 17:30, both the same day.
+    expect(await screen.findByText(/13:00 · New York 07:00$/)).toBeInTheDocument();
+    expect(screen.getByText(/23:30 · New York 17:30$/)).toBeInTheDocument();
+  });
+
+  it("shows one time only with no zone chosen, or with the module off", async () => {
+    mockApi({ startDay: 1, clocks: { calendar_zone: null } });
+    const first = render(<CalendarPage />);
+    await openSecond();
+    expect(await screen.findByText("13:00")).toBeInTheDocument();
+    expect(screen.queryByText(/13:00 ·/)).not.toBeInTheDocument();
+    first.unmount();
+
+    mockApi({ startDay: 1, clocks: { calendar_zone: "Asia/Tokyo", moduleOff: true } });
+    render(<CalendarPage />);
+    await openSecond();
+    expect(await screen.findByText("13:00")).toBeInTheDocument();
+    expect(screen.queryByText(/Tokyo/)).not.toBeInTheDocument();
   });
 
   it("a day outside the period moves to the period it belongs to", async () => {

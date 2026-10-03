@@ -1,5 +1,49 @@
 import type { Entry } from "../catalogue";
 
-/** Epic 48 (AD-64): the `/clocks` page and the dashboard card. Builder P adds `clocks.page.*`
- *  and `clocks.card.*` keys here. */
-export const clocksPage = {} satisfies Record<string, Entry>;
+/** Epic 48 (AD-64): the `/clocks` page and the dashboard card. Shared words (You, shading,
+ *  tomorrow/yesterday, Same time) are in `clocks.ts`. */
+export const clocksPage = {
+  "clocks.page.empty": {
+    en: "No places yet. Add a time zone below to see its time next to yours.",
+    fr: "Aucun lieu pour l’instant. Ajoutez un fuseau horaire ci-dessous pour voir son heure à côté de la vôtre.",
+  },
+  "clocks.page.list": { en: "Places", fr: "Lieux" },
+  "clocks.page.sliderTitle": { en: "Look at another time", fr: "Regarder une autre heure" },
+  "clocks.page.slider": { en: "Shift in 15-minute steps", fr: "Décalage par pas de 15 minutes" },
+  "clocks.page.yourTime": { en: "Your time", fr: "Votre heure" },
+  "clocks.page.now": { en: "Now", fr: "Maintenant" },
+  "clocks.page.backToNow": { en: "Back to now", fr: "Revenir à maintenant" },
+  "clocks.page.addTitle": { en: "Add a place", fr: "Ajouter un lieu" },
+  "clocks.page.search": { en: "Search time zones", fr: "Chercher un fuseau horaire" },
+  "clocks.page.searchHint": {
+    en: "Type a city or a region, such as Tokyo or America/Chicago.",
+    fr: "Tapez une ville ou une région, par exemple Tokyo ou America/Chicago.",
+  },
+  "clocks.page.noMatch": { en: "No time zone matches.", fr: "Aucun fuseau horaire ne correspond." },
+  "clocks.page.results": { en: "Matching zones", fr: "Fuseaux correspondants" },
+  "clocks.page.chosen": { en: "Chosen zone: {zone}", fr: "Fuseau choisi : {zone}" },
+  "clocks.page.labelField": { en: "Name", fr: "Nom" },
+  "clocks.page.add": { en: "Add", fr: "Ajouter" },
+  "clocks.page.cancel": { en: "Cancel", fr: "Annuler" },
+  "clocks.page.full": {
+    en: "You have {max} places, the most there can be. Remove one to add another.",
+    fr: "Vous avez {max} lieux, le maximum. Retirez-en un pour en ajouter un autre.",
+  },
+  "clocks.page.rename": { en: "Rename", fr: "Renommer" },
+  "clocks.page.renameOf": { en: "Rename {label}", fr: "Renommer {label}" },
+  "clocks.page.nameOf": { en: "New name for {label}", fr: "Nouveau nom pour {label}" },
+  "clocks.page.save": { en: "Save", fr: "Enregistrer" },
+  "clocks.page.up": { en: "Move {label} up", fr: "Monter {label}" },
+  "clocks.page.down": { en: "Move {label} down", fr: "Descendre {label}" },
+  "clocks.page.remove": { en: "Remove", fr: "Retirer" },
+  "clocks.page.removeOf": { en: "Remove {label}", fr: "Retirer {label}" },
+  "clocks.page.ownHours": { en: "Own hours", fr: "Horaires propres" },
+  "clocks.page.ownHoursOf": { en: "Own hours for {label}", fr: "Horaires propres pour {label}" },
+  "clocks.page.useDefault": { en: "Use default", fr: "Utiliser ceux par défaut" },
+  "clocks.page.workStart": { en: "Work starts", fr: "Début du travail" },
+  "clocks.page.workEnd": { en: "Work ends", fr: "Fin du travail" },
+  "clocks.page.nightStart": { en: "Night starts", fr: "Début de la nuit" },
+  "clocks.page.nightEnd": { en: "Night ends", fr: "Fin de la nuit" },
+  "clocks.card.open": { en: "Open", fr: "Ouvrir" },
+  "clocks.card.list": { en: "Time in other places", fr: "L’heure ailleurs" },
+} satisfies Record<string, Entry>;

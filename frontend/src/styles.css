@@ -5966,3 +5966,175 @@ dialog.sheet::backdrop {
 .moon-page .moon-form input {
   min-height: 44px;
 }
+
+/* ===== Epic 48 (AD-64): Clocks page and dashboard card. Every class is `.clocks-` ===== */
+.clocks-page .clocks-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.clocks-list,
+.clocks-lines,
+.clocks-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.clocks-row,
+.clocks-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.clocks-row:first-child,
+.clocks-line:first-child {
+  border-top: 0;
+}
+
+.clocks-row .clocks-name,
+.clocks-line .clocks-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.clocks-row .clocks-zone,
+.clocks-line .clocks-zone {
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
+.clocks-row .clocks-time,
+.clocks-line .clocks-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.clocks-row .clocks-meta,
+.clocks-line .clocks-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  font-size: var(--fs-small);
+}
+
+.clocks-row .clocks-shade,
+.clocks-line .clocks-shade {
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+.clocks-row .clocks-shade[data-shade="night"],
+.clocks-line .clocks-shade[data-shade="night"] {
+  border-style: dashed;
+}
+
+.clocks-row .clocks-actions,
+.clocks-page .clocks-add .clocks-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1 1 100%;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.clocks-page .clocks-actions button,
+.clocks-page .clocks-slider button {
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.clocks-page .clocks-rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.clocks-page .clocks-rename input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.clocks-page .clocks-hours {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1 1 100%;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.clocks-page .clocks-hours label {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.clocks-page .clocks-hours select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.clocks-page .clocks-slider {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.clocks-page .clocks-slider input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+}
+
+.clocks-page .clocks-readout {
+  margin: 0;
+}
+
+.clocks-page .clocks-field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.clocks-page .clocks-field input {
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+}
+
+.clocks-page .clocks-hint {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+}
+
+.clocks-page .clocks-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.clocks-page .clocks-results button {
+  min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.clocks-page .clocks-add {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

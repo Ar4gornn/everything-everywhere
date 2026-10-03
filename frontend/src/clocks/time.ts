@@ -6,9 +6,6 @@
  * Wall times are `"HH:MM"` (24h, both languages, as `schedule.ts` `timeLabel` already
  * shows them). Minutes-of-day are integers 0..1439. Offsets are minutes EAST of UTC
  * (Paris in summer = +120), the sign `Date#getTimezoneOffset` does NOT use.
- *
- * SKELETON: signatures are fixed; builder T implements and tests them. Callers (builders P
- * and S) code against these signatures now.
  */
 import type { ClockHours, ClockPlace, User, WallTime } from "../api/types";
 
@@ -24,57 +21,133 @@ export interface ClockReading {
   shade: Shade;
 }
 
-function notBuilt(): never {
-  throw new Error("clocks/time: not built yet");
+interface Parts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(zone: string): Intl.DateTimeFormat {
+  let f = formatters.get(zone);
+  if (!f) {
+    // Throws RangeError for an unknown zone, which is the documented contract.
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      calendar: "gregory",
+      numberingSystem: "latn",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    });
+    formatters.set(zone, f);
+  }
+  return f;
+}
+
+function partsOf(zone: string, at: Date): Parts {
+  const out: Record<string, number> = {};
+  for (const p of formatterFor(zone).formatToParts(at)) {
+    if (p.type !== "literal") out[p.type] = Number(p.value);
+  }
+  return {
+    year: out.year ?? 0,
+    month: out.month ?? 1,
+    day: out.day ?? 1,
+    // Some engines answer "24" for midnight even with h23.
+    hour: (out.hour ?? 0) === 24 ? 0 : (out.hour ?? 0),
+    minute: out.minute ?? 0,
+    second: out.second ?? 0,
+  };
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
 }
 
 /** Minutes east of UTC for `zone` at instant `at`. Throws RangeError for an unknown zone. */
-export function zoneOffset(_zone: string, _at: Date): number {
-  return notBuilt();
+export function zoneOffset(zone: string, at: Date): number {
+  const p = partsOf(zone, at);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  const truncated = Math.floor(at.getTime() / 1000) * 1000;
+  return Math.round((asUtc - truncated) / 60000);
 }
 
 /** The wall clock in `zone` at `at`, as minutes since local midnight (0..1439). */
-export function wallMinutes(_zone: string, _at: Date): number {
-  return notBuilt();
+export function wallMinutes(zone: string, at: Date): number {
+  const p = partsOf(zone, at);
+  return p.hour * 60 + p.minute;
 }
 
 /** The calendar date in `zone` at `at`, `"YYYY-MM-DD"`. */
-export function wallDate(_zone: string, _at: Date): string {
-  return notBuilt();
+export function wallDate(zone: string, at: Date): string {
+  const p = partsOf(zone, at);
+  return `${String(p.year).padStart(4, "0")}-${pad2(p.month)}-${pad2(p.day)}`;
 }
 
 /** `"HH:MM"` ↔ minutes since midnight. `toMinutes` throws on anything but `HH:MM`. */
-export function toMinutes(_time: WallTime): number {
-  return notBuilt();
+export function toMinutes(time: WallTime): number {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
+  if (!m) throw new Error(`not a HH:MM time: ${String(time)}`);
+  return Number(m[1]) * 60 + Number(m[2]);
 }
-export function fromMinutes(_minutes: number): WallTime {
-  return notBuilt();
+export function fromMinutes(minutes: number): WallTime {
+  const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 }
 
 /** Is `minutes` inside [start, end)? end <= start wraps past midnight; start === end is
  *  empty. */
-export function inRange(_range: [WallTime, WallTime], _minutes: number): boolean {
-  return notBuilt();
+export function inRange(range: [WallTime, WallTime], minutes: number): boolean {
+  const start = toMinutes(range[0]);
+  const end = toMinutes(range[1]);
+  if (start === end) return false;
+  if (start < end) return minutes >= start && minutes < end;
+  return minutes >= start || minutes < end;
 }
 
 /** Night wins over work where they overlap; anything else is free. */
-export function shadeAt(_hours: ClockHours, _minutes: number): Shade {
-  return notBuilt();
+export function shadeAt(hours: ClockHours, minutes: number): Shade {
+  if (inRange(hours.night, minutes)) return "night";
+  if (inRange(hours.work, minutes)) return "work";
+  return "free";
 }
 
 /** A place's own hours, or the account's default. */
-export function hoursFor(_place: Pick<ClockPlace, "hours">, _defaults: ClockHours): ClockHours {
-  return notBuilt();
+export function hoursFor(place: Pick<ClockPlace, "hours">, defaults: ClockHours): ClockHours {
+  return place.hours ?? defaults;
+}
+
+function dateToUtc(date: string): number {
+  const [y = 0, m = 1, d = 1] = date.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((dateToUtc(b) - dateToUtc(a)) / 86400000);
+}
+
+function clampShift(n: number): -1 | 0 | 1 {
+  return n < 0 ? -1 : n > 0 ? 1 : 0;
 }
 
 /** Everything a clock face shows, for `zone` at `at`, relative to `home`. */
-export function readClock(
-  _zone: string,
-  _at: Date,
-  _home: string,
-  _hours: ClockHours,
-): ClockReading {
-  return notBuilt();
+export function readClock(zone: string, at: Date, home: string, hours: ClockHours): ClockReading {
+  const minutes = wallMinutes(zone, at);
+  return {
+    time: fromMinutes(minutes),
+    dayShift: clampShift(daysBetween(wallDate(home, at), wallDate(zone, at))),
+    diff: zoneOffset(zone, at) - zoneOffset(home, at),
+    shade: shadeAt(hours, minutes),
+  };
 }
 
 /**
@@ -82,24 +155,95 @@ export function readClock(
  * `"+5h45"`, and `null` for 0 (the caller says "Same time"). Language-neutral on purpose:
  * "h" reads the same in English and French.
  */
-export function formatDiff(_minutes: number): string | null {
-  return notBuilt();
+export function formatDiff(minutes: number): string | null {
+  const total = Math.round(minutes);
+  if (total === 0) return null;
+  const abs = Math.abs(total);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return `${total < 0 ? "−" : "+"}${h}h${m === 0 ? "" : pad2(m)}`;
 }
 
 /** The account's zone (`user.timezone`, AD-52), else this device's, else `"UTC"`. */
-export function homeZone(_user: Pick<User, "timezone"> | null | undefined): string {
-  return notBuilt();
+export function homeZone(user: Pick<User, "timezone"> | null | undefined): string {
+  if (user?.timezone) return user.timezone;
+  try {
+    const z = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (z) return z;
+  } catch {
+    // fall through
+  }
+  return "UTC";
 }
 
 /** `"America/Argentina/Buenos_Aires"` → `"Buenos Aires"`; `"UTC"` → `"UTC"`. */
-export function zoneCity(_zone: string): string {
-  return notBuilt();
+export function zoneCity(zone: string): string {
+  const last = zone.split("/").pop() ?? zone;
+  return last.replace(/_/g, " ");
 }
+
+const FALLBACK_ZONES = [
+  "UTC",
+  "Africa/Cairo",
+  "Africa/Johannesburg",
+  "Africa/Lagos",
+  "Africa/Nairobi",
+  "America/Anchorage",
+  "America/Argentina/Buenos_Aires",
+  "America/Bogota",
+  "America/Chicago",
+  "America/Denver",
+  "America/Halifax",
+  "America/Los_Angeles",
+  "America/Mexico_City",
+  "America/New_York",
+  "America/Sao_Paulo",
+  "America/Toronto",
+  "Asia/Bangkok",
+  "Asia/Dubai",
+  "Asia/Hong_Kong",
+  "Asia/Jakarta",
+  "Asia/Karachi",
+  "Asia/Kathmandu",
+  "Asia/Kolkata",
+  "Asia/Seoul",
+  "Asia/Shanghai",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Europe/Berlin",
+  "Europe/Istanbul",
+  "Europe/London",
+  "Europe/Madrid",
+  "Europe/Moscow",
+  "Europe/Paris",
+  "Pacific/Auckland",
+  "Pacific/Honolulu",
+];
 
 /** Every zone this browser knows (`Intl.supportedValuesOf("timeZone")`), sorted; a short
  *  built-in list when the browser lacks `supportedValuesOf`. Always includes `"UTC"`. */
 export function allZones(): string[] {
-  return notBuilt();
+  let zones: string[] = [];
+  const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
+  try {
+    if (typeof intl.supportedValuesOf === "function") zones = intl.supportedValuesOf("timeZone");
+  } catch {
+    zones = [];
+  }
+  if (zones.length === 0) zones = FALLBACK_ZONES;
+  const set = new Set(zones);
+  set.add("UTC");
+  return [...set].sort();
+}
+
+function normalise(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[_/\s]+/g, " ")
+    .trim();
 }
 
 /**
@@ -107,8 +251,19 @@ export function allZones(): string[] {
  * underscores equal, matched against the whole id and against the city. City-prefix
  * matches first, then other matches, each alphabetical; at most `limit`.
  */
-export function searchZones(_query: string, _zones: readonly string[], _limit = 20): string[] {
-  return notBuilt();
+export function searchZones(query: string, zones: readonly string[], limit = 20): string[] {
+  const q = normalise(query);
+  if (!q || limit <= 0) return [];
+  const prefix: string[] = [];
+  const other: string[] = [];
+  for (const zone of zones) {
+    const id = normalise(zone);
+    const city = normalise(zoneCity(zone));
+    if (city.startsWith(q)) prefix.push(zone);
+    else if (id.includes(q)) other.push(zone);
+  }
+  const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...prefix.sort(byId), ...other.sort(byId)].slice(0, limit);
 }
 
 /**
@@ -117,15 +272,37 @@ export function searchZones(_query: string, _zones: readonly string[], _limit = 
  * offset in force just before the gap; an ambiguous one (fall-back) takes the first.
  */
 export function convertWallTime(
-  _date: string,
-  _time: WallTime,
-  _from: string,
-  _to: string,
+  date: string,
+  time: WallTime,
+  from: string,
+  to: string,
 ): { time: WallTime; dayShift: -1 | 0 | 1 } {
-  return notBuilt();
+  const minutes = toMinutes(time);
+  const naive = dateToUtc(date) + minutes * 60000;
+  const before = zoneOffset(from, new Date(naive - 86400000));
+  const after = zoneOffset(from, new Date(naive + 86400000));
+  let instant: number | null = null;
+  for (const offset of new Set([before, after])) {
+    const candidate = naive - offset * 60000;
+    const ok = wallMinutes(from, new Date(candidate)) === minutes &&
+      wallDate(from, new Date(candidate)) === date;
+    // The earliest valid instant is the first occurrence of an ambiguous time.
+    if (ok && (instant === null || candidate < instant)) instant = candidate;
+  }
+  // Gap: the wall time never happens, so read it with the offset before the gap.
+  if (instant === null) instant = naive - before * 60000;
+  const at = new Date(instant);
+  return {
+    time: fromMinutes(wallMinutes(to, at)),
+    dayShift: clampShift(daysBetween(date, wallDate(to, at))),
+  };
 }
 
 /** A fresh place id matching the server's `^[A-Za-z0-9_-]{1,40}$`. */
 export function newPlaceId(): string {
-  return notBuilt();
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c && typeof c.randomUUID === "function") return `p${c.randomUUID().replace(/-/g, "")}`.slice(0, 33);
+  let s = "";
+  while (s.length < 16) s += Math.random().toString(36).slice(2);
+  return `p${s.slice(0, 16)}`;
 }

@@ -234,7 +234,7 @@ describe("the module table is complete", () => {
     eager: true,
   });
   const client = sources["../api/client.ts"] ?? "";
-  const SEGMENT: Record<string, Exclude<ModuleId, "moon">> = {
+  const SEGMENT: Record<string, Exclude<ModuleId, "moon" | "clocks">> = {
     habits: "habits",
     books: "books",
     mood: "mood",
@@ -247,8 +247,8 @@ describe("the module table is complete", () => {
   };
   // The moon (Epic 47) has no endpoints at all: it is computed on the device (AD-63), so it
   // has no API callers to list and is left out of this table.
-  const API_MODULES = MODULES.filter((id): id is Exclude<ModuleId, "moon"> => id !== "moon");
-  const CALLERS: Record<Exclude<ModuleId, "moon">, string[]> = {
+  const API_MODULES = MODULES.filter((id): id is Exclude<ModuleId, "moon" | "clocks"> => id !== "moon" && id !== "clocks");
+  const CALLERS: Record<Exclude<ModuleId, "moon" | "clocks">, string[]> = {
     // pages/MoonPage.tsx (Epic 47) reads habits, mood and gym days for its overlay, each only
     // for a module that is on.
     habits: ["pages/CalendarPage.tsx", "pages/HabitsPage.tsx", "pages/MoonPage.tsx"],
@@ -288,7 +288,7 @@ describe("the module table is complete", () => {
     notes: ["notes/drafts.ts", "pages/NotePage.tsx", "pages/NotesPage.tsx"],
   };
 
-  const functions: Record<Exclude<ModuleId, "moon">, string[]> = {
+  const functions: Record<Exclude<ModuleId, "moon" | "clocks">, string[]> = {
     habits: [], books: [], mood: [], stock: [], gym: [], recipes: [], notes: [],
   };
   for (const match of client.matchAll(/\n {2}(\w+): (?:async )?\([^)]*\)[^=]*=>[\s\S]*?["`]\/api\/([\w-]+)/g)) {
