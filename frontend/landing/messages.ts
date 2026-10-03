@@ -178,20 +178,20 @@ export const landing = {
   "footer.source": { en: "Source on GitHub", fr: "Code source sur GitHub" },
 
   "alt.dashboard": {
-    en: "Screenshot of the Dashboard tab on a phone.",
-    fr: "Capture d’écran de l’onglet Tableau sur un téléphone.",
+    en: "Screenshot of the Dashboard on a phone: each category’s spending against its budget, then savings progress.",
+    fr: "Capture d’écran du Tableau sur un téléphone : les dépenses de chaque catégorie face au budget, puis l’avancement de l’épargne.",
   },
   "alt.plan": {
-    en: "Screenshot of the Plan tab on a phone, with each category’s spending against its plan.",
-    fr: "Capture d’écran de l’onglet Budget sur un téléphone, avec les dépenses de chaque catégorie face au budget.",
+    en: "Screenshot of the Plan tab on a phone, with savings pots and a proposed amount to put aside.",
+    fr: "Capture d’écran de l’onglet Budget sur un téléphone, avec les pots d’épargne et un montant proposé à mettre de côté.",
   },
   "alt.stock": {
-    en: "Screenshot of the Stock tab on a phone, with items and their restock levels.",
-    fr: "Capture d’écran de l’onglet Stock sur un téléphone, avec les articles et leurs seuils.",
+    en: "Screenshot of the Stock tab on a phone, with a shopping list built from items running low.",
+    fr: "Capture d’écran de l’onglet Stock sur un téléphone, avec une liste de courses tirée des articles presque épuisés.",
   },
   "alt.habits": {
-    en: "Screenshot of the Habits tab on a phone, with check-ins and a heatmap.",
-    fr: "Capture d’écran de l’onglet Habitudes sur un téléphone, avec le suivi et la carte de chaleur.",
+    en: "Screenshot of the Habits tab on a phone, with today’s habits, their streaks and check-ins.",
+    fr: "Capture d’écran de l’onglet Habitudes sur un téléphone, avec les habitudes du jour, leurs séries et le suivi.",
   },
 
   "privacy.title": { en: "Privacy", fr: "Confidentialité" },
