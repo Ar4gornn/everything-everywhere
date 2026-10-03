@@ -54,7 +54,7 @@ function figure(lang: Lang, which: Shot, alt: LandingKey, eager = false): string
 }
 
 function head(lang: Lang, page: Page): string {
-  const title = page === "home" ? tr(lang, "meta.title") : `${tr(lang, "privacy.title")} - ${tr(lang, "meta.title")}`;
+  const title = page === "home" ? tr(lang, "meta.homeTitle") : `${tr(lang, "privacy.title")} - ${tr(lang, "meta.title")}`;
   const desc = tr(lang, "meta.description");
   const url = ORIGIN + pagePath(lang, page);
   const alternates = [
@@ -81,6 +81,9 @@ function head(lang: Lang, page: Page): string {
     '<meta name="twitter:card" content="summary_large_image">',
     '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
     '<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">',
+    // Preloaded so the body face is not discovered only after the stylesheet is parsed; the
+    // same file landing.css imports, so Vite hashes both references to one asset.
+    '<link rel="preload" href="/node_modules/@fontsource/lato/files/lato-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>',
     '<link rel="stylesheet" href="/landing/landing.css">',
     '<script type="module" src="/landing/landing.ts"></script>',
   ].join("\n    ");

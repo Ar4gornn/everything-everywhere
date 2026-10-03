@@ -8,6 +8,10 @@ import type { Entry } from "../src/i18n/catalogue.ts";
 // shared `<name>` and the unused-key test accounts for that.
 export const landing = {
   "meta.title": { en: "Everything Everywhere", fr: "Everything Everywhere" },
+  "meta.homeTitle": {
+    en: "Everything Everywhere: money, home and habits in one app",
+    fr: "Everything Everywhere : argent, maison et habitudes dans une seule application",
+  },
   "meta.description": {
     en: "Track money, stock, recipes, habits, workouts and notes in one invite-only app you can install on your phone. Open source.",
     fr: "Suivez votre argent, votre stock, vos recettes, vos habitudes, votre sport et vos notes dans une seule application sur invitation, à installer sur votre téléphone. Code source ouvert.",
@@ -26,8 +30,8 @@ export const landing = {
   },
   "hero.register": { en: "Have an invite? Create an account", fr: "Une invitation ? Créez un compte" },
   "hero.note": {
-    en: "Everything Everywhere is invite-only and free to use.",
-    fr: "Everything Everywhere fonctionne sur invitation et son utilisation est gratuite.",
+    en: "Everything Everywhere is invite-only: you need an invitation to create an account.",
+    fr: "Everything Everywhere fonctionne sur invitation : il faut être invité pour créer un compte.",
   },
 
   "money.h": { en: "Money", fr: "Argent" },
@@ -222,8 +226,8 @@ export const landing = {
   },
   "privacy.logs.t": { en: "Server logs", fr: "Journaux du serveur" },
   "privacy.logs.d": {
-    en: "To keep the service running and fix problems, the server keeps technical logs of requests: the time, the address requested and the result. They are capped in size and overwritten as they fill up. They are never sold or shared.",
-    fr: "Pour faire fonctionner le service et corriger les problèmes, le serveur conserve des journaux techniques des requêtes : l’heure, l’adresse demandée et le résultat. Leur taille est plafonnée et ils sont écrasés au fur et à mesure. Ils ne sont jamais vendus ni partagés.",
+    en: "To keep the service running and fix problems, the server keeps technical logs of requests, which can include the time, the network address the request came from, the page requested and the result. They stay on the server, are capped in size and are overwritten as they fill up.",
+    fr: "Pour faire fonctionner le service et corriger les problèmes, le serveur conserve des journaux techniques des requêtes, qui peuvent contenir l’heure, l’adresse réseau d’origine, la page demandée et le résultat. Ils restent sur le serveur, leur taille est plafonnée et ils sont écrasés au fur et à mesure.",
   },
   "privacy.device.t": { en: "On your device", fr: "Sur votre appareil" },
   "privacy.device.d": {

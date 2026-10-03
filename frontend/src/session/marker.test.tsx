@@ -106,6 +106,15 @@ function stubApi(sessionEnded = false) {
 }
 
 describe("marker cookie and the session", () => {
+  it("is not set when storage refuses the refresh token", () => {
+    // Blocked storage: no token persists, so the server must keep showing the landing.
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    storeTokens(TOKEN);
+    expect(hasMarker()).toBe(false);
+  });
+
   it("is set on sign-in and cleared on sign-out", async () => {
     stubApi();
     const user = userEvent.setup();

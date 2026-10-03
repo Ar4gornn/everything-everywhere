@@ -163,13 +163,16 @@ export function readRefreshToken(): string | null {
 export function writeRefreshToken(token: string | null): void {
   try {
     if (token === null) window.localStorage.removeItem(REFRESH_KEY);
-    else window.localStorage.setItem(REFRESH_KEY, token);
+    else {
+      window.localStorage.setItem(REFRESH_KEY, token);
+      // AD-66: mirror "a refresh token exists" into the routing cookie, only once it really
+      // does (blocked storage throws above). The boot-time half lives in the auth provider,
+      // which migrates people already signed in.
+      setMarker();
+    }
   } catch {
     /* see readToken */
   }
-  // AD-66: mirror "a refresh token exists" into the routing cookie. The boot-time half
-  // lives in the auth provider, which migrates people already signed in.
-  if (token !== null) setMarker();
 }
 
 export function storeTokens(token: Token): void {
