@@ -19,7 +19,7 @@ import {
   storeTokens,
 } from "../api/client";
 import type { Currency, Language, PreferencesPatch, User } from "../api/types";
-import { PreferenceSaver, preferencesOf } from "../layout/preferences";
+import { PreferenceSaver, preferencesOf, type Versioned } from "../layout/preferences";
 import { clearEntriesStore } from "../entries/outbox";
 import { clearGymStore } from "../gym/store";
 import { clearPlace } from "../moon/location";
@@ -56,6 +56,14 @@ function writeSnapshot(user: User | null): void {
   }
 }
 
+/** A tab back in view re-reads the account if it has not heard from the server this long. */
+export const REREAD_MS = 30_000;
+
+/** A user's preferences with the version a write over them must name. */
+function versioned(user: User): Versioned {
+  return { prefs: preferencesOf(user), version: user.preferences_version ?? null };
+}
+
 interface AuthState {
   user: User | null;
   loading: boolean;
@@ -74,7 +82,7 @@ interface AuthState {
   ) => Promise<void>;
   signOut: () => void;
   /** Re-read the profile after something server-side changes it. */
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User>;
   /**
    * Epic 33: change the account's layout preferences. Shown at once, saved one request at
    * a time, reverted if the save fails — and the promise rejects, so the control can say so.
@@ -100,13 +108,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // never overwritten from a device that happens to be travelling.
   const zoneFilled = useRef<Set<string>>(new Set());
 
-  /** Every user that comes from the server goes through here, so the saver hears it too. */
-  const adopt = useCallback((found: User, fromSnapshot = false) => {
-    setUser(found);
+  // When the server last told this tab who it is, so a tab coming back into view knows
+  // whether its copy may be stale (see the visibility effect below).
+  const lastHeard = useRef(0);
+
+  /**
+   * Every user that comes from the server goes through here, so the saver hears it too.
+   * `stamp` is the saver's, taken when the read started: a read older than a preferences
+   * write is not allowed to show that write undone.
+   */
+  const adopt = useCallback((found: User, fromSnapshot = false, stamp?: number) => {
     setOffline(fromSnapshot);
     userId.current = found.id;
     // The snapshot is only ever what the server last said, never itself.
-    if (!fromSnapshot) writeSnapshot(found);
+    if (!fromSnapshot) {
+      writeSnapshot(found);
+      lastHeard.current = Date.now();
+    }
     const zone = deviceZone();
     if (!fromSnapshot && found.timezone === null && zone && !zoneFilled.current.has(found.id)) {
       zoneFilled.current.add(found.id);
@@ -123,23 +141,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           () => undefined,
         );
     }
-    const prefs = preferencesOf(found);
+    const { prefs, version } = versioned(found);
     if (saver.current?.owner === found.id) {
-      saver.current.saver.confirm(prefs);
-      return;
+      saver.current.saver.confirm(prefs, version, stamp);
+    } else {
+      const owner = found.id;
+      saver.current = {
+        owner,
+        saver: new PreferenceSaver(
+          prefs,
+          async (patch, current) => versioned(await api.setPreferences(patch, current)),
+          (shown) =>
+            setUser((user) =>
+              user && user.id === owner ? { ...user, preferences: shown } : user,
+            ),
+          { version, reload: async () => versioned(await api.me()) },
+        ),
+      };
     }
-    const owner = found.id;
-    saver.current = {
-      owner,
-      saver: new PreferenceSaver(
-        prefs,
-        async (patch) => preferencesOf(await api.setPreferences(patch)),
-        (shown) =>
-          setUser((current) =>
-            current && current.id === owner ? { ...current, preferences: shown } : current,
-          ),
-      ),
-    };
+    // The rest of the profile is the server's; the preferences are what the saver shows,
+    // which keeps any change still queued or in flight on screen.
+    setUser({ ...found, preferences: saver.current.saver.shown });
   }, []);
 
   const signOut = useCallback(() => {
@@ -243,8 +265,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const refreshUser = useCallback(async () => {
-    adopt(await api.me());
+    const stamp = saver.current?.saver.stamp();
+    const found = await api.me();
+    adopt(found, false, stamp);
+    return found;
   }, [adopt]);
+
+  // A tab left open for days holds the account as it was, and its next preferences write
+  // would carry that old copy (the server's version check refuses it, but only at write
+  // time). So when the tab comes back into view or focus, it re-reads who it is — at most
+  // once per REREAD_MS, and through `refreshUser`, so a change still queued or in flight
+  // stays on screen and a read that started before it cannot show it undone.
+  const signedIn = user !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const reread = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastHeard.current < REREAD_MS) return;
+      lastHeard.current = Date.now();
+      void refreshUser().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", reread);
+    window.addEventListener("focus", reread);
+    return () => {
+      document.removeEventListener("visibilitychange", reread);
+      window.removeEventListener("focus", reread);
+    };
+  }, [signedIn, refreshUser]);
 
   const updatePreferences = useCallback((patch: PreferencesPatch) => {
     if (saver.current === null) return Promise.reject(new Error("signed out"));

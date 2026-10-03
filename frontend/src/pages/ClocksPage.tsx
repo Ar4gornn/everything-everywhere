@@ -220,7 +220,8 @@ export function ClocksPage() {
     const job = async (): Promise<Outcome> => {
       let had = 0;
       try {
-        const current = clocksOf(preferencesOf(await api.me()));
+        // Through the provider, so the saver adopts this read and writes on its version.
+        const current = clocksOf(preferencesOf(await (refreshUser ?? api.me)()));
         had = current.length;
         const next = op(current);
         drop();

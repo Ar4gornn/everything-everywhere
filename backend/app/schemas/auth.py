@@ -196,6 +196,9 @@ class UserOut(BaseModel):
     # AD-54: whether this account may issue invites. Only decides what the client shows;
     # every admin route checks again, and so does the database.
     is_admin: bool = False
+    # What the stored preferences were when this answer was read; sent back as `If-Match`
+    # on the next preferences PATCH so a stale tab cannot write over a newer change.
+    preferences_version: str = ""
 
     @field_serializer("digest_time")
     def _hh_mm(self, value: time) -> str:

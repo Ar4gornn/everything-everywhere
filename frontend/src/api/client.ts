@@ -535,11 +535,16 @@ export const api = {
       body: JSON.stringify({ budget_start_day: day }),
     }),
 
-  /** Epic 33. Replaces only the top-level keys sent; answers the whole resolved user. */
-  setPreferences: (patch: PreferencesPatch) =>
+  /**
+   * Epic 33. Replaces only the top-level keys sent; answers the whole resolved user. With a
+   * `version` (the `preferences_version` last read), a write over a newer change is a 409
+   * `preferences_changed` instead.
+   */
+  setPreferences: (patch: PreferencesPatch, version: string | null = null) =>
     request<User>("/api/auth/me/preferences", {
       method: "PATCH",
       body: JSON.stringify(patch),
+      ...(version ? { headers: { "If-Match": `"${version}"` } } : {}),
     }),
 
   /** Idempotent: the tour can be replayed from Settings, so a second Done is fine. */

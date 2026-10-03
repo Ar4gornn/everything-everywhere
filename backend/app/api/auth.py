@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Header, Request, Response, status
 from sqlalchemy import text
 
 from app.core.config import get_settings
@@ -342,10 +342,14 @@ def set_tutorial(
 
 @router.patch("/me/preferences", response_model=UserOut)
 def set_preferences(
-    payload: PreferencesUpdate, user_id: CurrentUserId, session: DbSession
+    payload: PreferencesUpdate,
+    user_id: CurrentUserId,
+    session: DbSession,
+    if_match: str | None = Header(default=None, alias="If-Match"),
 ) -> auth_service.UserRow:
     """Epic 33 (AD-49). Only the top-level keys sent are replaced, so a phone saving its
-    layout cannot undo a module switched off from a laptop a moment before."""
+    layout cannot undo a module switched off from a laptop a moment before. `If-Match`
+    carries the `preferences_version` the client last read; a stale one is a 409."""
     patch = payload.model_dump(exclude_none=True)
     # `exclude_none` would swallow the one key whose null means something: clear the hemisphere.
     if "moon_hemisphere" in payload.model_fields_set:
@@ -353,7 +357,8 @@ def set_preferences(
     # Same for the calendar's second zone (Epic 48): null switches it off.
     if "calendar_zone" in payload.model_fields_set:
         patch["calendar_zone"] = payload.calendar_zone
-    return auth_service.set_preferences(session, user_id, patch)
+    expected = if_match.strip().removeprefix("W/").strip('"') if if_match else None
+    return auth_service.set_preferences(session, user_id, patch, expected)
 
 
 @router.get("/me", response_model=UserOut)

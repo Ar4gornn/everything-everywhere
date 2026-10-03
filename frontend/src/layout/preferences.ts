@@ -12,6 +12,7 @@ import type {
   StreakModuleId,
   User,
 } from "../api/types";
+import { ApiError } from "../api/client";
 
 /**
  * The account's layout preferences on the client (Epic 33, AD-49).
@@ -156,6 +157,47 @@ export function applyPatch(prefs: Preferences, patch: PreferencesPatch): Prefere
   return { ...prefs, ...patch };
 }
 
+/** Preferences as the server sent them, with the version a later write must name. */
+export interface Versioned {
+  prefs: Preferences;
+  /** `preferences_version`, or null from a server older than the check (nothing is sent). */
+  version: string | null;
+}
+
+/** The server refused a write because the account changed since this client read it. */
+export function isPreferencesChanged(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409 && error.code === "preferences_changed";
+}
+
+/** Same JSON value, whatever order an object's keys were written in. */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  return keys.every((key) => Object.hasOwn(right, key) && same(left[key], right[key]));
+}
+
+/** How many times one patch is re-based on a fresh read before the saver gives up. */
+const REBASES = 3;
+
+type PatchKey = keyof PreferencesPatch;
+
+interface Caller {
+  keys: PatchKey[];
+  resolve: () => void;
+  reject: (error: unknown) => void;
+}
+
+/** The subtrees another device changed first, and the refusal their callers are given. */
+interface Lost {
+  keys: Set<PatchKey>;
+  error: unknown;
+}
+
 /**
  * Saves preferences one request at a time, and shows the person their latest choice at once.
  *
@@ -169,19 +211,38 @@ export function applyPatch(prefs: Preferences, patch: PreferencesPatch): Prefere
  * queued patches laid over it. A request that fails drops its own patch and nothing else:
  * the screen falls back to the confirmed state plus whatever is still queued, and the
  * promise each caller got for that patch rejects, so the control that asked can say so.
+ *
+ * **Never over a newer change.** Each write names the version it was made against. A tab
+ * left open for days remembers subtrees another device has since changed; the server
+ * refuses its write (409) and the saver re-reads the account. A subtree nobody else touched
+ * is still this tab's to write and is sent again on the fresh version; one that changed
+ * elsewhere keeps the other device's value, and the callers that asked for it are rejected
+ * so their controls say the save did not happen.
+ *
+ * **Reads never undo writes.** A profile read that started before a write was sent or
+ * answered may describe the account before that write; `confirm` with the read's `stamp`
+ * ignores it, rather than briefly showing the person their change undone.
  */
 export class PreferenceSaver {
   private confirmed: Preferences;
+  private version: string | null;
+  private readonly reload: (() => Promise<Versioned>) | null;
   private inflight: PreferencesPatch | null = null;
   private queued: PreferencesPatch | null = null;
-  private waiting: { resolve: () => void; reject: (error: unknown) => void }[] = [];
+  private waiting: Caller[] = [];
+  private clock = 0;
+  private lastWrite = 0;
+  private lastRead = 0;
 
   constructor(
     initial: Preferences,
-    private readonly send: (patch: PreferencesPatch) => Promise<Preferences>,
+    private readonly send: (patch: PreferencesPatch, version: string | null) => Promise<Versioned>,
     private readonly onChange: (shown: Preferences) => void,
+    options: { version?: string | null; reload?: () => Promise<Versioned> } = {},
   ) {
     this.confirmed = initial;
+    this.version = options.version ?? null;
+    this.reload = options.reload ?? null;
   }
 
   /** What the screen should show now. */
@@ -189,16 +250,32 @@ export class PreferenceSaver {
     return applyPatch(applyPatch(this.confirmed, this.inflight ?? {}), this.queued ?? {});
   }
 
-  /** The server said so from elsewhere (a profile refresh): adopt it under anything pending. */
-  confirm(prefs: Preferences): void {
+  /** Taken just before a profile read starts, and handed back to `confirm` with its answer. */
+  stamp(): number {
+    this.clock += 1;
+    return this.clock;
+  }
+
+  /**
+   * The server said so from elsewhere (a profile read): adopt it under anything pending.
+   * With a `stamp`, a read older than the last write or the last adopted read is ignored.
+   * Returns whether it was adopted.
+   */
+  confirm(prefs: Preferences, version: string | null = null, stamp?: number): boolean {
+    if (stamp !== undefined) {
+      if (stamp < this.lastWrite || stamp < this.lastRead) return false;
+      this.lastRead = stamp;
+    }
     this.confirmed = prefs;
+    this.version = version;
     this.onChange(this.shown);
+    return true;
   }
 
   update(patch: PreferencesPatch): Promise<void> {
     this.queued = { ...this.queued, ...patch };
     const done = new Promise<void>((resolve, reject) => {
-      this.waiting.push({ resolve, reject });
+      this.waiting.push({ keys: Object.keys(patch) as PatchKey[], resolve, reject });
     });
     this.onChange(this.shown);
     if (this.inflight === null) void this.drain();
@@ -213,14 +290,58 @@ export class PreferenceSaver {
       this.waiting = [];
       this.inflight = patch;
       try {
-        this.confirmed = await this.send(patch);
+        const lost = await this.save(patch);
         this.inflight = null;
         this.onChange(this.shown);
-        for (const caller of callers) caller.resolve();
+        for (const caller of callers) {
+          if (caller.keys.some((key) => lost.keys.has(key))) caller.reject(lost.error);
+          else caller.resolve();
+        }
       } catch (error) {
         this.inflight = null;
         this.onChange(this.shown);
         for (const caller of callers) caller.reject(error);
+      }
+    }
+  }
+
+  /** Writes `patch`, re-basing it on a fresh read when the server says the account moved. */
+  private async save(patch: PreferencesPatch): Promise<Lost> {
+    const lost: Lost = { keys: new Set(), error: null };
+    let toSend = patch;
+    for (let attempt = 0; ; attempt++) {
+      const base = this.confirmed;
+      this.lastWrite = this.stamp();
+      try {
+        const saved = await this.send(toSend, this.version);
+        this.lastWrite = this.stamp();
+        this.confirmed = saved.prefs;
+        this.version = saved.version;
+        return lost;
+      } catch (error) {
+        this.lastWrite = this.stamp();
+        if (!isPreferencesChanged(error) || this.reload === null || attempt >= REBASES) {
+          throw error;
+        }
+        const fresh = await this.reload();
+        this.lastWrite = this.stamp();
+        this.confirmed = fresh.prefs;
+        this.version = fresh.version;
+        const next: Record<string, unknown> = {};
+        for (const key of Object.keys(toSend) as PatchKey[]) {
+          const mine = toSend[key];
+          // Untouched elsewhere: still this tab's to write. Changed elsewhere to exactly what
+          // this tab asked for: nothing left to do. Anything else: the other device wins.
+          if (same(fresh.prefs[key], base[key])) next[key] = mine;
+          else if (!same(fresh.prefs[key], mine)) {
+            lost.keys.add(key);
+            lost.error = error;
+          }
+        }
+        toSend = next as PreferencesPatch;
+        this.inflight = toSend;
+        this.onChange(this.shown);
+        if (Object.keys(toSend).length === 0) return lost;
       }
     }
   }

@@ -15,11 +15,11 @@ import unicodedata
 import uuid
 import zoneinfo
 
-from sqlalchemy import bindparam, update
+from sqlalchemy import Text, bindparam, cast, func, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from app.core.errors import Invalid
+from app.core.errors import Conflict, Invalid
 from app.models.user import User
 from app.services.activity import MODULES as STREAK_MODULES
 
@@ -406,19 +406,41 @@ def _check_clocks(places: list[dict]) -> None:
     _no_duplicates([place["id"] for place in places], "clock")
 
 
-def update_preferences(session: Session, user_id: uuid.UUID, patch: dict) -> None:
+#: The stored preferences' version: a digest of the value as stored, so any write that
+#: changes it changes this. Not a secret and not a counter, only "is it still what I read".
+#: Computed by Postgres on both sides of the comparison, so one definition decides both
+#: what a client is told and what its `If-Match` is checked against.
+VERSION = func.md5(cast(User.preferences, Text)).label("preferences_version")
+
+
+def update_preferences(
+    session: Session, user_id: uuid.UUID, patch: dict, expected: str | None = None
+) -> None:
     """Replace each top-level key the patch carries; leave the others as stored.
 
     One ``UPDATE ... SET preferences = preferences || :patch``, not a read-modify-write:
     two tabs saving ``modules`` and ``phone`` at the same moment both land. Refusals are
     raised before anything is written.
+
+    ``expected`` is the version the client last read. When given, the update applies only
+    if the stored value is still that version — checked in the same statement, so a write
+    landing in between cannot slip past — and a mismatch is a 409 the client answers by
+    re-reading. A tab left open for days otherwise writes back the subtree it remembers
+    over a change made on another device. Absent, nothing is checked: a client older than
+    this check behaves as before.
     """
     validate(patch)
-    if not patch:
+    if not patch and expected is None:
         return
-    session.execute(
+    statement = (
         update(User)
         .where(User.id == user_id)
         .values(preferences=User.preferences.op("||")(bindparam("patch", patch, type_=JSONB)))
     )
+    if expected is not None:
+        statement = statement.where(func.md5(cast(User.preferences, Text)) == expected)
+    if session.execute(statement).rowcount == 0 and expected is not None:
+        raise Conflict(
+            "The preferences changed since this client read them", "preferences_changed"
+        )
     session.flush()
