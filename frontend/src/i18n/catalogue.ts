@@ -49,6 +49,10 @@ import { navigation } from "./messages/navigation";
 import { clocksPage } from "./messages/clocksPage";
 import { clocksSettings } from "./messages/clocksSettings";
 import { installGuide } from "./messages/installGuide";
+import { gymFormat } from "./messages/gymFormat";
+import { gymPlans } from "./messages/gymPlans";
+import { gymSessionV2 } from "./messages/gymSessionV2";
+import { gymVideo } from "./messages/gymVideo";
 
 export const LANGUAGES = ["en", "fr"] as const;
 export type Lang = (typeof LANGUAGES)[number];
@@ -86,6 +90,10 @@ export const messages = {
   ...clocksPage,
   ...clocksSettings,
   ...installGuide,
+  ...gymFormat,
+  ...gymPlans,
+  ...gymSessionV2,
+  ...gymVideo,
   ...errors,
 };
 

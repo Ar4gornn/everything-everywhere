@@ -635,8 +635,32 @@ export interface Routine {
   created_at: string;
 }
 
+/**
+ * One set's own target (Epic 54, AD-67). Only the measure matching the exercise's kind may be
+ * set; null means "no target". A warm-up set is excluded from volume and records.
+ */
+export interface SetTarget {
+  reps: number | null;
+  seconds: number | null;
+  distance_m: number | null;
+  weight: Weight | null;
+  warmup: boolean;
+}
+
 /** The targets a routine line can carry. Null means "no target", never zero. */
 export interface LineTargets {
+  /**
+   * Per-set targets (Epic 54). When present, the server keeps `target_sets` equal to its
+   * length and the flat `target_*` equal to the first non-warm-up set, so older readers work.
+   */
+  set_targets: SetTarget[] | null;
+  /** Effort target: RPE 1-10 in halves, or RIR 0-10. Never both. */
+  target_rpe: number | null;
+  target_rir: number | null;
+  /** "3-1-1-0": four digits or X joined by "-". */
+  tempo: string | null;
+  /** Consecutive lines with the same group alternate set by set (a superset). 1-99. */
+  superset_group: number | null;
   target_sets: number | null;
   target_reps: number | null;
   target_seconds: number | null;
@@ -686,6 +710,8 @@ export interface WorkoutSet {
   weight: Weight | null;
   duration_seconds: number | null;
   distance_m: number | null;
+  /** Epic 54: a warm-up set, excluded from volume and records. */
+  is_warmup: boolean;
 }
 
 export interface WorkoutDetail {
@@ -730,6 +756,8 @@ export interface SetInput {
   weight?: Weight;
   duration_seconds?: number;
   distance_m?: number;
+  /** Epic 54: omitted means false. */
+  is_warmup?: boolean;
 }
 
 /** POST /api/gym/workouts/complete — a whole session, idempotent on client_ref (AD-58). */
@@ -757,6 +785,12 @@ export interface RoutineImportLine {
   rest_seconds?: number;
   rest_after_seconds?: number;
   note?: string;
+  /** Epic 54 (AD-67): see LineTargets. */
+  set_targets?: SetTarget[];
+  target_rpe?: number;
+  target_rir?: number;
+  tempo?: string;
+  superset_group?: number;
 }
 
 /** POST /api/gym/routines/import — one routine, created in one transaction. */

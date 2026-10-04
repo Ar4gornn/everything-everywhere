@@ -38,7 +38,7 @@ function routine(id: string, name: string): RoutineDetail {
       {
         id: `l-${id}`, exercise_id: `e-${id}`, exercise_name: "Bench", kind: "reps", video_url: null,
         position: 1, target_sets: 3, target_reps: 8, target_seconds: null, target_distance_m: null,
-        target_weight: "60.00", rest_seconds: null, rest_after_seconds: null, note: null,
+        target_weight: "60.00", rest_seconds: null, rest_after_seconds: null, note: null, set_targets: null, target_rpe: null, target_rir: null, tempo: null, superset_group: null,
       },
     ],
   };
