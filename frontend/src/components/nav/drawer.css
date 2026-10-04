@@ -2,7 +2,7 @@
    Class names are global in this app, so every rule here is qualified by its parent. Colours
    are text tokens that theme.test.tsx checks on the surface they sit on. */
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   /* The More button is a <button>, so it undoes the app's primary-pill skin and takes the
      look of the links beside it (same padding and line height, so the bar stays one height
      and the + above it still clears). */
@@ -64,7 +64,7 @@ dialog.nav-drawer::backdrop {
   background: rgb(0 0 0 / 50%);
 }
 
-@media (min-width: 721px) {
+@media (min-width: 721px) and (not (pointer: coarse)), (min-width: 1025px) {
   /* The sidebar replaces the drawer; a window widened while it was open must not keep it. */
   dialog.nav-drawer {
     display: none;

@@ -19,8 +19,12 @@ function rule(css: string, selector: string, from = 0): string {
   return css.slice(start, css.indexOf("}", start));
 }
 
-const desktop = sidebar.indexOf("@media (min-width: 721px) {");
-const rail = sidebar.indexOf("@media (min-width: 721px) and (max-width: 960px) {");
+const desktop = sidebar.indexOf(
+  "@media (min-width: 721px) and (not (pointer: coarse)), (min-width: 1025px) {",
+);
+const rail = sidebar.indexOf(
+  "@media (min-width: 721px) and (max-width: 960px) and (not (pointer: coarse)) {",
+);
 
 describe("the sidebar stylesheet", () => {
   it("keeps the page's old measure beside the column: a selector that outranks plain .shell", () => {

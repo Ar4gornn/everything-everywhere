@@ -163,3 +163,27 @@ These change §2 and §5 above; where they disagree, this section wins.
 - **Layout editor.** Pin and Unpin are words ("Épingler" / "Retirer"); the accessible names
   still name the place. A full bar's Pin is dashed and muted, unlike a disabled ↑/↓ at a
   list's end, is described by the reason, and the reason is repeated under the groups.
+
+## 8. Touch screens keep the phone layout (2026-10-04)
+
+Decision (the owner's): a touch-first device (`pointer: coarse`) up to 1024px keeps the
+**phone** layout (bottom bar, More drawer, phone CSS): a phone on its side (812x375, 932x430)
+and a tablet up to 1024px. A mouse or trackpad (anything not coarse) keeps the width-only rule:
+phone up to 720px, desktop from 721px, icon rail 721-960px, full sidebar from 961px. A coarse
+device wider than 1024px gets the desktop.
+
+- **One query, written the same everywhere.** `PHONE_QUERY` in `layout/useLayout.ts` is
+  `(max-width: 720px), (pointer: coarse) and (max-width: 1024px)`; every phone `@media` block in
+  `styles.css`, `drawer.css` and `sidebar.css` carries those exact words.
+- **The desktop blocks are the exact complement**: `(min-width: 721px) and (not (pointer:
+  coarse)), (min-width: 1025px)`. `not (pointer: coarse)` rather than `(pointer: fine)`, so a
+  device reporting `pointer: none` counts as a mouse and the two never both fail. The icon rail
+  and its short-window variant add `and (not (pointer: coarse))` (a coarse tablet is a phone, so
+  it never gets the rail).
+- **The calendar's `min-width: 1000px` two-column split** got the same qualifier: it is a desktop
+  layout, and between 1000 and 1024px a coarse tablet would have had it beside the phone's
+  fixed day sheet.
+- **Pinned by** `layout/breakpoints.test.ts` (reads every `.css` under `src`: no bare 720/721
+  query, phone blocks equal `PHONE_QUERY`, desktop blocks are the complement) and the
+  `useLayout` test that evaluates the query for (width, pointer) pairs. jsdom has no
+  `matchMedia`, so it is still a desktop there.
