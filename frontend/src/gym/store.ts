@@ -261,7 +261,20 @@ export function readActive(userId: string): ActiveSession | null {
   ) {
     return null;
   }
-  return raw as unknown as ActiveSession;
+  // A session stored before Epic 54 lacks the new fields: read them as "none" / "not a warm-up".
+  const session = raw as unknown as ActiveSession;
+  return {
+    ...session,
+    exercises: session.exercises.map((exercise) => ({
+      ...exercise,
+      set_targets: Array.isArray(exercise.set_targets) ? exercise.set_targets : null,
+      target_rpe: exercise.target_rpe ?? null,
+      target_rir: exercise.target_rir ?? null,
+      tempo: exercise.tempo ?? null,
+      superset_group: exercise.superset_group ?? null,
+    })),
+    sets: session.sets.map((set) => ({ ...set, is_warmup: set.is_warmup === true })),
+  };
 }
 
 /** Null removes it. */

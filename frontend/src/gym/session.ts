@@ -1,4 +1,10 @@
-import type { ExerciseKind, RoutineDetail, SetInput, WorkoutComplete } from "../api/types";
+import type {
+  ExerciseKind,
+  RoutineDetail,
+  SetInput,
+  SetTarget,
+  WorkoutComplete,
+} from "../api/types";
 import { todayIso } from "../months";
 import { FIELD_RANGES, MAX_SETS_PER_WORKOUT } from "./format";
 
@@ -29,6 +35,13 @@ export interface SessionExercise {
   /** Rest after the last target set, before the next exercise (Epic 43). */
   rest_after_seconds: number | null;
   note: string | null;
+  /** Epic 54: per-set targets; null = every set uses the flat target. Absent in old stored sessions. */
+  set_targets: SetTarget[] | null;
+  target_rpe: number | null;
+  target_rir: number | null;
+  tempo: string | null;
+  /** Consecutive exercises sharing a non-null group alternate set by set (a superset). */
+  superset_group: number | null;
 }
 
 /** One set done. Exactly the measures its kind needs are set; weight is optional. */
@@ -43,6 +56,8 @@ export interface SessionSet {
   distance_m: number | null;
   /** ISO time it was logged. */
   done_at: string;
+  /** Epic 54: a warm-up set (from its target); excluded from volume and records server-side. */
+  is_warmup: boolean;
 }
 
 export interface ActiveSession {
@@ -103,6 +118,11 @@ export function startSession(
       rest_seconds: line.rest_seconds,
       rest_after_seconds: line.rest_after_seconds ?? null,
       note: line.note,
+      set_targets: line.set_targets ?? null,
+      target_rpe: line.target_rpe ?? null,
+      target_rir: line.target_rir ?? null,
+      tempo: line.tempo ?? null,
+      superset_group: line.superset_group ?? null,
     })),
     sets: [],
     rest_until: null,
@@ -133,6 +153,11 @@ export function addExercise(
     rest_seconds: null,
     rest_after_seconds: null,
     note: null,
+    set_targets: null,
+    target_rpe: null,
+    target_rir: null,
+    tempo: null,
+    superset_group: null,
   };
   return { ...session, exercises: [...session.exercises, added] };
 }
@@ -178,10 +203,30 @@ function inRange(kind: ExerciseKind, draft: SetDraft): boolean {
   return draft.weight === null || within(Number(draft.weight), FIELD_RANGES.weight);
 }
 
-/** Prefill: the previous set of this exercise in the session, else its targets. */
+/**
+ * The target of the next set of an exercise with per-set targets: `set_targets[n]`, n = sets
+ * done, the last one beyond the list. Null when the exercise has none (flat targets apply).
+ */
+export function targetForNext(session: ActiveSession, exerciseKey: string): SetTarget | null {
+  const exercise = exerciseOf(session, exerciseKey);
+  const list = exercise?.set_targets;
+  if (!list || list.length === 0) return null;
+  return list[Math.min(setsOf(session, exerciseKey), list.length - 1)] ?? null;
+}
+
+/** Prefill: the set's own target when the exercise has per-set targets, else the previous set, else the flat targets. */
 export function nextSetDraft(session: ActiveSession, exerciseKey: string): SetDraft {
   const exercise = exerciseOf(session, exerciseKey);
   if (!exercise) return { ...EMPTY_DRAFT };
+  const planned = targetForNext(session, exerciseKey);
+  if (planned) {
+    return shaped(exercise.kind, {
+      reps: planned.reps,
+      weight: planned.weight,
+      duration_seconds: planned.seconds,
+      distance_m: planned.distance_m,
+    });
+  }
   const previous = [...session.sets].reverse().find((set) => set.exercise === exerciseKey);
   if (previous) {
     return shaped(exercise.kind, {
@@ -213,11 +258,18 @@ export function logSet(
   if (!inRange(exercise.kind, draft)) throw new Error("set_out_of_range");
   if (session.sets.length >= MAX_SETS_PER_WORKOUT) throw new Error("too_many_sets");
   const { seconds: rest } = restAfterSet(session, exerciseKey);
+  const is_warmup = targetForNext(session, exerciseKey)?.warmup === true;
   return {
     ...session,
     sets: [
       ...session.sets,
-      { key: newId(), exercise: exerciseKey, ...shaped(exercise.kind, draft), done_at: now.toISOString() },
+      {
+        key: newId(),
+        exercise: exerciseKey,
+        ...shaped(exercise.kind, draft),
+        done_at: now.toISOString(),
+        is_warmup,
+      },
     ],
     rest_until: rest > 0 ? new Date(now.getTime() + rest * 1000).toISOString() : null,
   };
@@ -252,10 +304,38 @@ const setsOf = (session: ActiveSession, key: string) =>
 const isDone = (session: ActiveSession, exercise: SessionExercise) =>
   setsOf(session, exercise.key) >= (exercise.target_sets ?? 1);
 
+/**
+ * The exercises that alternate with `key`: the run of consecutive exercises sharing its
+ * non-null `superset_group`, in plan order. A lone exercise is its own single member.
+ */
+export function supersetMembers(session: ActiveSession, key: string): SessionExercise[] {
+  const index = session.exercises.findIndex((exercise) => exercise.key === key);
+  const exercise = session.exercises[index];
+  if (!exercise) return [];
+  const group = exercise.superset_group;
+  if (group === null || group === undefined) return [exercise];
+  let from = index;
+  let to = index;
+  while (session.exercises[from - 1]?.superset_group === group) from -= 1;
+  while (session.exercises[to + 1]?.superset_group === group) to += 1;
+  return session.exercises.slice(from, to + 1);
+}
+
 /** The first exercise whose target sets are not all done, else the last one touched. */
 export function currentExercise(session: ActiveSession): string | null {
   const open = session.exercises.find((exercise) => !isDone(session, exercise));
-  if (open) return open.key;
+  if (open) {
+    // A superset alternates: the member with sets left and the fewest done (earliest on a tie),
+    // so A, B, A, B and an uneven A, B, A come out right without remembering who went last.
+    const members = supersetMembers(session, open.key).filter(
+      (member) => !isDone(session, member),
+    );
+    let pick = open;
+    for (const member of members) {
+      if (setsOf(session, member.key) < setsOf(session, pick.key)) pick = member;
+    }
+    return pick.key;
+  }
   const lastSet = session.sets[session.sets.length - 1];
   if (lastSet && exerciseOf(session, lastSet.exercise)) return lastSet.exercise;
   return session.exercises[session.exercises.length - 1]?.key ?? null;
@@ -300,6 +380,7 @@ export function toCompleteBody(session: ActiveSession, now: Date): WorkoutComple
     if (done.weight !== null) out.weight = done.weight;
     if (done.duration_seconds !== null) out.duration_seconds = done.duration_seconds;
     if (done.distance_m !== null) out.distance_m = done.distance_m;
+    if (done.is_warmup === true) out.is_warmup = true;
     sets.push(out);
   }
   const started = new Date(session.started_at);
@@ -349,6 +430,31 @@ export function restAfterSet(
   const exercise = session.exercises[index];
   if (!exercise) return { seconds: 0, beforeNext: null };
   const perSet = exercise.rest_seconds ?? DEFAULT_REST[exercise.kind];
+  const members = supersetMembers(session, exerciseKey);
+  if (members.length > 1) {
+    const limit = (member: SessionExercise) => member.target_sets ?? 1;
+    const round = setsOf(session, exerciseKey);
+    // Someone in the group still owes a set of this round: no rest between members.
+    const owes = members.some(
+      (member) =>
+        member.key !== exerciseKey &&
+        limit(member) > round &&
+        setsOf(session, member.key) <= round,
+    );
+    if (owes) return { seconds: 0, beforeNext: null };
+    const groupDone = members.every((member) =>
+      member.key === exerciseKey
+        ? round + 1 >= limit(member)
+        : setsOf(session, member.key) >= limit(member),
+    );
+    const last = members[members.length - 1] as SessionExercise;
+    if (groupDone && last.rest_after_seconds != null) {
+      const lastIndex = session.exercises.findIndex((other) => other.key === last.key);
+      const next = session.exercises.slice(lastIndex + 1).find((other) => !isDone(session, other));
+      if (next) return { seconds: last.rest_after_seconds, beforeNext: next.name };
+    }
+    return { seconds: perSet, beforeNext: null };
+  }
   const completes =
     exercise.target_sets !== null && setsOf(session, exerciseKey) + 1 >= exercise.target_sets;
   if (completes && exercise.rest_after_seconds != null) {
@@ -399,6 +505,11 @@ export function sessionFromLines(
       rest_seconds: null,
       rest_after_seconds: null,
       note: null,
+      set_targets: null,
+      target_rpe: null,
+      target_rir: null,
+      tempo: null,
+      superset_group: null,
     })),
     sets: [],
     rest_until: null,

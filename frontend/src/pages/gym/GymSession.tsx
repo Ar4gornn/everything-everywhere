@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import type { HistoryPoint, WeightUnit } from "../../api/types";
 import { Card, Empty, ErrorBanner } from "../../components/ui";
+import { VideoLink } from "../../components/VideoLink";
 import {
   addExercise,
   currentExercise,
@@ -15,6 +16,8 @@ import {
   restAfterSet,
   skipRest,
   startRest,
+  supersetMembers,
+  targetForNext,
   updateSet,
   type ActiveSession,
   type SessionExercise,
@@ -220,9 +223,12 @@ function LoggedSet({
     );
   }
   return (
-    <li className="gym-set">
+    <li className={`gym-set${set.is_warmup ? " is-warmup" : ""}`}>
       <span className="gym-set-n">{label}</span>
-      <span className="gym-set-value num">{text}</span>
+      <span className="gym-set-value num">
+        {text}
+        {set.is_warmup ? <span className="gym-warmup-badge">{t("gymSessionV2.warmup")}</span> : null}
+      </span>
       <button
         type="button"
         className="quiet"
@@ -265,6 +271,7 @@ function NextSet({
     entryFromDraft(nextSetDraft(session, exercise.key)),
   );
   const [problem, setProblem] = useState<string | null>(null);
+  const planned = targetForNext(session, exercise.key);
 
   function done() {
     if (!entryIsComplete(exercise.kind, entry)) {
@@ -288,7 +295,14 @@ function NextSet({
 
   return (
     <div className="gym-next">
-      <h4 className="gym-next-title">{t("rows.setN", { n: number })}</h4>
+      <h4 className="gym-next-title">
+        {t("rows.setN", { n: number })}
+        {planned?.warmup ? (
+          <span className="gym-warmup-badge" title={t("gymSessionV2.warmupHelp")}>
+            {t("gymSessionV2.warmup")}
+          </span>
+        ) : null}
+      </h4>
       <SetFields
         kind={exercise.kind}
         entry={entry}
@@ -297,7 +311,7 @@ function NextSet({
           setProblem(null);
         }}
         unit={unit}
-        targetSeconds={exercise.target_seconds}
+        targetSeconds={planned?.seconds ?? exercise.target_seconds}
         timer
       />
       {problem ? (
@@ -309,6 +323,61 @@ function NextSet({
         {t("gym.doneSet")}
       </button>
     </div>
+  );
+}
+
+/** Effort, tempo and superset hints under an exercise (Epic 54.4). Renders nothing without any. */
+function Hints({
+  exercise,
+  session,
+  current,
+}: {
+  exercise: SessionExercise;
+  session: ActiveSession;
+  current: string | null;
+}) {
+  const t = useT();
+  const members = supersetMembers(session, exercise.key);
+  const grouped = members.length > 1;
+  let next: string | undefined;
+  if (grouped) {
+    const left = members.filter(
+      (m) => session.sets.filter((s) => s.exercise === m.key).length < (m.target_sets ?? 1),
+    );
+    const now = left.find((m) => m.key === current);
+    // Doing this one now: the other side of the pair comes next. Otherwise the current one does.
+    const after = now && now.key !== exercise.key ? now : left.find((m) => m.key !== exercise.key);
+    next = after?.name;
+  }
+  const hasEffort = exercise.target_rpe != null || exercise.target_rir != null;
+  if (!hasEffort && !exercise.tempo && !grouped) return null;
+  return (
+    <>
+      {(hasEffort || exercise.tempo) && (
+        <ul className="hint gym-hints">
+          {exercise.target_rpe != null && (
+            <li title={t("gymSessionV2.rpeHelp")}>{t("gymSessionV2.rpe", { n: exercise.target_rpe })}</li>
+          )}
+          {exercise.target_rir != null && (
+            <li title={t("gymSessionV2.rirHelp")}>{t.n("gymSessionV2.rir", exercise.target_rir)}</li>
+          )}
+          {exercise.tempo ? (
+            <li>
+              <details>
+                <summary>{t("gymSessionV2.tempo", { value: exercise.tempo })}</summary>
+                {t("gymSessionV2.tempoHelp")}
+              </details>
+            </li>
+          ) : null}
+        </ul>
+      )}
+      {grouped && (
+        <p className="hint gym-superset">
+          {t("gymSessionV2.superset", { names: members.map((m) => m.name).join(" ↔ ") })}
+          {next ? ` · ${t("gymSessionV2.supersetNext", { name: next })}` : ""}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -537,13 +606,12 @@ export function GymSession() {
                     {exercise.video_url && (
                       <>
                         {" · "}
-                        <a href={exercise.video_url} target="_blank" rel="noopener noreferrer">
-                          {t("gym.video")}
-                        </a>
+                        <VideoLink url={exercise.video_url} label={t("gym.video")} />
                       </>
                     )}
                   </p>
                   {exercise.note ? <p className="hint">{exercise.note}</p> : null}
+                  <Hints exercise={exercise} session={session} current={current} />
 
                   {sets.length > 0 && (
                     <ul className="gym-sets" aria-label={t("gym.sets")}>

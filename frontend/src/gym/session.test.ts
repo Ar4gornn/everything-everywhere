@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RoutineDetail, RoutineLine } from "../api/types";
+import type { RoutineDetail, RoutineLine, SetTarget } from "../api/types";
 import {
   addExercise,
   currentExercise,
@@ -15,6 +15,7 @@ import {
   skipRest,
   startRest,
   startSession,
+  supersetMembers,
   toCompleteBody,
   updateSet,
   type ActiveSession,
@@ -42,6 +43,11 @@ function line(over: Partial<RoutineLine> & Pick<RoutineLine, "id" | "exercise_na
     rest_seconds: null,
     rest_after_seconds: null,
     note: null,
+    set_targets: null,
+    target_rpe: null,
+    target_rir: null,
+    tempo: null,
+    superset_group: null,
     ...over,
   };
 }
@@ -424,5 +430,143 @@ describe("rest between exercises and the standalone timer (Epic 43)", () => {
     expect(session.sets).toEqual([]);
     expect(session.rest_until).toBeNull();
     expect(toCompleteBody(session, later(5)).routine_id).toBeUndefined();
+  });
+});
+
+// ------------------------------------------------------------------ Epic 54.4
+
+const tgt = (over: Partial<SetTarget>): SetTarget => ({
+  reps: null,
+  seconds: null,
+  distance_m: null,
+  weight: null,
+  warmup: false,
+  ...over,
+});
+
+function routineOf(lines: RoutineLine[]): RoutineDetail {
+  return { id: "r9", name: "V2", note: null, lines };
+}
+
+describe("per-set targets", () => {
+  const warm = routineOf([
+    line({
+      id: "a",
+      exercise_name: "Squat",
+      kind: "reps",
+      position: 1,
+      target_sets: 3,
+      target_rpe: 8,
+      tempo: "3-1-1-0",
+      set_targets: [
+        tgt({ reps: 10, weight: "40.00", warmup: true }),
+        tgt({ reps: 5, weight: "100.00" }),
+        tgt({ reps: 3, weight: "110.00" }),
+      ],
+    }),
+  ]);
+
+  it("copies the new fields at start and nulls them for an ad-hoc exercise", () => {
+    const session = startSession(warm, NOW, ids());
+    expect(session.exercises[0]).toMatchObject({ target_rpe: 8, tempo: "3-1-1-0", target_rir: null, superset_group: null });
+    expect(session.exercises[0]!.set_targets).toHaveLength(3);
+    const added = addExercise(session, { exercise_id: null, name: "X", kind: "reps" }, ids());
+    expect(added.exercises[1]).toMatchObject({ set_targets: null, target_rpe: null, target_rir: null, tempo: null, superset_group: null });
+  });
+
+  it("prefills set n from set_targets[n], the last one beyond the list", () => {
+    let session = startSession(warm, NOW, ids());
+    const key = session.exercises[0]!.key;
+    expect(nextSetDraft(session, key)).toMatchObject({ reps: 10, weight: "40.00" });
+    session = logSet(session, key, reps(10, "40.00"), NOW, ids());
+    expect(nextSetDraft(session, key)).toMatchObject({ reps: 5, weight: "100.00" });
+    session = logSet(session, key, reps(5, "100.00"), NOW, ids());
+    session = logSet(session, key, reps(3, "110.00"), NOW, ids());
+    expect(nextSetDraft(session, key)).toMatchObject({ reps: 3, weight: "110.00" });
+  });
+
+  it("flags the logged set as a warm-up from its target and sends it only then", () => {
+    let session = startSession(warm, NOW, ids());
+    const key = session.exercises[0]!.key;
+    session = logSet(session, key, reps(10, "40.00"), NOW, ids());
+    session = logSet(session, key, reps(5, "100.00"), NOW, ids());
+    expect(session.sets.map((s) => s.is_warmup)).toEqual([true, false]);
+    const body = toCompleteBody(session, later(60));
+    expect(body.sets[0]).toMatchObject({ is_warmup: true });
+    expect(body.sets[1]).not.toHaveProperty("is_warmup");
+    expect(progress(session).setsDone).toBe(2);
+  });
+});
+
+describe("supersets", () => {
+  const mk = (id: string, pos: number, group: number | null, sets: number, extra: Partial<RoutineLine> = {}) =>
+    line({ id, exercise_name: id.toUpperCase(), kind: "reps", position: pos, target_sets: sets, target_reps: 8, superset_group: group, ...extra });
+
+  /** Log one set on the exercise the model currently points at; returns its name. */
+  function step(session: ActiveSession): [ActiveSession, string] {
+    const key = currentExercise(session)!;
+    const name = session.exercises.find((e) => e.key === key)!.name;
+    return [logSet(session, key, reps(8), NOW, ids()), name];
+  }
+
+  function run(lines: RoutineLine[], n: number) {
+    let session = startSession(routineOf(lines), NOW, ids());
+    const order: string[] = [];
+    const rests: (string | null)[] = [];
+    for (let i = 0; i < n; i++) {
+      const [next, name] = step(session);
+      order.push(name);
+      rests.push(next.rest_until);
+      session = next;
+    }
+    return { session, order, rests };
+  }
+
+  it("alternates two members and rests only after the round's last member", () => {
+    const { order, rests } = run(
+      [mk("a", 1, 1, 2, { rest_seconds: 10 }), mk("b", 2, 1, 2, { rest_seconds: 20 }), mk("c", 3, null, 1)],
+      4,
+    );
+    expect(order).toEqual(["A", "B", "A", "B"]);
+    expect(rests.map((r) => (r === null ? 0 : (Date.parse(r) - NOW.getTime()) / 1000))).toEqual([0, 20, 0, 20]);
+  });
+
+  it("alternates three members and wraps", () => {
+    const { order } = run([mk("a", 1, 2, 2), mk("b", 2, 2, 2), mk("c", 3, 2, 2)], 6);
+    expect(order).toEqual(["A", "B", "C", "A", "B", "C"]);
+  });
+
+  it("copes with uneven set counts: the member with sets left carries on", () => {
+    const { order, rests } = run([mk("a", 1, 1, 3, { rest_seconds: 5 }), mk("b", 2, 1, 1, { rest_seconds: 6 })], 4);
+    expect(order).toEqual(["A", "B", "A", "A"]);
+    const secs = rests.map((r) => (r === null ? 0 : (Date.parse(r) - NOW.getTime()) / 1000));
+    // round 0 ends with B (6 s); rounds 1 and 2 have only A left, so A ends them (5 s)
+    expect(secs).toEqual([0, 6, 5, 5]);
+  });
+
+  it("uses rest_after_seconds of the group's last member once the whole group is done", () => {
+    const { session, rests } = run(
+      [mk("a", 1, 1, 1, { rest_seconds: 10 }), mk("b", 2, 1, 1, { rest_seconds: 20, rest_after_seconds: 120 }), mk("c", 3, null, 1)],
+      2,
+    );
+    expect(Date.parse(rests[1]!) - NOW.getTime()).toBe(120_000);
+    expect(currentExercise(session)).toBe(session.exercises[2]!.key);
+  });
+
+  it("treats group membership as consecutive lines only", () => {
+    const session = startSession(routineOf([mk("a", 1, 1, 2), mk("b", 2, null, 2), mk("c", 3, 1, 2)]), NOW, ids());
+    expect(supersetMembers(session, session.exercises[0]!.key)).toHaveLength(1);
+  });
+});
+
+describe("an exercise stored before Epic 54", () => {
+  it("still works in the model when the new fields are simply absent", () => {
+    const session = started();
+    const old = {
+      ...session,
+      exercises: session.exercises.map(({ set_targets, target_rpe, target_rir, tempo, superset_group, ...rest }) => rest),
+    } as unknown as ActiveSession;
+    expect(nextSetDraft(old, old.exercises[0]!.key)).toMatchObject({ reps: 8 });
+    expect(currentExercise(old)).toBe(old.exercises[0]!.key);
   });
 });

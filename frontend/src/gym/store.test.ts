@@ -57,7 +57,7 @@ function session(ref: string, name: string | null = "Push"): ActiveSession {
   const base = startSession(
     { id: "r1", name: name ?? "", note: null, lines: [
       { id: "l1", exercise_id: "e1", exercise_name: "Bench", kind: "reps", video_url: null, position: 1,
-        target_sets: 1, target_reps: 5, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null },
+        target_sets: 1, target_reps: 5, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null, set_targets: null, target_rpe: null, target_rir: null, tempo: null, superset_group: null },
     ] },
     NOW,
     ids(),
@@ -275,6 +275,18 @@ describe("storage that cannot be trusted", () => {
     }
   });
 
+  it("reads a session stored before Epic 54 with the new fields as none / not a warm-up", () => {
+    const old = JSON.parse(JSON.stringify(session("ref-old")));
+    for (const exercise of old.exercises) {
+      for (const key of ["set_targets", "target_rpe", "target_rir", "tempo", "superset_group"]) delete exercise[key];
+    }
+    for (const set of old.sets) delete set.is_warmup;
+    window.localStorage.setItem(`everything-everywhere.gym.${USER}.active`, JSON.stringify(old));
+    const read = readActive(USER);
+    expect(read?.exercises[0]).toMatchObject({ set_targets: null, target_rpe: null, target_rir: null, tempo: null, superset_group: null });
+    expect(read?.sets[0]?.is_warmup).toBe(false);
+  });
+
   it("round-trips the active session and tells subscribers", () => {
     const heard = vi.fn();
     const stop = subscribe(heard);
@@ -303,9 +315,9 @@ describe("refreshing the cache", () => {
     id: "r1", name: "Push", note: null,
     lines: [
       { id: "l1", exercise_id: "e1", exercise_name: "Bench", kind: "reps", video_url: null, position: 1,
-        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null },
+        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null, set_targets: null, target_rpe: null, target_rir: null, tempo: null, superset_group: null },
       { id: "l2", exercise_id: "e2", exercise_name: "Plank", kind: "duration", video_url: null, position: 2,
-        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null },
+        target_sets: null, target_reps: null, target_seconds: null, target_distance_m: null, target_weight: null, rest_seconds: null, rest_after_seconds: null, note: null, set_targets: null, target_rpe: null, target_rir: null, tempo: null, superset_group: null },
     ],
   };
   const workout = (id: string, day: string, routineId: string | null = "r1"): Workout => ({
