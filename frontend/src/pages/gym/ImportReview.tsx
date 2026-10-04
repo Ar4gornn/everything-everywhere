@@ -1,11 +1,34 @@
-import type { ExerciseKind } from "../../api/types";
+import type { ExerciseKind, WeightUnit } from "../../api/types";
 import { Card, ErrorBanner } from "../../components/ui";
-import { hasDroppedMeasure, validateLine, type DraftLine, type DraftRoutine, type LineField } from "../../gym/format";
+import {
+  hasDroppedMeasure,
+  validateLine,
+  validateLines,
+  type DraftLine,
+  type DraftRoutine,
+  type DraftSet,
+  type LineField,
+} from "../../gym/format";
+import { VideoLink } from "../../components/VideoLink";
 import { useT } from "../../i18n";
+import type { Translate } from "../../i18n";
 import { KINDS } from "./ExerciseAdder";
 import { useGym } from "./GymContext";
 import { Field, MeasureInput } from "./MeasureInput";
-import { formatTarget, toWeight } from "./measure";
+import { formatSet, formatTarget, toWeight } from "./measure";
+import {
+  EffortFields,
+  SetRows,
+  SupersetToggle,
+  TempoField,
+  VarySwitch,
+  effortError,
+  firstWorking,
+  rowsDiffer,
+  seedRows,
+  tempoValid,
+  type SetRow,
+} from "./SetFields";
 
 /** The review's state: the drafts, what was decided about each line, and where the person is. */
 export type Decision = "pending" | "confirmed" | "skipped";
@@ -64,16 +87,95 @@ function WeekStrip({ schedule }: { schedule: string[] }) {
 
 /** A draft line in the shape `formatTarget` reads. */
 export function targetsOf(line: DraftLine) {
+  const first = line.setTargets ? firstWorking(line.setTargets) : null;
+  const from = first ?? line;
   return {
     kind: line.kind,
-    target_sets: line.sets,
-    target_reps: line.reps,
-    target_seconds: line.seconds,
-    target_distance_m: line.distance_m,
-    target_weight: line.weight === null ? null : toWeight(line.weight),
+    target_sets: line.setTargets ? line.setTargets.length : line.sets,
+    target_reps: from.reps,
+    target_seconds: from.seconds,
+    target_distance_m: from.distance_m,
+    target_weight: from.weight === null ? null : toWeight(from.weight),
     rest_seconds: line.rest_seconds,
   };
 }
+
+const labelOf = (line: DraftLine) => line.superset.trim().toUpperCase();
+
+/** Joined to the next line of the file by a shared superset label. */
+function linkedToNext(lines: DraftLine[], index: number): boolean {
+  const label = lines[index] ? labelOf(lines[index]) : "";
+  const next = lines[index + 1];
+  return label !== "" && next !== undefined && labelOf(next) === label;
+}
+
+/**
+ * Re-label the routine after the "Superset with next" toggle of line `index`: every run of
+ * joined lines keeps its first member's label (a repeated one gets a fresh number), and a line
+ * joined to nobody has none.
+ */
+function relink(lines: DraftLine[], index: number, link: boolean): DraftLine[] {
+  const links = lines.map((_, i) => (i === index ? link : linkedToNext(lines, i)));
+  const used = new Set<string>();
+  const taken = new Set(lines.map(labelOf));
+  let counter = 0;
+  const fresh = () => {
+    do counter += 1;
+    while (taken.has(String(counter)) || used.has(String(counter)));
+    return String(counter);
+  };
+  const labels: string[] = [];
+  let run = "";
+  for (const [i, line] of lines.entries()) {
+    const inRun = links[i] === true || (i > 0 && links[i - 1] === true);
+    if (!inRun) {
+      labels.push("");
+      run = "";
+    } else {
+      if (!(i > 0 && links[i - 1] === true)) {
+        const own = line.superset.trim();
+        run = own !== "" && !used.has(own.toUpperCase()) ? own : fresh();
+        used.add(run.toUpperCase());
+      }
+      labels.push(run);
+    }
+  }
+  return validateLines(lines.map((line, i) => ({ ...line, superset: labels[i] ?? "" })));
+}
+
+/** Everything beyond the plain target, as short phrases, for the read-only summary. */
+export function extrasOf(line: DraftLine, unit: WeightUnit, t: Translate): string[] {
+  const parts: string[] = [];
+  if (line.setTargets) {
+    const list = line.setTargets.map((set) => {
+      const text = formatSet(
+        {
+          kind: line.kind,
+          reps: set.reps,
+          duration_seconds: set.seconds,
+          distance_m: set.distance_m,
+          weight: set.weight === null ? null : toWeight(set.weight),
+        },
+        unit,
+        t,
+      );
+      return set.warmup ? t("gymPlans.summary.warmupSet", { text }) : text;
+    });
+    parts.push(t("gymPlans.summary.setsList", { list: list.join(" · ") }));
+  }
+  if (line.rpe !== null) parts.push(t("gymPlans.summary.rpe", { value: String(line.rpe) }));
+  if (line.rir !== null) parts.push(t("gymPlans.summary.rir", { value: String(line.rir) }));
+  if (line.tempo.trim() !== "") {
+    parts.push(t("gymPlans.summary.tempo", { value: line.tempo.trim().toUpperCase() }));
+  }
+  if (line.superset.trim() !== "") {
+    parts.push(t("gymPlans.summary.superset", { value: line.superset.trim() }));
+  }
+  return parts;
+}
+
+const toRow = (set: DraftSet): SetRow => set;
+const fromRow = (row: SetRow): DraftSet => ({ ...row, errors: row.errors ?? {} });
 
 function FieldError({ line, field }: { line: DraftLine; field: LineField }) {
   const t = useT();
@@ -149,6 +251,12 @@ export function ImportReview({
                         ? t("gym.existingExercise")
                         : t("gym.newExercise")}
                     </span>
+                    {extrasOf(line, unit, t).map((part) => (
+                      <span key={part} className="hint gym-summary-extra">
+                        {" "}
+                        · {part}
+                      </span>
+                    ))}
                   </li>
                 ))}
               </ul>
@@ -195,13 +303,21 @@ export function ImportReview({
   const line = routine?.lines[li];
   if (!routine || !line) return null;
   const match = cache.exercises.find((e) => e.name.toLowerCase() === line.name.trim().toLowerCase());
-  const valid = Object.keys(line.errors).length === 0 && (li > 0 || routine.name.trim() !== "");
+  const effort = effortError(line.rpe, line.rir);
+  const valid =
+    Object.keys(line.errors).length === 0 &&
+    (li > 0 || routine.name.trim() !== "") &&
+    tempoValid(line.tempo) &&
+    effort === undefined &&
+    !(line.setTargets ?? []).some((set) => Object.keys(set.errors).length > 0);
+  const varies = line.setTargets !== null;
 
   function setLine(next: DraftLine) {
+    // validateLines, not validateLine: only it sees a superset label split by another exercise.
     onChange({
       ...wizard,
       routines: wizard.routines.map((r, i) =>
-        i === ri ? { ...r, lines: r.lines.map((l, j) => (j === li ? next : l)) } : r,
+        i === ri ? { ...r, lines: validateLines(r.lines.map((l, j) => (j === li ? next : l))) } : r,
       ),
     });
   }
@@ -212,6 +328,33 @@ export function ImportReview({
     const now = cache.exercises.find((e) => e.name.toLowerCase() === next.name.trim().toLowerCase());
     if (now && now.kind !== next.kind) next = validateLine({ ...next, kind: now.kind });
     setLine(next);
+  }
+  function setVaries(on: boolean) {
+    if (!line) return;
+    if (on) {
+      const rows = seedRows(line.kind, line.sets, line);
+      edit({ setTargets: rows.map(fromRow) });
+      return;
+    }
+    const rows = (line.setTargets ?? []).map(toRow);
+    if (rowsDiffer(line.kind, rows) && !window.confirm(t("gymPlans.sets.confirmSame"))) return;
+    const first = firstWorking(rows);
+    edit({
+      setTargets: null,
+      sets: rows.length,
+      reps: first?.reps ?? null,
+      seconds: first?.seconds ?? null,
+      distance_m: first?.distance_m ?? null,
+      weight: first?.weight ?? null,
+    });
+  }
+  function setLink(link: boolean) {
+    onChange({
+      ...wizard,
+      routines: wizard.routines.map((r, i) =>
+        i === ri ? { ...r, lines: relink(r.lines, li, link) } : r,
+      ),
+    });
   }
   function decide(decision: Decision) {
     onChange({
@@ -284,7 +427,21 @@ export function ImportReview({
         {match && <p className="hint">{t("gym.kindLocked")}</p>}
         <FieldError line={line} field="kind" />
 
+        <VarySwitch name={line.name || t("gym.exerciseName")} varies={varies} onChange={setVaries} />
+        <FieldError line={line} field="set_targets" />
+        {line.setTargets && (
+          <SetRows
+            kind={line.kind}
+            rows={line.setTargets.map(toRow)}
+            unit={unit}
+            name={line.name || t("gym.exerciseName")}
+            onChange={(rows) => edit({ setTargets: rows.map(fromRow), sets: rows.length })}
+          />
+        )}
+
         <div className="gym-review-numbers">
+          {!varies && (
+            <>
           <Field label={t("gym.sets")}>
             <MeasureInput
               label={t("gym.sets")}
@@ -340,6 +497,8 @@ export function ImportReview({
             />
             <FieldError line={line} field="weight" />
           </Field>
+            </>
+          )}
           <Field label={t("gym.restSeconds")}>
             <MeasureInput
               label={t("gym.restSeconds")}
@@ -368,6 +527,36 @@ export function ImportReview({
           </p>
         )}
 
+        <div className="gym-review-extras">
+          <EffortFields
+            name={line.name || t("gym.exerciseName")}
+            rpe={line.rpe}
+            rir={line.rir}
+            error={line.errors.rpe ?? line.errors.rir ?? effort}
+            onChange={(next) => edit(next)}
+          />
+          <TempoField
+            name={line.name || t("gym.exerciseName")}
+            value={line.tempo}
+            error={line.errors.tempo}
+            onChange={(tempo) => edit({ tempo })}
+          />
+        </div>
+        <div className="gym-review-super" data-superset={linkedToNext(routine.lines, li) ? "start" : undefined}>
+          <SupersetToggle
+            name={line.name || t("gym.exerciseName")}
+            checked={linkedToNext(routine.lines, li)}
+            disabled={li >= routine.lines.length - 1}
+            onChange={setLink}
+          />
+          {line.superset.trim() !== "" && (
+            <span className="gym-super-badge">
+              {t("gymPlans.superset.badge", { n: line.superset.trim() })}
+            </span>
+          )}
+        </div>
+        <FieldError line={line} field="superset" />
+
         <label>
           {t("field.note")}
           <input
@@ -387,6 +576,11 @@ export function ImportReview({
           />
         </label>
         <FieldError line={line} field="video_url" />
+        {line.video_url.trim() !== "" && !line.errors.video_url && (
+          <p className="hint gym-video-preview">
+            {t("gymPlans.video.preview")}: <VideoLink url={line.video_url.trim()} />
+          </p>
+        )}
 
         <div className="gym-review-actions">
           <button type="submit" disabled={!valid}>

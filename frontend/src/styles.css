@@ -5888,10 +5888,226 @@ label.clocks-settings-pick {
 }
 
 /* ==== Epic 54.3 (editor + review) — owned by that story; keep rules between these markers ==== */
+.gym .gym-vary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.gym .gym-vary button {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+.gym .gym-setrows {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  min-width: 0;
+}
+
+.gym .gym-setrows-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.gym .gym-setrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+.gym .gym-setrow.is-warmup {
+  border-style: dashed;
+}
+
+.gym .gym-setrow-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gym .gym-setrow-warm {
+  grid-column: 2 / 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gym .gym-setrow-remove {
+  grid-column: 3 / 4;
+  grid-row: 1 / 2;
+}
+
+.gym .gym-setrow-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.gym .gym-effort {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.gym .gym-effort-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gym .gym-effort-row select {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+.gym .gym-tempo {
+  min-width: 0;
+}
+
+.gym .gym-review-extras {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gym .gym-superset-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gym .gym-super-badge {
+  display: inline-block;
+  font-size: var(--fs-small);
+  color: var(--accent-ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.gym li.gym-line[data-superset],
+.gym .gym-review-super[data-superset] {
+  border-left: 4px solid var(--border);
+  padding-left: 10px;
+}
+
+.gym li.gym-line[data-superset="start"] {
+  border-top-left-radius: var(--radius-sm);
+}
+
+.gym li.gym-line[data-superset="end"] {
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.gym .gym-summary-extra {
+  display: inline;
+}
+
+@media (max-width: 380px) {
+  .gym .gym-review-extras {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gym .gym-setrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .gym .gym-setrow-fields,
+  .gym .gym-setrow-warm {
+    grid-column: 1 / -1;
+  }
+
+  .gym .gym-setrow-remove {
+    grid-column: 2 / 3;
+  }
+}
 /* ==== end Epic 54.3 ==== */
 
 /* ==== Epic 54.4 (session) — owned by that story; keep rules between these markers ==== */
+.gym .gym-warmup-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: var(--pill);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.gym .gym-set.is-warmup .gym-set-value {
+  font-style: italic;
+}
+
+.gym .gym-hints {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  overflow-wrap: anywhere;
+}
+
+.gym .gym-hints details {
+  max-width: 100%;
+}
+
+.gym .gym-hints summary {
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.gym .gym-superset {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
 /* ==== end Epic 54.4 ==== */
 
 /* ==== Epic 54.5 (video player) — owned by that story; keep rules between these markers ==== */
+.video-link-player {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.video-link-frame {
+  width: 100%;
+  max-width: 36rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.video-link-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.video-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-width: 0;
+}
 /* ==== end Epic 54.5 ==== */

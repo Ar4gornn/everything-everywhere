@@ -175,3 +175,105 @@ describe("Routine editor: rest after an exercise", () => {
     );
   });
 });
+
+describe("Routine editor: format v2 (Epic 54.3)", () => {
+  const openVary = async () => {
+    renderGym("/gym/routines/r1");
+    await userEvent.click(
+      within(await screen.findByRole("group", { name: "Targets for Bench press" })).getByRole("button", {
+        name: "Vary per set",
+      }),
+    );
+  };
+
+  it("switching to Vary per set seeds one row per set from the flat values", async () => {
+    await openVary();
+    const sets = screen.getByRole("list", { name: "Sets of Bench press" });
+    expect(within(sets).getAllByRole("listitem")).toHaveLength(4);
+    expect(box("Set 4 reps of Bench press").value).toBe("8");
+    expect(box("Set 1 weight of Bench press").value).toBe("60");
+    // The flat fields give way to the rows.
+    expect(screen.queryByRole("textbox", { name: "Target reps of Bench press" })).toBeNull();
+    // Adding and removing a set.
+    await userEvent.click(screen.getByRole("button", { name: "Add a set to Bench press" }));
+    expect(within(sets).getAllByRole("listitem")).toHaveLength(5);
+    await userEvent.click(screen.getByRole("button", { name: "Remove set 5 of Bench press" }));
+    expect(within(sets).getAllByRole("listitem")).toHaveLength(4);
+  });
+
+  it("a warm-up set goes into the PATCH body", async () => {
+    await openVary();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Warm-up, set 1 of Bench press" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save Bench press" }));
+    await waitFor(() => expect(mocks.updateRoutineLine).toHaveBeenCalled());
+    const [id, body] = mocks.updateRoutineLine.mock.calls[0] as [string, { set_targets: unknown[] }];
+    expect(id).toBe("l1");
+    expect(body.set_targets).toHaveLength(4);
+    expect(body.set_targets[0]).toEqual({
+      reps: 8,
+      seconds: null,
+      distance_m: null,
+      weight: "60.00",
+      warmup: true,
+    });
+    expect(body.set_targets[1]).toMatchObject({ warmup: false });
+  });
+
+  it("RPE and RIR are exclusive: picking the other scale drops the number", async () => {
+    renderGym("/gym/routines/r1");
+    const scale = await screen.findByRole("combobox", { name: "Effort scale of Bench press" });
+    await userEvent.selectOptions(scale, "rpe");
+    await userEvent.type(box("Effort of Bench press"), "8");
+    await userEvent.selectOptions(scale, "rir");
+    expect(box("Effort of Bench press").value).toBe("");
+    // Nothing is left of the RPE, so the line is back to what was saved.
+    expect(screen.getByRole("button", { name: "Save Bench press" })).toBeDisabled();
+    await userEvent.type(box("Effort of Bench press"), "2");
+    await userEvent.click(screen.getByRole("button", { name: "Save Bench press" }));
+    await waitFor(() =>
+      expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l1", { target_rir: 2 }),
+    );
+  });
+
+  it("an RPE off the half-steps blocks Save", async () => {
+    renderGym("/gym/routines/r1");
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "Effort scale of Bench press" }),
+      "rpe",
+    );
+    await userEvent.type(box("Effort of Bench press"), "8.3");
+    expect(await screen.findByText("RPE is 1 to 10, in steps of 0.5.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Bench press" })).toBeDisabled();
+  });
+
+  it("a bad tempo shows its hint and blocks Save; a good one is sent upper-cased", async () => {
+    renderGym("/gym/routines/r1");
+    const tempo = await screen.findByRole("textbox", { name: "Tempo of Bench press" });
+    const save = screen.getByRole("button", { name: "Save Bench press" });
+    await userEvent.type(tempo, "3-1-1");
+    expect(screen.getByRole("alert")).toHaveTextContent("four digits or X");
+    expect(save).toBeDisabled();
+    await userEvent.type(tempo, "-x");
+    expect(screen.queryByRole("alert")).toBeNull();
+    await userEvent.click(save);
+    await waitFor(() =>
+      expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l1", { tempo: "3-1-1-X" }),
+    );
+  });
+
+  it("Superset with next joins two lines into one consecutive group", async () => {
+    renderGym("/gym/routines/r1");
+    // The last line has nothing to pair with.
+    expect(
+      await screen.findByRole("checkbox", { name: "Superset Plank with the next exercise" }),
+    ).toBeDisabled();
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Superset Bench press with the next exercise" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save Bench press" }));
+    await waitFor(() => {
+      expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l1", { superset_group: 1 });
+      expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l2", { superset_group: 1 });
+    });
+  });
+});
