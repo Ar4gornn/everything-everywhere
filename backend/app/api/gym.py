@@ -50,6 +50,11 @@ def _line_out(line: RoutineExercise, exercise: Exercise) -> RoutineLineOut:
         rest_seconds=line.rest_seconds,
         rest_after_seconds=line.rest_after_seconds,
         note=line.note,
+        set_targets=line.set_targets,
+        target_rpe=line.target_rpe,
+        target_rir=line.target_rir,
+        tempo=line.tempo,
+        superset_group=line.superset_group,
     )
 
 
@@ -73,6 +78,7 @@ def _set_out(row: WorkoutSet, exercise: Exercise) -> SetOut:
         weight=row.weight,
         duration_seconds=row.duration_seconds,
         distance_m=row.distance_m,
+        is_warmup=row.is_warmup,
     )
 
 
@@ -201,6 +207,8 @@ def update_routine_line(
     session: DbSession,
 ) -> RoutineLineOut:
     fields = {key: getattr(payload, key) for key in payload.model_fields_set}
+    if payload.set_targets is not None:
+        fields["set_targets"] = [t.model_dump() for t in payload.set_targets]
     line, exercise = gym.update_routine_line(session, user_id, line_id, fields)
     return _line_out(line, exercise)
 
@@ -268,6 +276,13 @@ def add_routine_line(
         rest_seconds=payload.rest_seconds,
         rest_after_seconds=payload.rest_after_seconds,
         note=payload.note,
+        set_targets=(
+            None if payload.set_targets is None else [t.model_dump() for t in payload.set_targets]
+        ),
+        target_rpe=payload.target_rpe,
+        target_rir=payload.target_rir,
+        tempo=payload.tempo,
+        superset_group=payload.superset_group,
     )
     return _line_out(line, exercise)
 
@@ -371,6 +386,7 @@ def log_set(
         weight=payload.weight,
         duration_seconds=payload.duration_seconds,
         distance_m=payload.distance_m,
+        is_warmup=payload.is_warmup,
     )
     exercise = gym.get_exercise(session, user_id, row.exercise_id)
     return _set_out(row, exercise)

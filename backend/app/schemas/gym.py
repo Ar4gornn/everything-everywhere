@@ -1,9 +1,11 @@
 import datetime as dt
+import re
 import uuid
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -32,6 +34,57 @@ _Reps = Annotated[int, Field(gt=0, le=999)]
 _Seconds = Annotated[int, Field(ge=1, le=86400)]
 _Metres = Annotated[int, Field(ge=1, le=1_000_000)]
 _Rest = Annotated[int, Field(ge=0, le=3600)]
+_Rir = Annotated[int, Field(ge=0, le=10)]
+_Group = Annotated[int, Field(ge=1, le=99)]
+
+_TEMPO = re.compile(r"[0-9X]-[0-9X]-[0-9X]-[0-9X]")
+
+
+def _half_step(value: float) -> float:
+    if (value * 2) != int(value * 2):
+        raise ValueError("RPE goes in steps of 0.5")
+    return value
+
+
+# 1-10 in halves. A JSON number on the wire (the column is numeric(3,1)).
+_Rpe = Annotated[float, Field(ge=1, le=10), AfterValidator(_half_step)]
+
+
+def _clean_tempo(value: object) -> str | None:
+    """Trim, uppercase; empty is null. Raises ValueError (anything else would be a 500)."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("tempo must be text")
+    cleaned = value.strip().upper()
+    if not cleaned:
+        return None
+    if not _TEMPO.fullmatch(cleaned):
+        raise ValueError("tempo looks like 3-1-1-0: four digits or X, joined by dashes")
+    return cleaned
+
+
+_Tempo = Annotated[str | None, BeforeValidator(_clean_tempo)]
+
+
+class SetTarget(BaseModel):
+    """One planned set. Only the measure matching the exercise's kind may be set (service)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reps: _Reps | None = None
+    seconds: _Seconds | None = None
+    distance_m: _Metres | None = None
+    weight: Weight | None = None
+    warmup: StrictBool = False
+
+
+_SetTargets = Annotated[list[SetTarget], Field(min_length=1, max_length=99)]
+
+
+def _rpe_xor_rir(rpe: object, rir: object) -> None:
+    if rpe is not None and rir is not None:
+        raise ValueError("give an RPE or an RIR, not both")
 
 
 def _trimmed(value: str) -> str:
@@ -113,9 +166,15 @@ class RoutineLineCreate(BaseModel):
     rest_seconds: _Rest | None = None
     rest_after_seconds: _Rest | None = None
     note: str | None = Field(default=None, max_length=200)
+    set_targets: _SetTargets | None = None
+    target_rpe: _Rpe | None = None
+    target_rir: _Rir | None = None
+    tempo: _Tempo = None
+    superset_group: _Group | None = None
 
     @model_validator(mode="after")
     def _exactly_one(self) -> "RoutineLineCreate":
+        _rpe_xor_rir(self.target_rpe, self.target_rir)
         if (self.exercise_id is None) == (self.exercise_name is None):
             raise ValueError("provide exactly one of exercise_id or exercise_name")
         if self.exercise_name is not None:
@@ -134,6 +193,16 @@ class RoutineLineUpdate(BaseModel):
     rest_seconds: _Rest | None = None
     rest_after_seconds: _Rest | None = None
     note: str | None = Field(default=None, max_length=200)
+    set_targets: _SetTargets | None = None
+    target_rpe: _Rpe | None = None
+    target_rir: _Rir | None = None
+    tempo: _Tempo = None
+    superset_group: _Group | None = None
+
+    @model_validator(mode="after")
+    def _effort(self) -> "RoutineLineUpdate":
+        _rpe_xor_rir(self.target_rpe, self.target_rir)
+        return self
 
 
 class RoutineLineOut(BaseModel):
@@ -151,6 +220,11 @@ class RoutineLineOut(BaseModel):
     rest_seconds: int | None
     rest_after_seconds: int | None
     note: str | None
+    set_targets: list[SetTarget] | None
+    target_rpe: float | None
+    target_rir: int | None
+    tempo: str | None
+    superset_group: int | None
 
 
 class RoutineDetailOut(BaseModel):
@@ -176,9 +250,15 @@ class RoutineImportLine(BaseModel):
     rest_seconds: _Rest | None = None
     rest_after_seconds: _Rest | None = None
     note: str | None = Field(default=None, max_length=200)
+    set_targets: _SetTargets | None = None
+    target_rpe: _Rpe | None = None
+    target_rir: _Rir | None = None
+    tempo: _Tempo = None
+    superset_group: _Group | None = None
 
     @model_validator(mode="after")
     def _trim(self) -> "RoutineImportLine":
+        _rpe_xor_rir(self.target_rpe, self.target_rir)
         object.__setattr__(self, "exercise_name", _trimmed(self.exercise_name))
         return self
 
@@ -224,6 +304,8 @@ class SetCreate(BaseModel):
     weight: Weight | None = None
     duration_seconds: _Seconds | None = None
     distance_m: _Metres | None = None
+    # Epic 54: absent = false. Strict, so "yes" or null is a 422 rather than a guess.
+    is_warmup: StrictBool = False
 
     @model_validator(mode="after")
     def _exactly_one(self) -> "SetCreate":
@@ -244,6 +326,7 @@ class SetOut(BaseModel):
     weight: Weight | None
     duration_seconds: int | None
     distance_m: int | None
+    is_warmup: bool
 
 
 class WorkoutDetailOut(BaseModel):

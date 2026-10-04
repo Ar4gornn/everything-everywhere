@@ -12,11 +12,13 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     UniqueConstraint,
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -110,6 +112,13 @@ class RoutineExercise(Base):
     # Rest after the exercise's last set, before the next one (Epic 43; CHECK in 0036).
     rest_after_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Epic 54 (AD-67; CHECKs in 0038). Per-set targets; the flat target_* above mirror the first
+    # working set. none_as_null: Python None must be SQL NULL, not JSON null.
+    set_targets: Mapped[list | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    target_rpe: Mapped[decimal.Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
+    target_rir: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    tempo: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    superset_group: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
 
 class Workout(Base):
@@ -179,6 +188,8 @@ class WorkoutSet(Base):
     reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Epic 54: a warm-up set is excluded from history aggregates and records.
+    is_warmup: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

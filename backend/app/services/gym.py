@@ -275,7 +275,51 @@ def routines_full(
     return [(routine, grouped[routine.id]) for routine in routines]
 
 
-_LINE_FIELDS = (
+_SET_MEASURE = {"reps": "reps", "duration": "seconds", "distance": "distance_m"}
+
+
+def normalise_set_targets(kind: str, set_targets: list[dict]) -> tuple[list[dict], dict]:
+    """Per-set targets -> (the JSON to store, the flat fields that mirror them) (Epic 54).
+
+    Only the measure matching the exercise's kind may be set on a set. The flat fields are the
+    first non-warm-up set's (the first set's when all are warm-ups), ``target_sets`` the length,
+    so GymCard, the prompt context and the session fallback keep reading the flat columns.
+    """
+    own = _SET_MEASURE[kind]
+    stored: list[dict] = []
+    for item in set_targets:
+        foreign = [m for m in ("reps", "seconds", "distance_m") if m != own and item.get(m)]
+        if foreign:
+            raise Invalid(
+                f"a {kind} exercise takes only {own} per set, not {foreign[0]}",
+                "set_target_wrong_measure",
+            )
+        weight = item.get("weight")
+        stored.append(
+            {
+                "reps": item.get("reps"),
+                "seconds": item.get("seconds"),
+                "distance_m": item.get("distance_m"),
+                "weight": None if weight is None else f"{Decimal(weight):.2f}",
+                "warmup": bool(item.get("warmup", False)),
+            }
+        )
+    lead = next((t for t in stored if not t["warmup"]), stored[0])
+    flat = {
+        "target_sets": len(stored),
+        "target_reps": lead["reps"],
+        "target_seconds": lead["seconds"],
+        "target_distance_m": lead["distance_m"],
+        "target_weight": None if lead["weight"] is None else Decimal(lead["weight"]),
+    }
+    return stored, flat
+
+
+def _rpe_value(value: object) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
+
+
+_FLAT_TARGETS = (
     "target_sets",
     "target_reps",
     "target_seconds",
@@ -285,6 +329,24 @@ _LINE_FIELDS = (
     "rest_after_seconds",
     "note",
 )
+_LINE_FIELDS = (
+    *_FLAT_TARGETS,
+    "set_targets",
+    "target_rpe",
+    "target_rir",
+    "tempo",
+    "superset_group",
+)
+
+
+def _line_values(kind: str, values: dict) -> dict:
+    """Every column a new routine line carries, normalised (create and import)."""
+    out = {key: values.get(key) for key in _LINE_FIELDS}
+    if out["set_targets"] is not None:
+        out["set_targets"], flat = normalise_set_targets(kind, out["set_targets"])
+        out.update(flat)
+    out["target_rpe"] = _rpe_value(out["target_rpe"])
+    return out
 
 
 def _next_position(session: Session, user_id: uuid.UUID, routine_id: uuid.UUID) -> int:
@@ -312,6 +374,11 @@ def add_routine_line(
     rest_seconds: int | None = None,
     rest_after_seconds: int | None = None,
     note: str | None = None,
+    set_targets: list[dict] | None = None,
+    target_rpe: float | None = None,
+    target_rir: int | None = None,
+    tempo: str | None = None,
+    superset_group: int | None = None,
 ) -> tuple[RoutineExercise, Exercise]:
     get_routine(session, user_id, routine_id)
     if exercise_name is not None:
@@ -328,14 +395,24 @@ def add_routine_line(
         routine_id=routine_id,
         exercise_id=exercise.id,
         position=_next_position(session, user_id, routine_id),
-        target_sets=target_sets,
-        target_reps=target_reps,
-        target_seconds=target_seconds,
-        target_distance_m=target_distance_m,
-        target_weight=target_weight,
-        rest_seconds=rest_seconds,
-        rest_after_seconds=rest_after_seconds,
-        note=note,
+        **_line_values(
+            exercise.kind,
+            {
+                "target_sets": target_sets,
+                "target_reps": target_reps,
+                "target_seconds": target_seconds,
+                "target_distance_m": target_distance_m,
+                "target_weight": target_weight,
+                "rest_seconds": rest_seconds,
+                "rest_after_seconds": rest_after_seconds,
+                "note": note,
+                "set_targets": set_targets,
+                "target_rpe": target_rpe,
+                "target_rir": target_rir,
+                "tempo": tempo,
+                "superset_group": superset_group,
+            },
+        ),
     )
     session.add(line)
     session.flush()
@@ -358,9 +435,17 @@ def update_routine_line(
     if row is None:
         raise NotFound("No routine line with that id")
     line, exercise = row
+    fields = dict(fields)
+    if fields.get("set_targets") is not None:
+        fields["set_targets"], flat = normalise_set_targets(exercise.kind, fields["set_targets"])
+        fields.update(flat)
+    if "target_rpe" in fields:
+        fields["target_rpe"] = _rpe_value(fields["target_rpe"])
     for key in _LINE_FIELDS:
         if key in fields:
             setattr(line, key, fields[key])
+    if line.target_rpe is not None and line.target_rir is not None:
+        raise Invalid("give an RPE or an RIR, not both", "effort_rpe_and_rir")
     session.flush()
     return line, exercise
 
@@ -427,7 +512,7 @@ def import_routine(
                 routine_id=routine.id,
                 exercise_id=exercise.id,
                 position=position,
-                **{key: line.get(key) for key in _LINE_FIELDS},
+                **_line_values(exercise.kind, line),
             )
         )
     session.flush()
@@ -558,6 +643,7 @@ def log_set(
     kind: str | None = None,
     duration_seconds: int | None = None,
     distance_m: int | None = None,
+    is_warmup: bool = False,
 ) -> WorkoutSet:
     get_workout(session, user_id, workout_id)
     if exercise_name is not None:
@@ -585,6 +671,7 @@ def log_set(
         weight=weight,
         duration_seconds=duration_seconds,
         distance_m=distance_m,
+        is_warmup=is_warmup,
     )
     session.add(row)
     session.flush()
@@ -706,6 +793,7 @@ def complete_workout(
                 weight=item["weight"],
                 duration_seconds=measures["duration_seconds"],
                 distance_m=measures["distance_m"],
+                is_warmup=item.get("is_warmup", False),
             )
         )
     session.flush()
@@ -742,7 +830,9 @@ _HISTORY = text(
            sum(s.weight * s.reps) FILTER (WHERE s.weight IS NOT NULL) AS volume
     FROM workout_sets s
     JOIN workouts w ON w.user_id = s.user_id AND w.id = s.workout_id
-    WHERE s.user_id = :uid AND s.exercise_id = :exercise_id
+    -- Warm-ups are not work: out of every aggregate (Epic 54). A session of only warm-ups
+    -- has no point at all.
+    WHERE s.user_id = :uid AND s.exercise_id = :exercise_id AND NOT s.is_warmup
     GROUP BY w.performed_on
     ORDER BY w.performed_on
     """
