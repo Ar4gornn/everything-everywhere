@@ -72,6 +72,11 @@
 	header @landing Cache-Control "no-cache"
 	rewrite @landing /landing.html
 
+	# "/" is the landing or the app depending on the cookie, so any shared cache in front
+	# must key on it.
+	@root path /
+	header @root Vary "Cookie"
+
 	# AD-66: every other landing document, with the same two headers.
 	@landingdocs path /landing.html /fr/ /fr/index.html /privacy/ /privacy/index.html /fr/privacy/ /fr/privacy/index.html
 	header @landingdocs X-EE-Page "landing"

@@ -114,6 +114,31 @@ p {
   text-underline-offset: 4px;
 }
 
+/* Phones: one row where it fits. The name takes what is left and breaks between its two words
+   rather than pushing Sign in onto a second line; its floor is its longest word, so the row
+   wraps only when even that does not fit (French at 320). */
+@media (max-width: 479px) {
+  .bar {
+    column-gap: 8px;
+  }
+
+  .brand {
+    flex: 1 1 0;
+    min-width: min-content;
+    line-height: 1.2;
+    overflow-wrap: normal;
+  }
+
+  .lang {
+    gap: 0;
+  }
+
+  .top .btn {
+    padding-inline: 14px;
+    white-space: nowrap;
+  }
+}
+
 /* Buttons and links that act as buttons */
 .btn {
   display: inline-flex;

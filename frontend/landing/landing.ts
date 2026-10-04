@@ -14,6 +14,20 @@ if (location.pathname === "/" && !stored && navigator.language.toLowerCase().sta
   location.replace("/fr/");
 }
 
+// The app's sign-in page opens in the language this page was read in, not the browser's: a
+// visitor who switched to French here should not be handed back to English at the door.
+// Same key as the app's i18n (src/i18n/index.tsx STORAGE_KEY); the account's own language
+// still wins once signed in.
+for (const a of document.querySelectorAll<HTMLAnchorElement>('a[href^="/signin"]')) {
+  a.addEventListener("click", () => {
+    try {
+      localStorage.setItem("everything-everywhere.language", document.documentElement.lang);
+    } catch {
+      // The sign-in page then falls back to the browser's language.
+    }
+  });
+}
+
 for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-lang]")) {
   a.addEventListener("click", () => {
     try {

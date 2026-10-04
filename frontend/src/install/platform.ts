@@ -43,7 +43,10 @@ export function detectPlatform(userAgent: string, maxTouchPoints: number): Insta
   const isIos = /\b(iPhone|iPad|iPod)\b/.test(ua) || (/\bMacintosh\b/.test(ua) && maxTouchPoints > 1);
   if (isIos) {
     let browser: InstallBrowser = "safari";
-    if (/\bCriOS\//.test(ua)) browser = "chrome";
+    // Opera (OPT), Opera Mini (OPiOS) and Opera GX (OPX) on iOS carry Safari's own tokens,
+    // GX even `Version/`, so they are named before anything else.
+    if (/\b(OPX|OPT|OPiOS)\//.test(ua)) browser = "other";
+    else if (/\bCriOS\//.test(ua)) browser = "chrome";
     else if (/\bEdgiOS\//.test(ua)) browser = "edge";
     else if (/\bFxiOS\//.test(ua)) browser = "firefox";
     return { os: "ios", browser, iosMajor: iosMajorOf(ua) };
@@ -54,7 +57,7 @@ export function detectPlatform(userAgent: string, maxTouchPoints: number): Insta
     if (/\bSamsungBrowser\//.test(ua)) browser = "samsung";
     else if (/\bEdgA\//.test(ua)) browser = "edge";
     else if (/\bFirefox\//.test(ua)) browser = "firefox";
-    else if (/\bOPR\//.test(ua)) browser = "other";
+    else if (/\b(OPR|OPX)\//.test(ua)) browser = "other";
     else if (/\bChrome\//.test(ua)) browser = "chrome";
     return { os: "android", browser, iosMajor: null };
   }

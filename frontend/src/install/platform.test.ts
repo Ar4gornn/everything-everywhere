@@ -41,6 +41,18 @@ const SAFARI_MAC =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
 const FIREFOX_WIN =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0";
+// Opera tokens (whatmyuseragent.com, udger.com, testmuai.com): GX mobile OPX on both phones,
+// Opera for iOS OPT, Opera for Android and desktop OPR.
+const OPERA_GX_IOS =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Mobile/15E148 Safari/604.1 OPX/3.2.1";
+const OPERA_IOS =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 OPT/5.0.0";
+const OPERA_GX_ANDROID =
+  "Mozilla/5.0 (Linux; Android 12; T779W Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.46 Mobile Safari/537.36 OPX/3.3";
+const OPERA_ANDROID =
+  "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36 OPR/83.0.0.0";
+const OPERA_WIN =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 OPR/112.0.0.0";
 
 describe("detectPlatform", () => {
   const rows: [string, string, number, string, string, number | null][] = [
@@ -60,6 +72,11 @@ describe("detectPlatform", () => {
     ["Windows Edge", EDGE_WIN, 0, "desktop", "edge", null],
     ["macOS Safari (no touch)", SAFARI_MAC, 0, "desktop", "safari", null],
     ["Windows Firefox", FIREFOX_WIN, 0, "desktop", "firefox", null],
+    ["iPhone Opera GX (OPX)", OPERA_GX_IOS, 5, "ios", "other", 26],
+    ["iPhone Opera (OPT)", OPERA_IOS, 5, "ios", "other", 17],
+    ["Android Opera GX (OPX)", OPERA_GX_ANDROID, 5, "android", "other", null],
+    ["Android Opera (OPR)", OPERA_ANDROID, 5, "android", "other", null],
+    ["Windows Opera (OPR)", OPERA_WIN, 0, "desktop", "other", null],
   ];
 
   it.each(rows)("%s", (_name, ua, touch, os, browser, iosMajor) => {
