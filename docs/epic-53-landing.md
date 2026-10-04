@@ -53,10 +53,15 @@ Landing, top to bottom:
 1. **Header bar.** Wordmark "Everything Everywhere" (links to its own language's home), an
    EN | FR toggle (two links, current one `aria-current="page"`), and a **Sign in** link.
 2. **Hero.** `h1`, one sentence of sub-copy, primary button **Sign in** and secondary link
-   **Have an invite? Create an account**. A one-line note that it is invite-only and free.
+   **Have an invite? Create an account**. A one-line note that it is invite-only. (Purpose,
+   clarified 2026-10-04: the page is a guide for family and friends Alex invites, not a pitch.
+   The app is not free yet: never say "free" or give a price. No personal names.)
    The dashboard screenshot sits beside the text on wide screens and below it on phones.
    This is the LCP image: `fetchpriority="high"`, not lazy.
-3. **Four sections**, each with an `h2`, a one-sentence lead, a 3–6 item feature list
+3. **Getting started** (`#getting-started`): an `<ol>` of eight steps from invite link to a
+   useful first week, each naming the app's own labels in bold. **Tips** (`#tips`): seven
+   habits. Then a short **What's inside** heading and
+   **four sections**, each with an `h2`, a one-sentence lead, a 3–5 item feature list
    (short noun phrase + one plain sentence each), and at most one screenshot.
    Order: Money → Home → You → Everywhere.
 4. **Your data, your server.** Three facts: no ads or trackers; hosted in Germany;
@@ -139,7 +144,20 @@ don't use"): all nine modules are on for a new account; turning one off hides it
 - Switch modules off, and arrange the tabs separately for phone and desktop.
 - A guided tour.
 
+**Getting started and tips (2026-10-04; labels are the app's own, from `i18n/messages/`):**
+- The invite link opens sign-up with the invite code filled in (AD-54); the form asks Email,
+  Password (10+ characters), Invite code, Currency; the currency locks once the account has data.
+- `/install` works signed out. The tour opens on first sign-in and replays from Settings.
+- Settings: Account currency, Budget month (Starts on day), Password and recovery (Generate
+  codes, self-service), Calendar apps (subscribe link), Export (Entries, Savings, Stock CSV),
+  Layout (Sections you use). On a phone, More → "Change what's in the bar" opens Layout.
+- The + button (Add an entry) opens quick add on a phone; Plan holds Recurring, Savings (goal
+  amount, goal date) and Monthly budgets; Stock holds the Shopping list (Bought); Check in keeps
+  a streak; points buy a freeze.
+
 **Privacy facts (privacy page):**
+- Accounts never see each other's data; the person who runs the server has technical access to
+  the database (said on the home strip and the privacy page).
 - No third-party requests: no analytics, no ads, no font CDN, and the CSP enforces
   `'self'`.
 - Passwords are hashed with Argon2. Refresh tokens and calendar-feed tokens are stored
@@ -165,8 +183,9 @@ don't use"): all nine modules are on for a new account; turning one off hides it
 - A year filter on Entries.
 - A mood CSV (no button).
 - Bank sync, shared or household accounts, native apps, anything "AI-powered".
-- "Free": Alex never confirmed it, so it was removed in QA (2026-10-04). Add it to §3.1 only
-  if he confirms it.
+- "Free", "gratuit" and any price: Alex never confirmed it, so it was removed in QA
+  (2026-10-04). A test refuses the words. Add it to §3.1 only if he confirms it.
+- Shared or household accounts: say each person has their own account.
 - Anything about what the server logs hold beyond "can include" the source address
   (uvicorn access logs, rotated 10 MB × 5; Caddy writes none).
 

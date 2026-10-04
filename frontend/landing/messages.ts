@@ -1,37 +1,133 @@
 import type { Entry } from "../src/i18n/catalogue.ts";
 
 // Every claim here traces to docs/epic-53-landing.md section 3.1. Section 3.2 (push,
-// reminders, digest, bank sync, ...) must never appear; landing.test.ts guards the words.
-// Feature names follow the app's own French labels (Opérations, Budget, Épargne, Sport...).
+// reminders, digest, bank sync, "free", prices ...) must never appear; landing.test.ts guards
+// the words. Feature names follow the app's own labels in each language, quoted between
+// double asterisks (render.ts turns them into <strong>): the strings are in
+// frontend/src/i18n/messages/*.ts and are listed in the story notes.
 //
 // Naming: `<name>.t` is an item's title and `<name>.d` its sentence; render.ts refers to the
 // shared `<name>` and the unused-key test accounts for that.
 export const landing = {
   "meta.title": { en: "Everything Everywhere", fr: "Everything Everywhere" },
   "meta.homeTitle": {
-    en: "Everything Everywhere: money, home and habits in one app",
-    fr: "Everything Everywhere : argent, maison et habitudes dans une seule application",
+    en: "Everything Everywhere: a guide for family and friends",
+    fr: "Everything Everywhere : le guide pour la famille et les amis",
   },
   "meta.description": {
-    en: "Track money, stock, recipes, habits, workouts and notes in one invite-only app you can install on your phone. Open source.",
-    fr: "Suivez votre argent, votre stock, vos recettes, vos habitudes, votre sport et vos notes dans une seule application sur invitation, à installer sur votre téléphone. Code source ouvert.",
+    en: "A guide for family and friends invited to Everything Everywhere: how to get started, and how to use it well to track money, home and daily habits. Invite-only, open source.",
+    fr: "Le guide des proches invités sur Everything Everywhere : comment démarrer et bien s’en servir pour suivre l’argent, la maison et les habitudes du quotidien. Sur invitation, code source ouvert.",
   },
   "skip.link": { en: "Skip to content", fr: "Aller au contenu" },
   "lang.label": { en: "Language", fr: "Langue" },
   "action.signin": { en: "Sign in", fr: "Se connecter" },
 
   "hero.title": {
-    en: "Your money, home and habits in one place",
-    fr: "Votre argent, votre foyer et vos habitudes au même endroit",
+    en: "Money, home and daily habits in one app, for family and friends",
+    fr: "L’argent, la maison et les habitudes du quotidien dans une seule application, pour la famille et les amis",
   },
   "hero.sub": {
-    en: "Track spending and savings, stock and recipes, habits, workouts and notes in one app you can install on your phone.",
-    fr: "Suivez vos dépenses et votre épargne, votre stock et vos recettes, vos habitudes, vos séances de sport et vos notes dans une seule application, à installer sur votre téléphone.",
+    en: "Everything Everywhere is an app shared with family and friends. Each person has their own account to track money, home and daily habits. This page shows you how to get started and how to use it well.",
+    fr: "Everything Everywhere est une application partagée entre proches. Chacun a son propre compte pour suivre l’argent, la maison et les habitudes du quotidien. Cette page vous montre comment démarrer et bien vous en servir.",
   },
   "hero.register": { en: "Have an invite? Create an account", fr: "Une invitation ? Créez un compte" },
   "hero.note": {
-    en: "Everything Everywhere is invite-only: you need an invitation to create an account.",
-    fr: "Everything Everywhere fonctionne sur invitation : il faut être invité pour créer un compte.",
+    en: "It is invite-only: you need an invitation from the person who shared it with you.",
+    fr: "Elle fonctionne sur invitation : il vous faut celle de la personne qui vous l’a fait découvrir.",
+  },
+
+  "start.h": { en: "Getting started", fr: "Pour bien démarrer" },
+  "start.lead": {
+    en: "From your invitation to a useful first week, in eight steps.",
+    fr: "De l’invitation à une première semaine utile, en huit étapes.",
+  },
+  "start.invite.t": { en: "Open your invite link and create your account", fr: "Ouvrez votre lien d’invitation et créez votre compte" },
+  "start.invite.d": {
+    en: "The link opens the sign-up form with your **Invite code** already filled in; it works once. Enter your **Email**, a **Password** of at least 10 characters and your **Currency**, then press **Create account**. The currency can only be changed while the account is still empty.",
+    fr: "Le lien ouvre le formulaire d’inscription avec votre **Code d’invitation** déjà rempli ; il ne sert qu’une fois. Saisissez votre **Adresse e-mail**, un **Mot de passe** d’au moins 10 caractères et votre **Devise**, puis appuyez sur **Créer le compte**. La devise ne se change que tant que le compte est vide.",
+  },
+  "start.install.t": { en: "Install it on your phone", fr: "Installez-la sur votre téléphone" },
+  "start.install.d": {
+    en: "The install guide works even before you sign in. Later you can find it in **Settings**, under **Install the app**, with **Open the guide**.",
+    fr: "Le guide d’installation fonctionne même avant la connexion. Vous le retrouverez plus tard dans les **Réglages**, sous **Installer l’application**, avec **Ouvrir le guide**.",
+  },
+  "start.tour.t": { en: "Take the short tour", fr: "Faites la courte visite" },
+  "start.tour.d": {
+    en: "The first time you sign in, a short tour shows you how to record an entry, set a budget and read the dashboard. You can play it again from **Settings**, with **Show the tour again**.",
+    fr: "À votre première connexion, une courte visite vous montre comment enregistrer une opération, fixer un budget et lire le tableau de bord. Vous pouvez la rejouer depuis les **Réglages**, avec **Revoir la visite**.",
+  },
+  "start.settings.t": { en: "Check your settings", fr: "Vérifiez vos réglages" },
+  "start.settings.d": {
+    en: "In **Settings**, look at **Account currency**, then set **Budget month** to start on the day you are paid (**Starts on day**).",
+    fr: "Dans les **Réglages**, vérifiez la **Devise du compte**, puis faites commencer le **Mois budgétaire** le jour de votre paie (**Commence le jour**).",
+  },
+  "start.first.t": { en: "Record your first expense", fr: "Notez votre première dépense" },
+  "start.first.d": {
+    en: "On a phone, tap the **+** button (**Add an entry**), choose a category, enter the amount and press **Save**. On a computer, open **Entries**.",
+    fr: "Sur téléphone, touchez le bouton **+** (**Ajouter une opération**), choisissez une catégorie, saisissez le montant et appuyez sur **Enregistrer**. Sur ordinateur, ouvrez **Opérations**.",
+  },
+  "start.plan.t": { en: "Set a monthly plan", fr: "Fixez un budget mensuel" },
+  "start.plan.d": {
+    en: "Open **Plan**, find **Monthly budgets** and give each category an amount. You will then see what you spent against what you planned.",
+    fr: "Ouvrez **Budget**, repérez **Budgets mensuels** et donnez un montant à chaque catégorie. Vous verrez alors ce que vous avez dépensé face à ce que vous aviez prévu.",
+  },
+  "start.recovery.t": { en: "Keep your recovery codes", fr: "Gardez vos codes de récupération" },
+  "start.recovery.d": {
+    en: "In **Settings**, under **Password and recovery**, press **Generate codes** and keep them somewhere that is not this app. If you forget your password, **Forgot your password?** on the sign-in page lets you set a new one with your email and one code.",
+    fr: "Dans les **Réglages**, sous **Mot de passe et récupération**, appuyez sur **Générer des codes** et conservez-les ailleurs que dans l’application. Si vous oubliez votre mot de passe, **Mot de passe oublié ?** sur la page de connexion vous permet d’en définir un nouveau avec votre e-mail et un code.",
+  },
+  "start.yours.t": { en: "Make it yours", fr: "Faites-en votre outil" },
+  "start.yours.d": {
+    en: "On a phone, **More** then **Change what’s in the bar** lets you pin the four places you use most. In **Settings**, **Layout** also has **Sections you use**: switch off what you don’t need.",
+    fr: "Sur téléphone, **Plus** puis **Modifier la barre** vous permet d’épingler les quatre rubriques que vous utilisez le plus. Dans les **Réglages**, **Disposition** propose aussi **Rubriques utilisées** : désactivez ce qui ne vous sert pas.",
+  },
+  "start.install.link": { en: "Open the install guide", fr: "Ouvrir le guide d’installation" },
+
+  "tips.h": { en: "Tips to get the most out of it", fr: "Nos conseils pour en profiter" },
+  "tips.lead": {
+    en: "Small habits that make the app more useful.",
+    fr: "De petites habitudes qui rendent l’application plus utile.",
+  },
+  "tips.asyougo.t": { en: "Record purchases as they happen", fr: "Notez les achats sur le moment" },
+  "tips.asyougo.d": {
+    en: "The **+** button on your phone is the fastest way. Without a connection, the entry waits on your phone and is sent when you are back online.",
+    fr: "Le bouton **+** de votre téléphone est le plus rapide. Sans connexion, l’opération attend sur votre téléphone et part dès que le réseau revient.",
+  },
+  "tips.recurring.t": { en: "Make rent and salary recurring", fr: "Rendez le loyer et le salaire récurrents" },
+  "tips.recurring.d": {
+    en: "On **Plan**, use **Recurring** and **Add a recurring entry**. Each one is proposed when it is due and you confirm it or press **Skip**. Tick **Add automatically** only for a fixed amount like rent.",
+    fr: "Sur **Budget**, utilisez **Récurrent** puis **Ajouter une récurrence**. Chacune vous est proposée à l’échéance et vous la confirmez ou appuyez sur **Passer**. Ne cochez **Ajouter automatiquement** que pour un montant fixe, comme un loyer.",
+  },
+  "tips.pots.t": { en: "Give savings pots a goal and a date", fr: "Donnez un objectif et une date aux pots d’épargne" },
+  "tips.pots.d": {
+    en: "In the **Savings** card on **Plan**, fill in **Goal amount** and **Goal date**. The app then proposes how much to put aside each month.",
+    fr: "Dans la carte **Épargne** de **Budget**, renseignez **Montant visé** et **Date visée**. L’application vous propose alors combien mettre de côté chaque mois.",
+  },
+  "tips.stock.t": { en: "Keep Stock levels up to date", fr: "Tenez les niveaux du Stock à jour" },
+  "tips.stock.d": {
+    en: "Give each item a restock level in **Stock**. Items that run low appear in the **Shopping list**, and ticking one as **Bought** restocks it and can record the expense in the same step.",
+    fr: "Donnez à chaque article un seuil de réapprovisionnement dans **Stock**. Ceux qui manquent arrivent dans la **Liste de courses** ; cocher **Acheté** les réapprovisionne et peut enregistrer la dépense dans la foulée.",
+  },
+  "tips.calendar.t": { en: "Put it in your phone’s calendar", fr: "Mettez-le dans l’agenda de votre téléphone" },
+  "tips.calendar.d": {
+    en: "In **Settings**, under **Calendar apps**, press **Create a subscribe link** and paste it into Google, Apple or Outlook calendar. It is read-only: changes are made in the app.",
+    fr: "Dans les **Réglages**, sous **Applications d’agenda**, appuyez sur **Créer un lien d’abonnement** et collez-le dans Google, Apple ou Outlook. C’est en lecture seule : les modifications se font dans l’application.",
+  },
+  "tips.streak.t": { en: "Check in every day", fr: "Validez votre journée chaque jour" },
+  "tips.streak.d": {
+    en: "Press **Check in** to keep your streak going and earn points. Points can buy a freeze that covers a day off.",
+    fr: "Appuyez sur **Valider aujourd’hui** pour entretenir votre série et gagner des points. Les points achètent un gel qui couvre un jour d’absence.",
+  },
+  "tips.export.t": { en: "Export your data when you like", fr: "Exportez vos données quand vous voulez" },
+  "tips.export.d": {
+    en: "In **Settings**, under **Export**, download **Entries CSV**, **Savings CSV** or **Stock CSV** for a spreadsheet or to keep.",
+    fr: "Dans les **Réglages**, sous **Export**, téléchargez **Opérations (CSV)**, **Épargne (CSV)** ou **Stock (CSV)** pour un tableur ou pour les conserver.",
+  },
+
+  "inside.h": { en: "What’s inside", fr: "Ce que vous y trouverez" },
+  "inside.lead": {
+    en: "The main places, in four groups.",
+    fr: "Les principales rubriques, en quatre groupes.",
   },
 
   "money.h": { en: "Money", fr: "Argent" },
@@ -41,33 +137,28 @@ export const landing = {
   },
   "money.entries.t": { en: "Income and expenses", fr: "Revenus et dépenses" },
   "money.entries.d": {
-    en: "Record each one with a category, an optional quantity and unit, and the shop it came from. Search them later, or add one from a bottom sheet on your phone.",
-    fr: "Notez chacun avec une catégorie, une quantité et une unité facultatives, et le magasin. Retrouvez-les avec la recherche, ou ajoutez-en un depuis un panneau en bas de l’écran sur téléphone.",
+    en: "Each with a category, an optional quantity and unit, and the shop. Search them later.",
+    fr: "Chacun avec une catégorie, une quantité et une unité facultatives, et le magasin. Retrouvez-les avec la recherche.",
   },
   "money.recurring.t": { en: "Recurring entries", fr: "Opérations récurrentes" },
   "money.recurring.d": {
-    en: "Rent, subscriptions and salary are proposed each time they are due, and you confirm or skip them.",
-    fr: "Loyer, abonnements et salaire vous sont proposés à chaque échéance, et vous les confirmez ou vous les passez.",
+    en: "Rent, subscriptions and salary are proposed when due; you confirm or skip.",
+    fr: "Loyer, abonnements et salaire vous sont proposés à l’échéance ; vous confirmez ou vous passez.",
   },
   "money.plan.t": { en: "A monthly plan", fr: "Un budget mensuel" },
   "money.plan.d": {
-    en: "Set an amount per category and see what you spent against what you planned. Your budget month can start on any day you choose.",
-    fr: "Fixez un montant par catégorie et comparez-le à ce que vous avez dépensé. Votre mois budgétaire peut commencer le jour de votre choix.",
+    en: "An amount per category, against what you spent. Your budget month can start on any day.",
+    fr: "Un montant par catégorie, face à ce que vous avez dépensé. Votre mois budgétaire peut commencer n’importe quel jour.",
   },
-  "money.totals.t": { en: "Totals and prices", fr: "Totaux et prix" },
+  "money.totals.t": { en: "Totals and comparisons", fr: "Totaux et comparaisons" },
   "money.totals.d": {
-    en: "See totals for the month, the year and all time, and compare unit prices between shops. Amounts are in US dollars or euros.",
-    fr: "Consultez les totaux du mois, de l’année et de tous les temps, et comparez les prix unitaires d’un magasin à l’autre. Les montants sont en dollars américains ou en euros.",
+    en: "Totals for the month, the year and all time, and what you pay per unit in each shop. Grow compares interest rates on your device and stores nothing.",
+    fr: "Les totaux du mois, de l’année et de tous les temps, et ce que vous payez par unité dans chaque magasin. L’onglet Épargne compare des taux d’intérêt sur votre appareil, sans rien enregistrer.",
   },
   "money.pots.t": { en: "Savings pots", fr: "Pots d’épargne" },
   "money.pots.d": {
-    en: "Give each pot a goal and a date, make deposits and withdrawals, and get a proposed monthly amount. An expense can be paid from a pot.",
-    fr: "Donnez à chaque pot un objectif et une date, faites des dépôts et des retraits, et obtenez un montant mensuel proposé. Une dépense peut être payée depuis un pot.",
-  },
-  "money.grow.t": { en: "Rates and export", fr: "Taux et export" },
-  "money.grow.d": {
-    en: "Grow compares interest rates on your device and stores nothing. Export your entries, savings, stock and books to CSV.",
-    fr: "L’onglet Épargne compare des taux d’intérêt sur votre appareil, sans rien enregistrer. Exportez vos opérations, votre épargne, votre stock et vos livres en CSV.",
+    en: "A goal and a date for each pot, deposits and withdrawals, and a proposed monthly amount. An expense can be paid from a pot.",
+    fr: "Un objectif et une date par pot, des dépôts et des retraits, et un montant mensuel proposé. Une dépense peut être payée depuis un pot.",
   },
 
   "home.h": { en: "Home", fr: "Maison" },
@@ -77,23 +168,23 @@ export const landing = {
   },
   "home.stock.t": { en: "Stock", fr: "Stock" },
   "home.stock.d": {
-    en: "Keep spaces and items with a restock level, and see each item’s history on a chart.",
-    fr: "Organisez des espaces et des articles avec un seuil de réapprovisionnement, et voyez l’historique de chaque article sur un graphique.",
+    en: "Spaces and items with a restock level, and a history chart for each item.",
+    fr: "Des espaces et des articles avec un seuil de réapprovisionnement, et un graphique d’historique par article.",
   },
   "home.shopping.t": { en: "Shopping list", fr: "Liste de courses" },
   "home.shopping.d": {
-    en: "It is built from what is running low. Tick an item to restock it and, if you want, record the expense in the same step.",
-    fr: "Elle se construit à partir de ce qui manque. Cochez un article pour le réapprovisionner et, si vous le souhaitez, enregistrer la dépense dans la foulée.",
+    en: "Built from what is running low. Tick an item to restock it and, if you want, record the expense.",
+    fr: "Construite à partir de ce qui manque. Cochez un article pour le réapprovisionner et, si vous le souhaitez, enregistrer la dépense.",
   },
   "home.recipes.t": { en: "Recipes", fr: "Recettes" },
   "home.recipes.d": {
-    en: "Write down ingredients, steps and servings.",
-    fr: "Notez les ingrédients, les étapes et le nombre de portions.",
+    en: "Ingredients, steps and servings.",
+    fr: "Les ingrédients, les étapes et le nombre de portions.",
   },
   "home.meals.t": { en: "Foods and meals", fr: "Aliments et repas" },
   "home.meals.d": {
-    en: "Add foods with their kcal and macros, log a meal, and it shows on your calendar.",
-    fr: "Ajoutez des aliments avec leurs kcal et leurs macros, enregistrez un repas, et il apparaît dans votre calendrier.",
+    en: "Foods with their kcal and macros; a logged meal shows on your calendar.",
+    fr: "Des aliments avec leurs kcal et leurs macros ; un repas enregistré apparaît dans votre calendrier.",
   },
 
   "you.h": { en: "You", fr: "Vous" },
@@ -101,25 +192,20 @@ export const landing = {
     en: "Keep track of the things you do for yourself.",
     fr: "Gardez la trace de ce que vous faites pour vous.",
   },
-  "you.habits.t": { en: "Habits", fr: "Habitudes" },
+  "you.habits.t": { en: "Habits and mood", fr: "Habitudes et humeur" },
   "you.habits.d": {
-    en: "Flexible schedules: a number of times a week, certain weekdays, every few days, a day of the month or the nth weekday. Check in each day and see a heatmap.",
-    fr: "Des fréquences souples : un nombre de fois par semaine, certains jours, tous les quelques jours, un jour du mois ou le énième jour de la semaine. Validez chaque jour et suivez une carte de chaleur.",
-  },
-  "you.mood.t": { en: "Mood", fr: "Humeur" },
-  "you.mood.d": {
-    en: "A daily check-in, with a note if you want one.",
-    fr: "Un point quotidien, avec une note si vous le souhaitez.",
+    en: "Flexible schedules, a daily check-in and a heatmap, plus a daily mood check-in with an optional note.",
+    fr: "Des fréquences souples, un suivi quotidien et une carte de chaleur, plus un point d’humeur chaque jour avec une note facultative.",
   },
   "you.gym.t": { en: "Gym", fr: "Sport" },
   "you.gym.d": {
-    en: "Exercises, routines, sessions, rest days, history and a strength chart. You can build a prompt from your own training data, paste it into the AI assistant of your choice and import the plan it returns. The app itself calls no AI.",
-    fr: "Exercices, programmes, séances, jours de repos, historique et courbe de force. Vous pouvez générer une consigne à partir de vos propres données d’entraînement, la coller dans l’assistant IA de votre choix et importer le plan qu’il vous renvoie. L’application elle-même n’appelle aucune IA.",
+    en: "Exercises, routines, sessions, rest days and a strength chart. You can build a prompt from your own data for the AI assistant of your choice and import its plan. The app itself calls no AI.",
+    fr: "Exercices, programmes, séances, jours de repos et courbe de force. Vous pouvez générer une consigne à partir de vos données pour l’assistant IA de votre choix et importer son plan. L’application elle-même n’appelle aucune IA.",
   },
   "you.books.t": { en: "Books and notes", fr: "Livres et notes" },
   "you.books.d": {
-    en: "Rate books, group them in series, tag them and keep their quotes. Write notes by typing or by drawing with a finger.",
-    fr: "Notez vos livres, regroupez-les en séries, ajoutez des étiquettes et gardez leurs citations. Écrivez des notes au clavier ou dessinez-les du bout du doigt.",
+    en: "Rate books, keep their quotes, and write notes by typing or drawing with a finger.",
+    fr: "Notez vos livres, gardez leurs citations et écrivez des notes au clavier ou en dessinant du bout du doigt.",
   },
   "you.streaks.t": { en: "Streaks and points", fr: "Séries et points" },
   "you.streaks.d": {
@@ -128,8 +214,8 @@ export const landing = {
   },
   "you.clocks.t": { en: "Moon and clocks", fr: "Lune et horloges" },
   "you.clocks.d": {
-    en: "See the moon phase and moonrise, computed on your device, and keep clocks for other time zones.",
-    fr: "Consultez la phase de la lune et son lever, calculés sur votre appareil, et gardez des horloges pour d’autres fuseaux horaires.",
+    en: "Moon phase and moonrise, computed on your device, and clocks for other time zones.",
+    fr: "Phase de la lune et son lever, calculés sur votre appareil, et des horloges pour d’autres fuseaux horaires.",
   },
 
   "everywhere.h": { en: "Everywhere", fr: "Partout" },
@@ -137,20 +223,15 @@ export const landing = {
     en: "On your phone, on your computer, and when the signal drops.",
     fr: "Sur votre téléphone, sur votre ordinateur, et quand le réseau disparaît.",
   },
-  "everywhere.install.t": { en: "Install it", fr: "Installez-la" },
-  "everywhere.install.d": {
-    en: "Put it on your phone or computer like an app. A built-in guide shows you how.",
-    fr: "Ajoutez-la à votre téléphone ou à votre ordinateur comme une application. Un guide intégré vous montre comment faire.",
-  },
   "everywhere.offline.t": { en: "Offline entries", fr: "Saisie hors connexion" },
   "everywhere.offline.d": {
-    en: "Entries, gym sessions and notes you make without a connection are sent later, when you are back online.",
-    fr: "Les opérations, séances de sport et notes saisies sans connexion sont envoyées plus tard, au retour du réseau.",
+    en: "Entries, gym sessions and notes made without a connection are sent later.",
+    fr: "Les opérations, séances de sport et notes saisies sans connexion sont envoyées plus tard.",
   },
   "everywhere.calendar.t": { en: "Calendar", fr: "Calendrier" },
   "everywhere.calendar.d": {
-    en: "See your records on a calendar with layers. Subscribe from Google, Apple or Outlook with a private link, or add a single item to your own calendar.",
-    fr: "Retrouvez vos données dans un calendrier à calques. Abonnez-vous depuis Google, Apple ou Outlook avec un lien privé, ou ajoutez un seul élément à votre propre calendrier.",
+    en: "Your records on a calendar with layers, a private link for Google, Apple or Outlook, and a way to add a single item to your own calendar.",
+    fr: "Vos données dans un calendrier à calques, un lien privé pour Google, Apple ou Outlook, et de quoi ajouter un seul élément à votre propre calendrier.",
   },
   "everywhere.looks.t": { en: "Languages and looks", fr: "Langues et apparence" },
   "everywhere.looks.d": {
@@ -168,6 +249,10 @@ export const landing = {
   "data.host": {
     en: "Hosted by Hetzner in Germany.",
     fr: "Hébergé par Hetzner, en Allemagne.",
+  },
+  "data.access": {
+    en: "Accounts never see each other’s data. As with any hosted service, the person who runs the server has technical access to the database.",
+    fr: "Les comptes ne voient jamais les données des autres. Comme pour tout service hébergé, la personne qui gère le serveur a un accès technique à la base de données.",
   },
   "data.open": {
     en: "Open source under the MIT licence, so anyone can run their own copy.",
@@ -199,7 +284,7 @@ export const landing = {
   },
 
   "privacy.title": { en: "Privacy", fr: "Confidentialité" },
-  "privacy.updated": { en: "Last updated: 2026-10-03", fr: "Dernière mise à jour : 2026-10-03" },
+  "privacy.updated": { en: "Last updated: 2026-10-04", fr: "Dernière mise à jour : 2026-10-04" },
   "privacy.intro": {
     en: "Everything Everywhere is a small, invite-only app. This page says plainly what it stores and where.",
     fr: "Everything Everywhere est une petite application sur invitation. Cette page dit simplement ce qu’elle conserve, et où.",
@@ -218,6 +303,11 @@ export const landing = {
   "privacy.security.d": {
     en: "Passwords are hashed with Argon2. Sign-in refresh tokens and calendar-feed tokens are stored only as hashes. Each account’s data is kept apart from every other account’s by Postgres row-level security.",
     fr: "Les mots de passe sont hachés avec Argon2. Les jetons de renouvellement de connexion et les jetons des flux de calendrier ne sont conservés que sous forme de hachages. Les données de chaque compte sont isolées de celles des autres par la sécurité au niveau des lignes de Postgres.",
+  },
+  "privacy.access.t": { en: "Who can see your data", fr: "Qui peut voir vos données" },
+  "privacy.access.d": {
+    en: "Accounts never see each other’s data. As with any hosted service, the person who runs the server has technical access to the database.",
+    fr: "Les comptes ne voient jamais les données des autres. Comme pour tout service hébergé, la personne qui gère le serveur a un accès technique à la base de données.",
   },
   "privacy.third.t": { en: "No third parties", fr: "Aucun tiers" },
   "privacy.third.d": {

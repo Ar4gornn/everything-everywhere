@@ -11,6 +11,7 @@ const LANGS: readonly Lang[] = ["en", "fr"];
 const LOCALE: Record<Lang, string> = { en: "en_US", fr: "fr_FR" };
 const GITHUB = "https://github.com/Ar4gornn/everything-everywhere";
 const SIGN_IN = "/signin";
+const INSTALL = "/install";
 const REGISTER = "/signin?mode=register";
 
 export function pagePath(lang: Lang, page: Page): string {
@@ -29,6 +30,11 @@ function esc(s: string): string {
 
 function tr(lang: Lang, key: LandingKey): string {
   return esc(landing[key][lang]);
+}
+
+// `**label**` in a message is the app's own UI label: rendered bold, after escaping.
+function rich(lang: Lang, key: LandingKey): string {
+  return tr(lang, key).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
 export type Shot = "dashboard" | "plan" | "stock" | "habits";
@@ -104,7 +110,7 @@ const SECTIONS: {
     h: "money.h",
     lead: "money.lead",
     shot: { which: "plan", alt: "alt.plan" },
-    items: ["money.entries", "money.recurring", "money.plan", "money.totals", "money.pots", "money.grow"],
+    items: ["money.entries", "money.recurring", "money.plan", "money.totals", "money.pots"],
   },
   {
     id: "home",
@@ -118,14 +124,13 @@ const SECTIONS: {
     h: "you.h",
     lead: "you.lead",
     shot: { which: "habits", alt: "alt.habits" },
-    items: ["you.habits", "you.mood", "you.gym", "you.books", "you.streaks", "you.clocks"],
+    items: ["you.habits", "you.gym", "you.books", "you.streaks", "you.clocks"],
   },
   {
     id: "everywhere",
     h: "everywhere.h",
     lead: "everywhere.lead",
     items: [
-      "everywhere.install",
       "everywhere.offline",
       "everywhere.calendar",
       "everywhere.looks",
@@ -138,6 +143,7 @@ const PRIVACY_SECTIONS: ItemBase[] = [
   "privacy.stored",
   "privacy.where",
   "privacy.security",
+  "privacy.access",
   "privacy.third",
   "privacy.logs",
   "privacy.device",
@@ -198,6 +204,66 @@ function items(lang: Lang, bases: ItemBase[]): string {
   return `<ul class="items">${lis.join("")}</ul>`;
 }
 
+const STEPS: ItemBase[] = [
+  "start.invite",
+  "start.install",
+  "start.tour",
+  "start.settings",
+  "start.first",
+  "start.plan",
+  "start.recovery",
+  "start.yours",
+];
+
+const TIPS: ItemBase[] = [
+  "tips.asyougo",
+  "tips.recurring",
+  "tips.pots",
+  "tips.stock",
+  "tips.calendar",
+  "tips.streak",
+  "tips.export",
+];
+
+// Steps are an ordered list; the numbers come from the list itself (CSS counter, tokens only).
+function gettingStarted(lang: Lang): string {
+  const lis = STEPS.map((b) => {
+    const link =
+      b === "start.install" ? `<a class="step-link" href="${INSTALL}">${tr(lang, "start.install.link")}</a>` : "";
+    return `<li><h3>${tr(lang, `${b}.t` as LandingKey)}</h3><p>${rich(lang, `${b}.d` as LandingKey)}</p>${link}</li>`;
+  });
+  return `<section class="guide" id="getting-started" aria-labelledby="start-h">
+      <div class="wrap">
+        <h2 id="start-h">${tr(lang, "start.h")}</h2>
+        <p class="lead">${tr(lang, "start.lead")}</p>
+        <ol class="steps">${lis.join("")}</ol>
+      </div>
+    </section>`;
+}
+
+function tips(lang: Lang): string {
+  const lis = TIPS.map(
+    (b) =>
+      `<li><h3>${tr(lang, `${b}.t` as LandingKey)}</h3><p>${rich(lang, `${b}.d` as LandingKey)}</p></li>`,
+  );
+  return `<section class="guide tips" id="tips" aria-labelledby="tips-h">
+      <div class="wrap">
+        <h2 id="tips-h">${tr(lang, "tips.h")}</h2>
+        <p class="lead">${tr(lang, "tips.lead")}</p>
+        <ul class="items">${lis.join("")}</ul>
+      </div>
+    </section>`;
+}
+
+function inside(lang: Lang): string {
+  return `<section class="inside" id="inside" aria-labelledby="inside-h">
+      <div class="wrap">
+        <h2 id="inside-h">${tr(lang, "inside.h")}</h2>
+        <p class="lead">${tr(lang, "inside.lead")}</p>
+      </div>
+    </section>`;
+}
+
 function sections(lang: Lang): string {
   return SECTIONS.map((s) => {
     const media = s.shot ? figure(lang, s.shot.which, s.shot.alt) : "";
@@ -221,6 +287,7 @@ function dataStrip(lang: Lang): string {
         <ul class="facts">
           <li>${tr(lang, "data.noads")}</li>
           <li>${tr(lang, "data.host")}</li>
+          <li>${tr(lang, "data.access")}</li>
           <li>${tr(lang, "data.open")}</li>
         </ul>
         <p class="links">
@@ -276,7 +343,7 @@ function privacyBody(lang: Lang): string {
 export function renderPage(lang: Lang, page: Page): string {
   const main =
     page === "home"
-      ? [hero(lang), sections(lang), dataStrip(lang), closing(lang)].join("\n    ")
+      ? [hero(lang), gettingStarted(lang), tips(lang), inside(lang), sections(lang), dataStrip(lang), closing(lang)].join("\n    ")
       : privacyBody(lang);
   return `<!doctype html>
 <html lang="${lang}">

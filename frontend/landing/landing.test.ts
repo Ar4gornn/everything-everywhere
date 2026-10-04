@@ -114,6 +114,21 @@ describe("rendered copy", () => {
     expect(visible(renderPage(lang, page))).not.toMatch(/notif|rappel|reminder/i);
   });
 
+  it.each(PAIRS)("%s %s never says free or names a price", (lang, page) => {
+    // EE is not free to use yet and has no public pricing (epic 53 section 3.2).
+    expect(visible(renderPage(lang, page))).not.toMatch(/\b(free|gratuit\w*|price|prix)\b/i);
+  });
+
+  it.each(["en", "fr"] as const)("%s home has an ordered getting-started list", (lang) => {
+    const html = renderPage(lang, "home");
+    const section = html.match(/<section[^>]*id="getting-started"[\s\S]*?<\/section>/)?.[0] ?? "";
+    expect(section).toContain("<ol");
+    expect(section.match(/<li>/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(section.match(/<li>/g)?.length).toBeLessThanOrEqual(8);
+    expect(section).toContain('href="/install"');
+    expect(html).toContain('id="tips"');
+  });
+
   it.each(["en", "fr"] as const)("%s home links to sign in and to registering", (lang) => {
     const html = renderPage(lang, "home");
     expect(html).toContain('href="/signin"');

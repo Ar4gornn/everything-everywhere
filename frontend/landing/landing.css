@@ -255,6 +255,83 @@ h1 {
   color: var(--muted);
 }
 
+/* Guide sections: numbered steps and tips. */
+.guide {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+}
+
+.guide h2,
+.inside h2 {
+  font-size: var(--fs-h3);
+}
+
+.inside {
+  padding: var(--space-5) 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.guide .items,
+.steps {
+  margin-top: var(--space-4);
+}
+
+.steps {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.steps li {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) 64px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  counter-increment: step;
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+}
+
+.steps h3 {
+  font-size: 18px;
+}
+
+.steps p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+}
+
+.steps strong,
+.items strong {
+  color: var(--text);
+}
+
+.step-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+
 /* Data strip and closing call to action */
 .strip {
   padding: var(--space-5) 0;
@@ -362,12 +439,19 @@ h1 {
   }
 
   .feature,
+  .guide,
   .strip,
   .cta {
     padding: var(--space-6) 0;
   }
 
+  .inside {
+    padding: var(--space-6) 0 0;
+  }
+
   .feature h2,
+  .guide h2,
+  .inside h2,
   .strip h2,
   .cta h2 {
     font-size: var(--fs-h2);
