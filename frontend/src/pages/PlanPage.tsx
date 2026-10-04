@@ -113,6 +113,7 @@ export function PlanPage() {
 
   return (
     <>
+      <h1 className="visually-hidden">{t("nav.plan")}</h1>
       <CheckInButton streak="plan" bar />
       <ErrorBanner message={failure} />
 

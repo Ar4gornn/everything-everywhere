@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PHASES } from "../moon/engine";
 import { onAPhone } from "../test/phone";
 import MoonPage from "./MoonPage";
+import { moonOnDay } from "../moon/useMoonView";
 
 /**
  * The Moon page (Epic 47). The engine, the location store and the hemisphere are other
@@ -183,6 +184,22 @@ describe("the today block", () => {
     expect(screen.getByTestId("moon-phase")).toHaveTextContent("Waxing gibbous");
     expect(screen.getByText("85% lit")).toBeInTheDocument();
     expect(screen.getByText("Age: 10.4 days")).toBeInTheDocument();
+  });
+
+  it("shows the same lit percentage as the dashboard line: the day's noon reading, not this instant", () => {
+    // An engine whose answer moves through the day: 10:00 is 42% lit, noon is 50%.
+    const reading = (when: Date) => ({
+      angle: 90,
+      illumination: when.getHours() / 24,
+      ageDays: 10.4,
+      phase: "waxingGibbous" as const,
+    });
+    h.engine = { ...fakeEngine(), stateAt: vi.fn(reading) };
+    open();
+    const dashboard = Math.round(moonOnDay(h.engine as never, NOW).illumination * 100);
+    expect(dashboard).toBe(50);
+    expect(screen.getByText(`${dashboard}% lit`)).toBeInTheDocument();
+    expect(screen.queryByText("42% lit")).toBeNull();
   });
 
   it("draws the glyph mirrored when the hemisphere is south", () => {
@@ -387,8 +404,10 @@ describe("one pass over the window", () => {
     expect(engine.phaseAt).toHaveBeenCalledTimes(89);
     const stamps = engine.phaseAt.mock.calls.map(([when]) => when.getTime());
     expect(new Set(stamps).size).toBe(89);
-    // stateAt (with the age search) is only for today, never for a window day.
-    for (const [when] of engine.stateAt.mock.calls) expect(when.getTime()).toBe(NOW.getTime());
+    // stateAt (with the age search) is only for today, at the day's noon reading, never for a window day.
+    for (const [when] of engine.stateAt.mock.calls) {
+      expect(when.getTime()).toBe(new Date(2026, 9, 3, 12).getTime());
+    }
   });
 });
 

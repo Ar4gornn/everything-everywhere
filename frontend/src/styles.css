@@ -871,6 +871,13 @@ tr.history td {
     padding-bottom: calc(72px + 52px + 12px + 48px + 16px + env(safe-area-inset-bottom));
   }
 
+  /* The calendar's legend wraps to the card's right edge, which is where the + floats while
+     the page is first on screen: keep its words out of the button's column (52px + 16px
+     gutter, less the card's own padding). */
+  .shell:has(> .fab) .cal-legend {
+    padding-right: 48px;
+  }
+
   /* The top bar's links and buttons are 27-31px tall, drawn that way so the bar stays one
      slim row. A transparent overhang gives each a 43-47px target without moving anything. */
   .identity a,
@@ -901,8 +908,8 @@ tr.history td {
      French phone — which is exactly what the Epic 23 note above refused. Of the four things
      in the bar the name is the one a phone does not need: the bottom tab says which section
      you are in, the page says what it is, and the installed app's own name is on the home
-     screen. Hidden visually rather than `display: none` so the heading stays in the
-     accessibility tree; out of flow, so it costs nothing. Freeing it leaves French at
+     screen. Hidden visually rather than `display: none` so the name stays in the
+     accessibility tree (a paragraph, not a heading: every page owns the one h1); out of flow, so it costs nothing. Freeing it leaves French at
      193 + 8 + 44 = 245 of 335. */
   .brand {
     position: absolute;

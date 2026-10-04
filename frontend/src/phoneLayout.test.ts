@@ -30,6 +30,13 @@ describe("phone layout CSS", () => {
     expect(pad(".shell:has(> .fab-note)")).toContain("48px");
   });
 
+  it("keeps the calendar legend out of the + button's column", () => {
+    const legend = rules.find((r) => r.selectors.includes(".shell:has(> .fab) .cal-legend"));
+    expect(legend?.body.match(/padding-right:\s*(\d+)px/)?.[1]).toBeDefined();
+    // 52px button + 16px gutter, less the card's 14px+ padding, rounded up to a clean figure.
+    expect(Number(legend?.body.match(/padding-right:\s*(\d+)px/)?.[1])).toBeGreaterThanOrEqual(40);
+  });
+
   it("gives a collapsible card heading a 44px target", () => {
     const toggle = rules.find((r) => r.selectors.includes(".card-toggle"))?.body ?? "";
     const pad = Number(toggle.match(/padding:\s*(\d+)px 0/)?.[1] ?? 0);

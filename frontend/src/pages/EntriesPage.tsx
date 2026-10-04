@@ -562,13 +562,16 @@ export function EntriesPage() {
 
   return (
     <>
+      <h1 className="visually-hidden">{t("nav.entries")}</h1>
       <CheckInButton streak="entries" bar />
       <ErrorBanner message={error ?? failure} />
 
       <WaitingEntries />
 
       {phone ? (
-        <AddEntryButton />
+        // The + already opens the sheet; the page's own button stays only while the tour's
+        // entry step points at it (the coach panel would cover the floating +).
+        tour.step === "entry" ? <AddEntryButton /> : null
       ) : (
       <Card title={t("entries.record")} tour="record-form">
         <form className="row" onSubmit={submit} aria-label={t("entries.record")}>

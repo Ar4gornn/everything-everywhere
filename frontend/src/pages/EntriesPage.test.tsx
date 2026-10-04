@@ -708,24 +708,15 @@ describe("on a phone (AD-53)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows an Add an entry button instead of the inline form, and it opens the sheet", async () => {
-    const user = userEvent.setup();
+  it("draws neither the inline form nor a button of its own: the floating + opens the sheet", async () => {
     mockApi([], rows);
-    render(
-      <>
-        <EntriesPage />
-        <SheetProbe />
-      </>,
-    );
+    render(<EntriesPage />);
 
-    const button = await screen.findByRole("button", { name: "Add an entry" });
+    await screen.findByRole("region", { name: /1 August/ });
     expect(screen.queryByRole("form", { name: "Record an entry" })).toBeNull();
-    // The tour's phone entry step rings this button: it is the only record-form target here.
-    expect(document.querySelectorAll('[data-tour="record-form"]')).toHaveLength(1);
-    expect(button).toHaveAttribute("data-tour", "record-form");
-    expect(screen.queryByTestId("sheet-open")).toBeNull();
-    await user.click(button);
-    expect(screen.getByTestId("sheet-open")).toBeInTheDocument();
+    // Only the tour's entry step brings a page button back (Tutorial.test.tsx).
+    expect(screen.queryByRole("button", { name: "Add an entry" })).toBeNull();
+    expect(document.querySelectorAll('[data-tour="record-form"]')).toHaveLength(0);
   });
 
   it("leaves ?add=1 for App's quick-add handler: the page neither consumes nor focuses it", async () => {
@@ -739,7 +730,7 @@ describe("on a phone (AD-53)", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByRole("button", { name: "Add an entry" });
+    await screen.findByRole("region", { name: /1 August/ });
     // An effect would have stripped it by now.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.getByTestId("search")).toHaveTextContent("?add=1&date=2026-08-15");
