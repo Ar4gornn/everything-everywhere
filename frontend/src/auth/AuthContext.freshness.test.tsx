@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { storeTokens } from "../api/client";
 import type { Preferences, PreferencesPatch, User } from "../api/types";
 import { LanguageProvider } from "../i18n";
-import { DEFAULT_PREFERENCES, preferencesOf } from "../layout/preferences";
+import { applyPatch, DEFAULT_PREFERENCES, preferencesOf } from "../layout/preferences";
 import { AuthProvider, REREAD_MS, useAuth } from "./AuthContext";
 
 /**
@@ -46,7 +46,7 @@ function fakeServer() {
         return json({ detail: "changed", code: "preferences_changed" }, 409);
       }
       const patch = JSON.parse(String(init.body)) as PreferencesPatch;
-      state.prefs = { ...state.prefs, ...patch };
+      state.prefs = applyPatch(state.prefs, patch);
       state.version += 1;
       return json(me());
     }
@@ -54,7 +54,7 @@ function fakeServer() {
   });
   /** Another device saves: the server moves on and this tab is not told. */
   const elsewhere = (patch: PreferencesPatch) => {
-    state.prefs = { ...state.prefs, ...patch };
+    state.prefs = applyPatch(state.prefs, patch);
     state.version += 1;
   };
   return { state, fetch, elsewhere };
