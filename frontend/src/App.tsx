@@ -402,7 +402,7 @@ export function App() {
           signed in) and the theme switch. */}
       {desktop ? null : (
       <header className="topbar">
-        <h1 className="brand">{t("app.name")}</h1>
+        <p className="brand">{t("app.name")}</p>
         {/* The email is the way into Settings: currency, password, recovery codes and
             sign-out all live there, so the top bar carries one link instead of a button
             for each. Six bottom tabs would not fit a phone; one link here does. */}

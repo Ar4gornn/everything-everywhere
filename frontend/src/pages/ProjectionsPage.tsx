@@ -109,6 +109,7 @@ export function ProjectionsPage() {
 
   return (
     <>
+      <h1 className="visually-hidden">{t("nav.grow")}</h1>
       <CheckInButton streak="grow" bar />
       {invalid && (
         <ErrorBanner message={t("grow.badInput")} />

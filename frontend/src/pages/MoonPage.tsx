@@ -11,6 +11,7 @@ import { useT } from "../i18n";
 import { MODULE_NAME, useModules } from "../layout/modules";
 import { useLayout } from "../layout/useLayout";
 import { type PhaseName, useMoonEngine } from "../moon/engine";
+import { moonOnDay } from "../moon/useMoonView";
 import { type Hemisphere, resolveHemisphere } from "../moon/hemisphere";
 import { clearPlace, locateOnce, type MoonPlace, usePlace, writePlace } from "../moon/location";
 import {
@@ -156,7 +157,8 @@ export function MoonPage() {
   }
 
   const now = new Date();
-  const state = engine.stateAt(now);
+  // The day's own reading (local noon), the same one the dashboard line and the nav hint use.
+  const state = moonOnDay(engine, now);
   const age = Math.round(state.ageDays * 10) / 10;
   // French takes the singular below 2 ("1,5 jour"), English only at exactly 1.
   const ageCount = t.lang === "fr" && age < 2 ? 1 : age;
