@@ -4,8 +4,12 @@ import type { Layout, LayoutName, Preferences, PreferencesPatch } from "../api/t
 import { useAuth, useOptionalAuth } from "../auth/AuthContext";
 import { preferencesOf } from "./preferences";
 
-/** The breakpoint every phone rule in styles.css uses. One number, two places. */
-export const PHONE_QUERY = "(max-width: 720px)";
+/**
+ * The breakpoint every phone rule in the stylesheets uses (docs/epic-52-navigation.md section 8):
+ * a window up to 720px, or a touch-first device (coarse pointer) up to 1024px, so a phone on
+ * its side and a tablet keep the phone layout. Same words in every `@media` block.
+ */
+export const PHONE_QUERY = "(max-width: 720px), (pointer: coarse) and (max-width: 1024px)";
 
 function subscribe(onChange: () => void): () => void {
   const query = window.matchMedia?.(PHONE_QUERY);

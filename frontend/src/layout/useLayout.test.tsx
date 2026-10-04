@@ -203,3 +203,45 @@ describe("usePreferences", () => {
     expect(requests.some((r) => r.method === "PATCH")).toBe(true);
   });
 });
+
+/** Evaluates PHONE_QUERY for a screen: a comma list of "and" chains over width and pointer. */
+function matches(query: string, width: number, pointer: "fine" | "coarse"): boolean {
+  return query.split(",").some((chain) =>
+    chain.split(" and ").every((raw) => {
+      const c = raw.trim();
+      const max = /^\(max-width: (\d+)px\)$/.exec(c);
+      if (max) return width <= Number(max[1]);
+      const ptr = /^\(pointer: (\w+)\)$/.exec(c);
+      if (ptr) return pointer === ptr[1];
+      throw new Error(`unknown condition ${c}`);
+    }),
+  );
+}
+
+describe("the phone query", () => {
+  const layoutAt = (width: number, pointer: "fine" | "coarse") => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: matches(q, width, pointer),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    render(<LayoutProbe />);
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    [375, "coarse", "phone"],
+    [812, "coarse", "phone"],
+    [932, "coarse", "phone"],
+    [1024, "coarse", "phone"],
+    [1180, "coarse", "desktop"],
+    [800, "fine", "desktop"],
+    [721, "fine", "desktop"],
+    [720, "fine", "phone"],
+    [700, "fine", "phone"],
+    [1000, "fine", "desktop"],
+  ] as const)("%ipx with a %s pointer is a %s", (width, pointer, expected) => {
+    layoutAt(width, pointer);
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+});

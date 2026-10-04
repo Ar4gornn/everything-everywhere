@@ -25,7 +25,7 @@
   top: 8px;
 }
 
-@media (min-width: 721px) {
+@media (min-width: 721px) and (not (pointer: coarse)), (min-width: 1025px) {
   /* Two columns: the sidebar, then the page. `:has(> .sidebar)` outranks the plain `.shell`
      rule in styles.css (which comes later in the bundle and would otherwise win), so the
      page keeps its old measure (1080px box, 1040px of content) beside the column. The
@@ -222,7 +222,7 @@
 /* A narrow desktop window (721-960px): an icon rail, so the page keeps its measure. Labels,
    headings and hints stay in the DOM (visually hidden); each link shows its name as a tooltip
    (the app's `data-tip`) on hover and on keyboard focus, to the right of the rail. */
-@media (min-width: 721px) and (max-width: 960px) {
+@media (min-width: 721px) and (max-width: 960px) and (not (pointer: coarse)) {
   .shell:has(> .sidebar) {
     --sidebar-w: 64px;
     --sidebar-gap: 20px;
@@ -305,7 +305,7 @@
   }
 }
 
-@media (min-width: 721px) and (max-width: 960px) and (max-height: 640px) {
+@media (min-width: 721px) and (max-width: 960px) and (max-height: 640px) and (not (pointer: coarse)) {
   .sidebar .sidebar-groups {
     overflow-y: auto;
   }

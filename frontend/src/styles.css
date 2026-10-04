@@ -1378,7 +1378,7 @@ tr.history td {
   margin-bottom: var(--space-3);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .shell {
     /* Room for the fixed bottom bar, plus the iOS home indicator. */
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
@@ -1515,7 +1515,7 @@ tr.history td {
  * technology.
  * ------------------------------------------------------------------------ */
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   table.stacked thead {
     /* Visually gone, still announced: the cells carry their own labels below. */
     position: absolute;
@@ -1772,7 +1772,7 @@ section:first-child > h3.list-day {
  * Bottom navigation and quick add
  * ------------------------------------------------------------------------ */
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .bottom-nav {
     display: flex;
     position: fixed;
@@ -1844,7 +1844,7 @@ section:first-child > h3.list-day {
   pointer-events: none;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   /* Clear of the bottom navigation, or it covers the Undo button. */
   .toasts {
     bottom: calc(84px + env(safe-area-inset-bottom));
@@ -1952,7 +1952,7 @@ section:first-child > h3.list-day {
   min-width: 0;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   /* Overrides the "one control per row" rule above: these three belong together, and
      stacking them cost most of a screen before any figure appeared. */
   .month-nav label {
@@ -2008,7 +2008,7 @@ section:first-child > h3.list-day {
   padding: 6px 8px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .compare-grid {
     grid-template-columns: minmax(46px, auto) 1fr 1fr;
     gap: 6px 8px;
@@ -2388,7 +2388,7 @@ a.chip {
   border-left-style: dashed;
 }
 
-@media (min-width: 721px) {
+@media (min-width: 721px) and (not (pointer: coarse)), (min-width: 1025px) {
   .cal-bars {
     display: none;
   }
@@ -2545,7 +2545,7 @@ label.cal-layer-option {
   margin-top: var(--gap);
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1000px) and (not (pointer: coarse)), (min-width: 1025px) {
   .cal-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
@@ -2565,7 +2565,7 @@ label.cal-layer-option {
 /* On a phone the same panel sits over the lower part of the screen, above the tabs and
    the quick-add button. Not a modal: no backdrop, nothing inert, the grid above it still
    answers a tap (see MoodCheckin on why there is no modal in this app). */
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .cal-side {
     position: fixed;
     left: 8px;
@@ -2629,7 +2629,7 @@ label.cal-layer-option {
 
 /* On a phone the seven days stack, one full-width row each, which is the only way a
    day's items fit in full at 320px. */
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .cal-grid.week {
     margin-inline: 0;
   }
@@ -2877,7 +2877,7 @@ label.cal-layer-option {
   color: var(--on-primary);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   /* Same rule as aria-current: the Dashboard tab stays lit while its calendar view is
      open, so five tabs still describe where you are. */
   .bottom-nav a.on {
@@ -3221,7 +3221,7 @@ label.cal-layer-option {
   color: var(--link);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .book-side {
     align-items: flex-start;
     width: 100%;
@@ -3413,7 +3413,7 @@ label.cal-layer-option {
   margin-top: 14px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .tour-coach {
     left: 12px;
     right: 12px;
@@ -3482,7 +3482,7 @@ body[data-tour-step] .shell {
   box-shadow: 0 3px 12px rgb(0 0 0 / 18%);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .fab-note {
     right: 18px;
     width: 48px;
@@ -3687,7 +3687,7 @@ button.pin:not(.on) span {
 
 /* --------------------------------------------------------------- appearance */
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .identity {
     min-width: 94px;
   }
@@ -4137,7 +4137,7 @@ button.bell[aria-pressed="false"] {
    than one narrow column with Check in and Repair pushed to the far edge. Always split: with
    no repair and no tab shown the dots alone fill the right. The phone order is the DOM
    order, kept. */
-@media (min-width: 721px) {
+@media (min-width: 721px) and (not (pointer: coarse)), (min-width: 1025px) {
   .streak-card .streak-dots-head,
   .streak-card .streak-dots {
     grid-template-columns: repeat(7, 20px);
@@ -5008,7 +5008,7 @@ button.streak-checkin {
   color: var(--text);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .gym .gym-build-footer {
     bottom: calc(76px + env(safe-area-inset-bottom));
   }
@@ -6238,7 +6238,7 @@ dialog.sheet::backdrop {
 /* Phones: name and time on the first line, the meta on its own line under the name, so the
    name keeps the whole first track; the Edit toggle is its icon alone; the slider is compact
    and stays under the top edge while the list scrolls. */
-@media (max-width: 720px) {
+@media (max-width: 720px), (pointer: coarse) and (max-width: 1024px) {
   .clocks-list,
   .clocks-lines {
     grid-template-columns: minmax(0, 1fr) max-content;
