@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   convertWeight,
+  FORMAT,
   type DraftLine,
   extractJson,
   hasDroppedMeasure,
@@ -9,6 +10,7 @@ import {
   parseWorkoutFile,
   toImportBody,
   validateLine,
+  validateLines,
 } from "./format";
 
 /**
@@ -97,7 +99,7 @@ describe("the shapes of a file", () => {
     const text = JSON.stringify({
       format: "ee-workout/1",
       author: "gpt",
-      routines: [{ name: "A", tags: ["x"], exercises: [{ name: "Squat", tempo: "3-1-1", rpe: 8 }] }],
+      routines: [{ name: "A", tags: ["x"], exercises: [{ name: "Squat", cadence: "3-1-1", effort: 8 }] }],
     });
     const line = firstLine(text);
     expect(line.name).toBe("Squat");
@@ -434,5 +436,263 @@ describe("schedule (Epic 43)", () => {
   it("accepts 14 days and an 80-character label", () => {
     expect(read(Array.from({ length: 14 }, () => "rest"))).toHaveLength(14);
     expect(read(["x".repeat(80)])?.[0]).toHaveLength(80);
+  });
+});
+
+const v2 = (exercises: unknown[], extra: Record<string, unknown> = {}) =>
+  file(exercises, { format: "ee-workout/2", ...extra });
+const bodyOf = (text: string, unit: "kg" | "lb" = "kg") => {
+  const routine = parseWorkoutFile(text, unit).routines[0];
+  return toImportBody(routine as NonNullable<typeof routine>);
+};
+
+describe("ee-workout/2: the format and its older sibling", () => {
+  it("writes v2 and still reads v1 and files with no format", () => {
+    expect(FORMAT).toBe("ee-workout/2");
+    for (const format of ["ee-workout/1", "ee-workout/2", undefined]) {
+      const text = JSON.stringify({ format, routines: [{ name: "A", exercises: [{ name: "Squat", sets: 3, reps: 5 }] }] });
+      expect(firstLine(text)).toMatchObject({ sets: 3, reps: 5, setTargets: null, rpe: null, rir: null, tempo: "", superset: "" });
+    }
+  });
+
+  it("reads the documented v2 object without a single flag", () => {
+    const parsed = parseWorkoutFile(
+      v2([
+        {
+          name: "Bench press", kind: "reps", video_url: "https://www.youtube.com/watch?v=VIDEO_ID",
+          rpe: 8, tempo: "3-1-1-0", rest_seconds: 90, rest_after_seconds: 120,
+          sets: [{ reps: 12, weight: 40, warmup: true }, { reps: 8, weight: 60 }, { reps: 8, weight: 60 }],
+        },
+        { name: "Pull-up", kind: "reps", superset: "A", sets: 3, reps: 8, rir: 2 },
+        { name: "Dips", kind: "reps", superset: "A", sets: 3, reps: 10 },
+      ]),
+      "kg",
+    );
+    expect(parsed.warnings).toEqual([]);
+    const [bench, pull, dips] = parsed.routines[0]?.lines ?? [];
+    expect(bench).toMatchObject({ sets: 3, rpe: 8, rir: null, tempo: "3-1-1-0" });
+    expect(bench?.setTargets?.map((s) => [s.reps, s.weight, s.warmup])).toEqual([
+      [12, 40, true],
+      [8, 60, false],
+      [8, 60, false],
+    ]);
+    expect(pull).toMatchObject({ superset: "A", rir: 2, setTargets: null });
+    expect(dips?.superset).toBe("A");
+    expect([bench, pull, dips].every((line) => Object.keys(line?.errors ?? {}).length === 0)).toBe(true);
+  });
+});
+
+describe("per-set targets", () => {
+  it("reads numbers as text and a decimal comma, like the flat fields", () => {
+    const line = firstLine(v2([{ name: "Bench", sets: [{ reps: "8", weight: "62,5" }] }]));
+    expect(line.setTargets?.[0]).toMatchObject({ reps: 8, weight: 62.5, warmup: false, errors: {} });
+  });
+
+  it("keeps a bad number in its set, flags the set and the line, and holds it until fixed", () => {
+    const line = firstLine(
+      v2([{ name: "Bench", sets: [{ reps: 8 }, { reps: 1000 }, { reps: "lots" }, { reps: 5, weight: -2 }] }]),
+    );
+    const sets = line.setTargets ?? [];
+    expect(sets.map((s) => s.errors)).toEqual([
+      {},
+      { reps: "gymCore.field.range" },
+      { reps: "gymCore.field.number" },
+      { weight: "gymCore.field.range" },
+    ]);
+    expect(sets[2]?.reps).toBeNull();
+    expect(line.errors.set_targets).toBe("gymFormat.setsInvalid");
+
+    // re-check: the unreadable flag stays on an empty field, the rest recomputes
+    const again = validateLine(line);
+    expect(again.setTargets?.[2]?.errors.reps).toBe("gymCore.field.number");
+    expect(again.errors.set_targets).toBe("gymFormat.setsInvalid");
+
+    const fixed = validateLine({
+      ...line,
+      setTargets: sets.map((s, i) => ({ ...s, reps: i === 1 ? 8 : i === 2 ? 8 : s.reps, weight: s.weight === -2 ? 20 : s.weight })),
+    });
+    expect(fixed.setTargets?.every((s) => Object.keys(s.errors).length === 0)).toBe(true);
+    expect(fixed.errors.set_targets).toBeUndefined();
+  });
+
+  it("takes the set count from the list, and flags more than 99", () => {
+    const many = (n: number) => firstLine(v2([{ name: "X", sets: Array.from({ length: n }, () => ({ reps: 5 })) }]));
+    expect(many(99).sets).toBe(99);
+    expect(many(99).errors.sets).toBeUndefined();
+    expect(many(100).errors.sets).toBe("gymCore.field.range");
+  });
+
+  it("treats an empty list as no sets, and skips entries that are not objects, saying so", () => {
+    expect(firstLine(v2([{ name: "X", sets: [] }]))).toMatchObject({ sets: null, setTargets: null });
+    const parsed = parseWorkoutFile(v2([{ name: "X", sets: [{ reps: 5 }, "oops", 7] }]), "kg");
+    expect(parsed.routines[0]?.lines[0]?.setTargets).toHaveLength(1);
+    expect(parsed.warnings).toContain("gymCore.warn.skipped");
+  });
+
+  it("converts per-set weights by weight_unit, flags the line, and warns", () => {
+    const parsed = parseWorkoutFile(v2([{ name: "Bench", sets: [{ reps: 8, weight: 135 }, { reps: 8 }] }], { weight_unit: "lb" }), "kg");
+    const line = parsed.routines[0]?.lines[0];
+    expect(line?.setTargets?.map((s) => s.weight)).toEqual([61, null]);
+    expect(line?.converted).toBe(true);
+    expect(parsed.warnings).toEqual(["gymCore.warn.fromLb"]);
+  });
+
+  it("infers the kind from the sets when the line does not say", () => {
+    expect(firstLine(v2([{ name: "Plank", sets: [{ seconds: 30 }] }])).kind).toBe("duration");
+    expect(firstLine(v2([{ name: "Run", sets: [{ distance_m: 500 }] }])).kind).toBe("distance");
+  });
+
+  it("counts a stray measure inside a set as dropped", () => {
+    const text = v2([{ name: "Squat", kind: "reps", sets: [{ reps: 5, seconds: 30 }] }]);
+    expect(hasDroppedMeasure(firstLine(text))).toBe(true);
+    expect(parseWorkoutFile(text, "kg").warnings).toContain("gymCore.warn.droppedMeasure");
+  });
+
+  it("ships set_targets with two-place weights, the kind's measure only, and coherent flat targets", () => {
+    const body = bodyOf(
+      v2([
+        { name: "Bench", kind: "reps", sets: [{ reps: 12, weight: 40, warmup: true }, { reps: 8, weight: 62.5 }, { reps: 6, weight: 65, seconds: 9 }] },
+        { name: "Plank", kind: "duration", sets: [{ seconds: 30, reps: 4 }, { seconds: 45 }] },
+      ]),
+    );
+    expect(body.lines[0]).toEqual({
+      exercise_name: "Bench",
+      kind: "reps",
+      target_sets: 3,
+      target_reps: 8, // the first working set, not the warm-up
+      target_weight: "62.50",
+      set_targets: [
+        { reps: 12, seconds: null, distance_m: null, weight: "40.00", warmup: true },
+        { reps: 8, seconds: null, distance_m: null, weight: "62.50", warmup: false },
+        { reps: 6, seconds: null, distance_m: null, weight: "65.00", warmup: false },
+      ],
+    });
+    expect(body.lines[1]).toMatchObject({
+      target_sets: 2,
+      target_seconds: 30,
+      set_targets: [
+        { reps: null, seconds: 30, distance_m: null, weight: null, warmup: false },
+        { reps: null, seconds: 45, distance_m: null, weight: null, warmup: false },
+      ],
+    });
+    expect(body.lines[1]).not.toHaveProperty("target_reps");
+  });
+
+  it("falls back to the first set when every set is a warm-up, and ignores a flat target_sets", () => {
+    const body = bodyOf(v2([{ name: "Bench", sets: [{ reps: 10, weight: 20, warmup: true }, { reps: 8, weight: 30, warmup: true }] }]));
+    expect(body.lines[0]).toMatchObject({ target_sets: 2, target_reps: 10, target_weight: "20.00" });
+  });
+
+  it("sends no set_targets for a uniform line", () => {
+    const body = bodyOf(v2([{ name: "Squat", sets: 3, reps: 5, weight: 100 }]));
+    expect(body.lines[0]).toEqual({ exercise_name: "Squat", kind: "reps", target_sets: 3, target_reps: 5, target_weight: "100.00" });
+  });
+});
+
+describe("effort and tempo", () => {
+  it.each([
+    [{ rpe: 8 }, undefined],
+    [{ rpe: 7.5 }, undefined],
+    [{ rpe: "8,5" }, undefined],
+    [{ rpe: 10 }, undefined],
+    [{ rpe: 1 }, undefined],
+    [{ rpe: 0.5 }, "gymCore.field.range"],
+    [{ rpe: 11 }, "gymCore.field.range"],
+    [{ rpe: 7.3 }, "gymFormat.rpeStep"],
+    [{ rpe: "hard" }, "gymCore.field.number"],
+  ])("rpe %j: %s", (extra, problem) => {
+    expect(firstLine(v2([{ name: "X", reps: 5, ...extra }])).errors.rpe).toBe(problem);
+  });
+
+  it.each([
+    [{ rir: 0 }, undefined],
+    [{ rir: 10 }, undefined],
+    [{ rir: 11 }, "gymCore.field.range"],
+    [{ rir: -1 }, "gymCore.field.range"],
+    [{ rir: 1.5 }, "gymCore.field.whole"],
+  ])("rir %j: %s", (extra, problem) => {
+    expect(firstLine(v2([{ name: "X", reps: 5, ...extra }])).errors.rir).toBe(problem);
+  });
+
+  it("flags rpe and rir together on both, keeps both values, and refuses to send them", () => {
+    const line = firstLine(v2([{ name: "X", reps: 5, rpe: 8, rir: 2 }]));
+    expect([line.rpe, line.rir]).toEqual([8, 2]);
+    expect(line.errors).toMatchObject({ rpe: "gymFormat.effortBoth", rir: "gymFormat.effortBoth" });
+    expect(validateLine({ ...line, rir: null }).errors.rpe).toBeUndefined();
+  });
+
+  it("keeps an unreadable rpe flagged until it has a value", () => {
+    const line = firstLine(v2([{ name: "X", reps: 5, rpe: "hard" }]));
+    expect(validateLine(line).errors.rpe).toBe("gymCore.field.number");
+    expect(validateLine({ ...line, rpe: 8 }).errors.rpe).toBeUndefined();
+  });
+
+  it.each([
+    ["3-1-1-0", undefined],
+    ["X-0-X-0", undefined],
+    ["3-1-x-0", undefined],
+    [" 2-0-2-0 ", undefined],
+    ["", undefined],
+    ["3-1-1", "gymFormat.tempo"],
+    ["3-1-1-0-1", "gymFormat.tempo"],
+    ["slow", "gymFormat.tempo"],
+    ["10-1-1-0", "gymFormat.tempo"],
+  ])("tempo %j: %s", (tempo, problem) => {
+    expect(firstLine(v2([{ name: "X", reps: 5, tempo }])).errors.tempo).toBe(problem);
+  });
+
+  it("sends rpe or rir, and the tempo upper-cased", () => {
+    const body = bodyOf(v2([{ name: "A", reps: 5, rpe: 7.5, tempo: " 3-1-x-0 " }, { name: "B", reps: 5, rir: 0 }, { name: "C", reps: 5 }]));
+    expect(body.lines[0]).toMatchObject({ target_rpe: 7.5, tempo: "3-1-X-0" });
+    expect(body.lines[0]).not.toHaveProperty("target_rir");
+    expect(body.lines[1]).toMatchObject({ target_rir: 0 });
+    expect(body.lines[2]).not.toHaveProperty("target_rpe");
+    expect(body.lines[2]).not.toHaveProperty("tempo");
+  });
+});
+
+describe("supersets", () => {
+  const ex = (name: string, superset?: string) => ({ name, reps: 5, ...(superset === undefined ? {} : { superset }) });
+
+  it("numbers labels 1, 2 in order of first appearance and drops a group of one", () => {
+    const body = bodyOf(v2([ex("A1", "x"), ex("A2", "x"), ex("Solo"), ex("B1", "Y"), ex("B2", "y"), ex("B3", "Y"), ex("Lonely", "Z")]));
+    expect(body.lines.map((l) => l.superset_group)).toEqual([1, 1, undefined, 2, 2, 2, undefined]);
+    expect(JSON.stringify(body)).not.toContain("null");
+  });
+
+  it("warns about a label only one exercise carries", () => {
+    expect(parseWorkoutFile(v2([ex("A", "A"), ex("B")]), "kg").warnings).toContain("gymFormat.warn.lonelySuperset");
+    expect(parseWorkoutFile(v2([ex("A", "A"), ex("B", "A")]), "kg").warnings).not.toContain("gymFormat.warn.lonelySuperset");
+  });
+
+  it("flags a label longer than 8 characters, and accepts exactly 8", () => {
+    expect(firstLine(v2([ex("A", "123456789")])).errors.superset).toBe("gymFormat.supersetLong");
+    expect(firstLine(v2([ex("A", "12345678")])).errors.superset).toBeUndefined();
+  });
+
+  it("flags a label that comes back after a break, on the later run only", () => {
+    const lines = parseWorkoutFile(v2([ex("A1", "A"), ex("A2", "A"), ex("Mid"), ex("A3", "A"), ex("A4", "a")]), "kg").routines[0]?.lines ?? [];
+    expect(lines.map((l) => l.errors.superset)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      "gymFormat.supersetSplit",
+      "gymFormat.supersetSplit",
+    ]);
+  });
+
+  it("leaves two different consecutive groups alone", () => {
+    const lines = parseWorkoutFile(v2([ex("A1", "A"), ex("A2", "A"), ex("B1", "B"), ex("B2", "B")]), "kg").routines[0]?.lines ?? [];
+    expect(lines.every((l) => l.errors.superset === undefined)).toBe(true);
+  });
+
+  it("validateLines re-checks a whole routine, including the split flag", () => {
+    const lines = parseWorkoutFile(v2([ex("A1", "A"), ex("Mid"), ex("A2", "A")]), "kg").routines[0]?.lines ?? [];
+    const checked = validateLines(lines.map((l) => ({ ...l, errors: {} })));
+    expect(checked.map((l) => l.errors.superset)).toEqual([undefined, undefined, "gymFormat.supersetSplit"]);
+    // fixing the middle exercise's neighbour order clears it
+    const [first, mid, last] = lines;
+    const regrouped = validateLines([first, last, mid].map((l) => ({ ...(l as DraftLine), errors: {} })));
+    expect(regrouped.every((l) => l.errors.superset === undefined)).toBe(true);
   });
 });

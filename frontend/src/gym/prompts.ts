@@ -160,9 +160,9 @@ export function buildPromptContext(
   return { unit, exercises, routines, recent: lines };
 }
 
-/** The "About me" block, with every empty part left out. Empty string when nothing is known. */
+/** The body of the ABOUT ME section, with every empty part left out. */
 function contextBlock(context: PromptContext, t: ReturnType<typeof translator>): string {
-  const lines: string[] = [t("gymPrompt.context.header"), t("gymPrompt.context.unit", { unit: context.unit })];
+  const lines: string[] = [t("gymPrompt.context.unit", { unit: context.unit })];
   if (context.exercises.length > 0) {
     const list = context.exercises
       .map((exercise) => `${exercise.name} (${t(`gymPrompt.context.kind.${exercise.kind}`)})`)
@@ -184,7 +184,10 @@ function contextBlock(context: PromptContext, t: ReturnType<typeof translator>):
   return lines.join("\n");
 }
 
-/** The whole prompt for one profile, in `lang`. `notes` is used by the `notes` profile only. */
+/**
+ * The whole prompt for one profile, in `lang`: five sections, each a heading line in capitals
+ * then its body (ROLE, ABOUT ME, TASK, CONFIRM, OUTPUT). `notes` is used by the `notes` profile only.
+ */
 export function buildPrompt(
   profile: PromptProfile,
   context: PromptContext,
@@ -198,12 +201,16 @@ export function buildPrompt(
           notes: notes?.trim() ? notes.trim() : t("gymPrompt.notes.pending"),
         })
       : t(`gymPrompt.${profile}.instructions` as MessageKey);
+  const section = (heading: MessageKey, body: string) => `${t(heading)}\n${body}`;
   return [
-    t("gymPrompt.role"),
-    instructions,
-    contextBlock(context, t),
-    t(profile === "notes" ? "gymPrompt.confirmOnce" : "gymPrompt.confirm"),
-    t("gymPrompt.format", { unit: context.unit }),
+    section("gymPrompt.section.role", t("gymPrompt.role")),
+    section("gymPrompt.section.about", contextBlock(context, t)),
+    section("gymPrompt.section.task", instructions),
+    section(
+      "gymPrompt.section.confirm",
+      t(profile === "notes" ? "gymPrompt.confirmOnce" : "gymPrompt.confirm"),
+    ),
+    section("gymPrompt.section.output", t("gymPrompt.format", { unit: context.unit })),
   ]
     .filter((part) => part.trim() !== "")
     .join("\n\n");

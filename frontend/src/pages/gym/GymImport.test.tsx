@@ -420,7 +420,7 @@ describe("Import: getting a prompt (the AI half)", () => {
     const french = buildPrompt("build", empty, "fr");
     expect(french).not.toBe(english);
     for (const key of [
-      '"format": "ee-workout/1"',
+      '"format": "ee-workout/2"',
       '"distance_m": 2000',
       '"rest_seconds": 60',
       '"schedule"',

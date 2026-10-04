@@ -39,6 +39,11 @@ const routine = (id: string, name: string, names: string[]): RoutineDetail => ({
     rest_seconds: null,
     rest_after_seconds: null,
     note: null,
+    set_targets: null,
+    target_rpe: null,
+    target_rir: null,
+    tempo: null,
+    superset_group: null,
   })),
 });
 
@@ -52,6 +57,7 @@ const set = (name: string, over: Partial<WorkoutDetail["sets"][number]> = {}) =>
   weight: "60.00",
   duration_seconds: null,
   distance_m: null,
+  is_warmup: false,
   ...over,
 });
 
@@ -87,11 +93,11 @@ describe("the six profiles", () => {
   it.each(PROFILES.map((p) => p.id))("%s carries its instruction and the shared format", (id) => {
     const text = buildPrompt(id, EMPTY, "en");
     expect(text).toContain(marker[id]);
-    expect(text).toContain('"format": "ee-workout/1"');
+    expect(text).toContain('"format": "ee-workout/2"');
     expect(text).toContain("rest_after_seconds");
     expect(text).toContain('"schedule"');
     expect(text).toContain("Gym → New workout → Ask an AI");
-    expect(text.startsWith("You are helping me build a gym workout")).toBe(true);
+    expect(text.startsWith("ROLE\nYou are helping me build a gym workout")).toBe(true);
   });
 
   it("has a title and a one-line description for every card, in both languages", () => {
@@ -139,7 +145,7 @@ describe("notes", () => {
 describe("the context block", () => {
   it("is just the unit when nothing is known, and omits the empty parts", () => {
     const text = buildPrompt("build", EMPTY, "en");
-    expect(text).toContain("About me (from my app):\n- I count weight in kg.");
+    expect(text).toContain("ABOUT ME\n- I count weight in kg.");
     expect(text).not.toContain("Exercises I already have");
     expect(text).not.toContain("My routines");
     expect(text).not.toContain("My last sessions");
@@ -218,7 +224,7 @@ describe("French", () => {
       const text = buildPrompt(profile.id, context, "fr");
       expect(text).toContain("Je compte les charges en kg");
       expect(text).not.toContain("You are helping me");
-      for (const key of ['"format": "ee-workout/1"', '"rest_after_seconds"', '"schedule"', '"kind": "duration"', '"distance_m"', '"rest_seconds"']) {
+      for (const key of ['"format": "ee-workout/2"', '"rest_after_seconds"', '"schedule"', '"kind": "duration"', '"distance_m"', '"rest_seconds"']) {
         expect(text).toContain(key);
       }
       expect(text).not.toContain('"répétitions"');
@@ -233,10 +239,56 @@ describe("the person's unit in the format", () => {
     for (const profile of PROFILES) {
       const text = buildPrompt(profile.id, context, lang);
       expect(text).toContain('"weight_unit": "lb"');
-      expect(text).toContain('"weight_unit" ');
+      expect(text).toMatch(/^- "weight_unit" ?: (always|toujours) "lb"\./m);
       expect(text).not.toContain('"kg"');
       expect(text).not.toContain("{unit}");
     }
     expect(buildPrompt("quick", EMPTY, lang)).toContain('"weight_unit": "kg"');
+  });
+});
+
+describe("the sections (Epic 54)", () => {
+  const HEADINGS = {
+    en: ["ROLE", "ABOUT ME", "TASK", "CONFIRM", "OUTPUT"],
+    fr: ["RÔLE", "À PROPOS DE MOI", "TÂCHE", "CONFIRMATION", "SORTIE"],
+  } as const;
+
+  it.each(["en", "fr"] as const)("%s: five headings on lines of their own, in order", (lang) => {
+    for (const profile of PROFILES) {
+      const lines = buildPrompt(profile.id, EMPTY, lang).split("\n");
+      const found = HEADINGS[lang].map((heading) => lines.indexOf(heading));
+      expect(found.every((index) => index >= 0), `${profile.id} ${lang}`).toBe(true);
+      expect([...found].sort((a, b) => a - b)).toEqual(found);
+    }
+  });
+
+  it("puts the profile's instructions under TASK and the confirm rule under CONFIRM", () => {
+    const text = buildPrompt("quick", EMPTY, "en");
+    const task = text.indexOf("\nTASK\n");
+    const confirm = text.indexOf("\nCONFIRM\n");
+    const marker = text.indexOf("little time and little motivation");
+    expect(marker).toBeGreaterThan(task);
+    expect(marker).toBeLessThan(confirm);
+    expect(text.indexOf("ONE AT A TIME")).toBeGreaterThan(confirm);
+  });
+
+  it("describes the v2 fields as bullets, and asks for a video link only when sure", () => {
+    const text = buildPrompt("build", EMPTY, "en");
+    for (const key of ["format", "weight_unit", "video_url", "sets", "warmup", "rpe", "tempo", "superset", "rest_seconds"]) {
+      expect(text, key).toMatch(new RegExp(`^- "${key}"`, "m"));
+    }
+    expect(text).toContain("only one you are confident exists; omit it otherwise");
+    expect(text).toContain("never both");
+    expect(text).toContain("CONSECUTIVE");
+    expect(text).not.toContain("Rules for the JSON");
+  });
+
+  it("keeps the example JSON valid once the unit is filled in", () => {
+    const text = buildPrompt("build", EMPTY, "en");
+    const start = text.indexOf('{\n  "format"');
+    const end = text.indexOf("\n}\n", start) + 2;
+    const example = JSON.parse(text.slice(start, end));
+    expect(example.format).toBe("ee-workout/2");
+    expect(example.routines[0].exercises[0].sets[0].warmup).toBe(true);
   });
 });
