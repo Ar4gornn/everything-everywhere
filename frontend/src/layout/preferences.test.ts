@@ -15,15 +15,27 @@ import {
   pinItem,
   preferencesOf,
   unpinItem,
+  type Versioned,
 } from "./preferences";
+import { ApiError } from "../api/client";
 
 /** A send whose answers the test releases by hand, in whatever order it likes. */
 function controlledSend() {
-  const calls: { patch: PreferencesPatch; resolve: (p: Preferences) => void; reject: (e: unknown) => void }[] = [];
+  const calls: {
+    patch: PreferencesPatch;
+    version: string | null;
+    resolve: (p: Preferences, version?: string | null) => void;
+    reject: (e: unknown) => void;
+  }[] = [];
   const send = vi.fn(
-    (patch: PreferencesPatch) =>
-      new Promise<Preferences>((resolve, reject) => {
-        calls.push({ patch, resolve, reject });
+    (patch: PreferencesPatch, version: string | null) =>
+      new Promise<Versioned>((resolve, reject) => {
+        calls.push({
+          patch,
+          version,
+          resolve: (prefs, next = null) => resolve({ prefs, version: next }),
+          reject,
+        });
       }),
   );
   return { send, calls };
@@ -218,6 +230,94 @@ describe("PreferenceSaver", () => {
     saver.confirm(applyPatch(DEFAULT_PREFERENCES, gymOff));
     expect(saver.shown.modules.gym).toBe(false);
     expect(saver.shown.phone).toEqual(phoneStatsHidden.phone);
+  });
+});
+
+describe("PreferenceSaver against a newer change elsewhere", () => {
+  const changed = () => new ApiError(409, "changed", "preferences_changed");
+  const booksOff: PreferencesPatch = { modules: { ...DEFAULT_PREFERENCES.modules, books: false } };
+
+  /** A saver whose re-read answers `fresh`, as the account now is on the server. */
+  function stale(fresh: Versioned) {
+    const { send, calls } = controlledSend();
+    const reload = vi.fn(async () => fresh);
+    const saver = new PreferenceSaver(DEFAULT_PREFERENCES, send, vi.fn(), { version: "v1", reload });
+    return { saver, send, calls, reload };
+  }
+
+  it("names the version it read, then the one each write answered", async () => {
+    const { saver, calls } = stale({ prefs: DEFAULT_PREFERENCES, version: "v1" });
+    const first = saver.update(gymOff);
+    expect(at(calls, 0).version).toBe("v1");
+    at(calls, 0).resolve(applyPatch(DEFAULT_PREFERENCES, gymOff), "v2");
+    await first;
+    void saver.update(phoneStatsHidden);
+    expect(at(calls, 1).version).toBe("v2");
+  });
+
+  it("re-reads and sends again a subtree nobody else touched", async () => {
+    // This tab hides a card; another device switched Books off meanwhile.
+    const { saver, calls, reload } = stale({ prefs: applyPatch(DEFAULT_PREFERENCES, booksOff), version: "v2" });
+    const done = saver.update(phoneStatsHidden);
+    at(calls, 0).reject(changed());
+    await flush();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(at(calls, 1)).toMatchObject({ patch: phoneStatsHidden, version: "v2" });
+    expect(saver.shown.modules.books).toBe(false);
+    expect(saver.shown.phone).toEqual(phoneStatsHidden.phone);
+
+    at(calls, 1).resolve(applyPatch(applyPatch(DEFAULT_PREFERENCES, booksOff), phoneStatsHidden), "v3");
+    await done;
+    expect(saver.shown.modules.books).toBe(false);
+    expect(saver.shown.phone).toEqual(phoneStatsHidden.phone);
+  });
+
+  it("keeps the other device's value for a subtree both changed, and says so", async () => {
+    // The stale tab's modules still have Books on; writing them would switch it back.
+    const { saver, calls, send } = stale({ prefs: applyPatch(DEFAULT_PREFERENCES, booksOff), version: "v2" });
+    const done = saver.update(gymOff);
+    at(calls, 0).reject(changed());
+    await expect(done).rejects.toMatchObject({ status: 409, code: "preferences_changed" });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(saver.shown.modules.books).toBe(false);
+    expect(saver.shown.modules.gym).toBe(true);
+  });
+
+  it("rejects only the callers whose subtree was lost", async () => {
+    const { saver, calls } = stale({ prefs: applyPatch(DEFAULT_PREFERENCES, booksOff), version: "v2" });
+    void saver.update(phoneStatsHidden);
+    const lost = saver.update(gymOff);
+    const kept = saver.update({ desktop: phoneStatsHidden.phone });
+    at(calls, 0).resolve(applyPatch(DEFAULT_PREFERENCES, phoneStatsHidden), "v1b");
+    await flush();
+    at(calls, 1).reject(changed());
+    await flush();
+    expect(at(calls, 2).patch).toEqual({ desktop: phoneStatsHidden.phone });
+    at(calls, 2).resolve(DEFAULT_PREFERENCES, "v3");
+    await expect(lost).rejects.toMatchObject({ status: 409 });
+    await expect(kept).resolves.toBeUndefined();
+  });
+
+  it("counts a subtree changed elsewhere to exactly what was asked as done", async () => {
+    const { saver, calls, send } = stale({ prefs: applyPatch(DEFAULT_PREFERENCES, gymOff), version: "v2" });
+    const done = saver.update(gymOff);
+    at(calls, 0).reject(changed());
+    await expect(done).resolves.toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a read that started before a write show it undone", async () => {
+    const { saver, calls } = stale({ prefs: DEFAULT_PREFERENCES, version: "v1" });
+    const before = saver.stamp();
+    const done = saver.update(gymOff);
+    at(calls, 0).resolve(applyPatch(DEFAULT_PREFERENCES, gymOff), "v2");
+    await done;
+    expect(saver.confirm(DEFAULT_PREFERENCES, "v1", before)).toBe(false);
+    expect(saver.shown.modules.gym).toBe(false);
+
+    const after = saver.stamp();
+    expect(saver.confirm(applyPatch(DEFAULT_PREFERENCES, booksOff), "v3", after)).toBe(true);
+    expect(saver.shown.modules.books).toBe(false);
   });
 });
 

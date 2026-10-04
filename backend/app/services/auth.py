@@ -51,6 +51,7 @@ class UserRow:
         timezone: str | None,
         digest_time: time,
         is_admin: bool = False,
+        preferences_version: str = "",
     ) -> None:
         self.id = id
         self.email = email
@@ -66,6 +67,8 @@ class UserRow:
         self.timezone = timezone
         self.digest_time = digest_time
         self.is_admin = is_admin
+        # What the stored preferences were when this row was read, for `If-Match`.
+        self.preferences_version = preferences_version
 
 
 def _read_user(session: Session, user_id: uuid.UUID) -> UserRow | None:
@@ -84,6 +87,7 @@ def _read_user(session: Session, user_id: uuid.UUID) -> UserRow | None:
             User.timezone,
             User.digest_time,
             User.is_admin,
+            preferences_service.VERSION,
         ).where(User.id == user_id)
     ).one_or_none()
     return None if row is None else UserRow(*row)
@@ -320,13 +324,16 @@ def set_notification_schedule(
     return updated
 
 
-def set_preferences(session: Session, user_id: uuid.UUID, patch: dict) -> UserRow:
+def set_preferences(
+    session: Session, user_id: uuid.UUID, patch: dict, expected: str | None = None
+) -> UserRow:
     """Epic 33 (AD-49): replace the top-level keys the patch carries. Never locked — a
-    layout moves what is drawn where, never what anything means."""
+    layout moves what is drawn where, never what anything means. With ``expected``, only if
+    the stored preferences are still that version (see ``update_preferences``)."""
     current = _read_user(session, user_id)
     if current is None:
         raise NotFound("No such account")
-    preferences_service.update_preferences(session, user_id, patch)
+    preferences_service.update_preferences(session, user_id, patch, expected)
     updated = _read_user(session, user_id)
     if updated is None:  # pragma: no cover
         raise NotFound("No such account")

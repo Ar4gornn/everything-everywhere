@@ -57,6 +57,11 @@ export interface User {
    */
   preferences?: Preferences;
   /**
+   * What the stored preferences were when this answer was read, sent back as `If-Match` on
+   * the next preferences PATCH. Absent from a server older than the check.
+   */
+  preferences_version?: string;
+  /**
    * Epic 36 (AD-52): the IANA zone the account's day is counted in, and the local hour the
    * daily digest may arrive. Null zone: the server's clock. Absent from an older server.
    */
