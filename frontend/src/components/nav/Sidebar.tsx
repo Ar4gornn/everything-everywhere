@@ -81,7 +81,12 @@ export function Sidebar({ model, pathname }: { model: NavModel; pathname: string
           </span>
           <span className="sidebar-label">
             {t("nav.settings")}
-            {email ? <span className="sidebar-email">{email}</span> : null}
+            {/* Cut with an ellipsis in a narrow foot: the title shows the whole address. */}
+            {email ? (
+              <span className="sidebar-email" title={email}>
+                {email}
+              </span>
+            ) : null}
           </span>
         </Link>
         <button
