@@ -8,6 +8,7 @@ The database URLs are rewritten *before* the application is imported, so the app
 is built against the test database.
 """
 
+import datetime as dt
 import os
 import uuid
 from collections.abc import Iterator
@@ -135,6 +136,31 @@ def runtime_connection():
         return conn
 
     return _connect
+
+
+@pytest.fixture
+def pin_stock_stamps(owner_engine):
+    """Move every stock log row so the first (or last) lands on ``at``, gaps kept.
+
+    ``changed_at`` is the database's ``now()``, so a test that writes stock and then asks
+    for "this month" depends on the wall clock — and on which zone "this month" was
+    computed in. It went red at 00:00-03:00 local on 2026-10-01. Pinning the stamps after
+    the writes makes the month a fact of the test instead of the day it runs.
+    """
+
+    def _pin(at: dt.datetime, *, anchor: str = "first") -> None:
+        edge = {"first": "min", "last": "max"}[anchor]
+        with owner_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE inventory_item_changes SET changed_at = changed_at"
+                    f" + (CAST(:at AS timestamptz) - (SELECT {edge}(changed_at)"
+                    " FROM inventory_item_changes))"
+                ),
+                {"at": at},
+            )
+
+    return _pin
 
 
 def register_user(

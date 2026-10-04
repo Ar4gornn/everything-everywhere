@@ -28,6 +28,17 @@ MAX_START_DAY = 28
 DEFAULT_START_DAY = 1
 
 
+def utc_today() -> dt.date:
+    """Today in UTC: the zone every ``changed_at`` (a ``TIMESTAMPTZ``) is bucketed in.
+
+    ``dt.date.today()`` is the *process's* zone. Defaulting a window to it while the rows are
+    grouped by UTC day puts "this month" one month ahead of the newest row for the hours
+    between local and UTC midnight on the 1st, on any host east of UTC. One function, so a
+    test can pin it.
+    """
+    return dt.datetime.now(dt.UTC).date()
+
+
 class InvalidMonth(ValueError):
     pass
 

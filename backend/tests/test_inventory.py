@@ -1,5 +1,7 @@
 """Epic 11 — spaces, items, the restock predicate, and the quantity log."""
 
+import datetime as dt
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, ProgrammingError
@@ -255,7 +257,41 @@ def test_the_log_goes_with_its_item(client, user_a, owner_engine):
     assert left == 0
 
 
-def test_restocks_per_space_per_month_are_zero_filled(client, user_a):
+@pytest.mark.parametrize(
+    ("at", "anchor", "labels"),
+    [
+        pytest.param(
+            dt.datetime(2026, 10, 1, tzinfo=dt.UTC),
+            "first",
+            ["2026-08", "2026-09", "2026-10"],
+            id="1st",
+        ),
+        pytest.param(
+            dt.datetime(2026, 9, 30, 23, 59, 59, 999999, tzinfo=dt.UTC),
+            "last",
+            ["2026-07", "2026-08", "2026-09"],
+            id="last-day",
+        ),
+        pytest.param(
+            dt.datetime(2026, 9, 15, 12, tzinfo=dt.UTC),
+            "first",
+            ["2026-07", "2026-08", "2026-09"],
+            id="mid",
+        ),
+        pytest.param(
+            dt.datetime(2027, 1, 1, tzinfo=dt.UTC),
+            "first",
+            ["2026-11", "2026-12", "2027-01"],
+            id="new-year",
+        ),
+    ],
+)
+def test_restocks_per_space_per_month_are_zero_filled(
+    client, user_a, pin_stock_stamps, monkeypatch, at, anchor, labels
+):
+    # No `ending`: the window defaults to the current UTC month, pinned here to the day the
+    # stamps are pinned to, so the default path is exercised at the edge it once broke on.
+    monkeypatch.setattr("app.services.inventory.utc_today", lambda: at.date())
     fridge = _space(client, user_a, "Fridge")
     _space(client, user_a, "Garage")  # no items at all: still appears, at zeroes
     # Created with stock: creation itself must not count as a restock.
@@ -265,9 +301,10 @@ def test_restocks_per_space_per_month_are_zero_filled(client, user_a):
     client.patch(url, json={"quantity": 1}, headers=user_a["headers"])  # down: not one
     client.patch(url, json={"quantity": 3}, headers=user_a["headers"])  # up: a restock
     client.patch(url, json={"quantity": 4}, headers=user_a["headers"])  # up
+    pin_stock_stamps(at, anchor=anchor)
 
     body = client.get("/api/inventory/restocks?months=3", headers=user_a["headers"]).json()
-    assert len(body["months"]) == 3
+    assert body["months"] == labels
     by_name = {s["space_name"]: s["values"] for s in body["series"]}
     assert by_name["Fridge"] == [0, 0, 2]
     assert by_name["Garage"] == [0, 0, 0]

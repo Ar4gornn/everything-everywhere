@@ -22,6 +22,7 @@ from app.core.months import (
     format_month,
     month_range,
     parse_month,
+    utc_today,
 )
 from app.models.inventory import InventoryItem, InventoryItemChange, Space
 
@@ -326,7 +327,7 @@ def restocks(
     ending: str | None = None,
     start_day: int = DEFAULT_START_DAY,
 ) -> dict:
-    last_month = parse_month(ending) if ending else dt.date.today().replace(day=1)
+    last_month = parse_month(ending) if ending else utc_today().replace(day=1)
     first = add_months(last_month, -(months - 1))
     window_start, _ = month_range(format_month(first), start_day)
     _, window_end = month_range(format_month(last_month), start_day)

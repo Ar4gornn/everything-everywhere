@@ -10,6 +10,8 @@ The figures asserted here are worked out by hand in the comments first.
 
 import datetime as dt
 
+import pytest
+
 _TODAY = dt.date.today()
 
 
@@ -32,7 +34,37 @@ def _stock(client, user, name="Milk", quantity=2):
     return item
 
 
-def test_changes_reports_every_item_in_one_window(client, user_a):
+# UTC instants (changed_at is bucketed in UTC) on either side of a month edge, the
+# month they must land in, and the neighbour that must stay empty.
+_EDGES = [
+    pytest.param(dt.datetime(2026, 10, 1, tzinfo=dt.UTC), "first", "2026-10", "2026-09", id="1st"),
+    pytest.param(
+        dt.datetime(2026, 9, 30, 23, 59, 59, 999999, tzinfo=dt.UTC),
+        "last",
+        "2026-09",
+        "2026-10",
+        id="last-day",
+    ),
+    pytest.param(
+        dt.datetime(2026, 9, 15, 12, tzinfo=dt.UTC), "first", "2026-09", "2026-10", id="mid"
+    ),
+    pytest.param(
+        dt.datetime(2028, 2, 29, 23, 59, 59, 999999, tzinfo=dt.UTC),
+        "last",
+        "2028-02",
+        "2028-03",
+        id="leap-day",
+    ),
+    pytest.param(
+        dt.datetime(2027, 1, 1, tzinfo=dt.UTC), "first", "2027-01", "2026-12", id="new-year"
+    ),
+]
+
+
+@pytest.mark.parametrize(("at", "anchor", "month", "neighbour"), _EDGES)
+def test_changes_reports_every_item_in_one_window(
+    client, user_a, pin_stock_stamps, at, anchor, month, neighbour
+):
     """Two items, five log rows, one call.
 
     Hand-worked, and the first attempt got it wrong, which is why the count is spelled out:
@@ -52,17 +84,21 @@ def test_changes_reports_every_item_in_one_window(client, user_a):
             headers=user_a["headers"],
         )
 
-    rows = client.get(
-        f"/api/inventory/changes?month={_month_of(_TODAY)}", headers=user_a["headers"]
-    ).json()["items"]
+    pin_stock_stamps(at, anchor=anchor)
 
-    assert [(r["item_name"], r["quantity_before"], r["quantity_after"]) for r in rows] == [
+    def read(label):
+        return client.get(
+            f"/api/inventory/changes?month={label}", headers=user_a["headers"]
+        ).json()["items"]
+
+    assert [(r["item_name"], r["quantity_before"], r["quantity_after"]) for r in read(month)] == [
         ("Milk", 2, 2),
         ("Eggs", 6, 6),
         ("Milk", 2, 0),
         ("Milk", 0, 4),
         ("Eggs", 6, 5),
     ]
+    assert read(neighbour) == []
 
 
 def test_changes_excludes_a_month_that_holds_nothing(client, user_a):
