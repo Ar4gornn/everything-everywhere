@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 import type { Exercise, ExerciseHistory, ExerciseKind, WorkoutDetail } from "../../api/types";
 import { StrengthChart } from "../../charts/StrengthChart";
 import { ListRow, useOpenRow } from "../../components/ListRow";
+import { VideoLink } from "../../components/VideoLink";
 import { Card, Empty, ErrorBanner } from "../../components/ui";
 import { errorMessage } from "../../i18n/errors";
 import { useT } from "../../i18n";
@@ -311,9 +312,7 @@ export function ExercisesCard() {
                 ) : (
                   <div className="row">
                     {exercise.video_url && (
-                      <a href={exercise.video_url} target="_blank" rel="noopener noreferrer">
-                        {t("gym.video")}
-                      </a>
+                      <VideoLink url={exercise.video_url} label={t("gym.video")} />
                     )}
                     <button
                       type="button"

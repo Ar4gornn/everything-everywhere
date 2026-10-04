@@ -27,12 +27,12 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
 		# The app loads one bundle and one stylesheet from its own origin, talks only to
-		# its own /api, and embeds nothing. Everything below is what it actually needs;
+		# its own /api, and embeds only the YouTube nocookie player (frame-src). Everything below is what it actually needs;
 		# there is no 'unsafe-inline' because the build produces no inline script.
 		# worker-src and manifest-src are named explicitly rather than left to default-src:
 		# both fall back to it today, but a future relaxation of default-src should not
 		# silently widen where a service worker may come from.
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data:; connect-src 'self'; form-action 'self'; worker-src 'self'; manifest-src 'self'"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src https://www.youtube-nocookie.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; worker-src 'self'; manifest-src 'self'"
 		# Do not advertise the server version.
 		-Server
 	}
