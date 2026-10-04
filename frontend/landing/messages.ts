@@ -53,8 +53,8 @@ export const landing = {
   },
   "start.tour.t": { en: "Take the short tour", fr: "Faites la courte visite" },
   "start.tour.d": {
-    en: "The first time you sign in, a short tour shows you how to record an entry, set a budget and read the dashboard. You can play it again from **Settings**, with **Show the tour again**.",
-    fr: "À votre première connexion, une courte visite vous montre comment enregistrer une opération, fixer un budget et lire le tableau de bord. Vous pouvez la rejouer depuis les **Réglages**, avec **Revoir la visite**.",
+    en: "Right after you create your account, a short tour shows you how to record an entry, set a budget and read the dashboard. You can play it again from **Settings**, with **Show the tour again**.",
+    fr: "Juste après la création de votre compte, une courte visite vous montre comment enregistrer une opération, fixer un budget et lire le tableau de bord. Vous pouvez la rejouer depuis les **Réglages**, avec **Revoir la visite**.",
   },
   "start.settings.t": { en: "Check your settings", fr: "Vérifiez vos réglages" },
   "start.settings.d": {
@@ -63,8 +63,8 @@ export const landing = {
   },
   "start.first.t": { en: "Record your first expense", fr: "Notez votre première dépense" },
   "start.first.d": {
-    en: "On a phone, tap the **+** button (**Add an entry**), choose a category, enter the amount and press **Save**. On a computer, open **Entries**.",
-    fr: "Sur téléphone, touchez le bouton **+** (**Ajouter une opération**), choisissez une catégorie, saisissez le montant et appuyez sur **Enregistrer**. Sur ordinateur, ouvrez **Opérations**.",
+    en: "On a phone, tap the **+** button (**Add an entry**), enter the amount, choose a category and press **Save**. On a computer, open **Entries**.",
+    fr: "Sur téléphone, touchez le bouton **+** (**Ajouter une opération**), saisissez le montant, choisissez une catégorie et appuyez sur **Enregistrer**. Sur ordinateur, ouvrez **Opérations**.",
   },
   "start.plan.t": { en: "Set a monthly plan", fr: "Fixez un budget mensuel" },
   "start.plan.d": {
