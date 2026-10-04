@@ -1,4 +1,4 @@
-import { type ComponentType, lazy, Suspense, useEffect, useRef } from "react";
+import { type ComponentType, lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   NavLink,
   Navigate,
@@ -12,6 +12,9 @@ import {
 import type { Layout, ModuleId, SectionId } from "./api/types";
 import { useAuth } from "./auth/AuthContext";
 import { ModuleGate } from "./components/ModuleOff";
+import { BottomBar } from "./components/nav/BottomBar";
+import { NavDrawer } from "./components/nav/NavDrawer";
+import { Sidebar } from "./components/nav/Sidebar";
 import { QuickAddProvider, useQuickAdd } from "./components/QuickAdd/QuickAddContext";
 import { QuickAddSheet } from "./components/QuickAdd/QuickAddSheet";
 import { TutorialModal } from "./components/Tutorial/TutorialModal";
@@ -22,6 +25,7 @@ import { useLayout, usePreferences } from "./layout/useLayout";
 import { flushEntries, useEntryOutbox } from "./entries/outbox";
 import { flushOutbox } from "./gym/store";
 import { flushDrafts } from "./notes/drafts";
+import { navModel } from "./nav/model";
 import { SignInPage } from "./pages/SignInPage";
 import { useTheme } from "./theme";
 
@@ -302,12 +306,20 @@ export function App() {
   // Read before the early returns below: a hook must run on every render.
   const modules = useModules();
   // The tabs are the account's, per layout (Epic 33): a phone and a laptop may differ.
-  const { current } = usePreferences();
-  const { bar: SECTIONS, top: topLinks } = navFor(current, modules);
-
-  /** A section owns more than its own path when it has two views (Dashboard / Calendar). */
-  const extra = (section: Section) =>
-    section.also.some((path) => pathname.startsWith(path)) ? "on" : "";
+  const { current, layout } = usePreferences();
+  const desktop = layout === "desktop";
+  // Epic 52 (AD-65): one model for the phone bar, the More drawer and the desktop sidebar.
+  const nav = navModel(current, modules, layout);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // A window widened past the phone breakpoint with the drawer open: the sidebar takes over,
+  // and a modal dialog left open would keep the whole page inert.
+  useEffect(() => {
+    if (desktop) setDrawerOpen(false);
+  }, [desktop]);
+  // A tap on a tile closes the drawer itself; this covers every other way the page changes
+  // (back button, a link in a page) so the sheet never stays over the new one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the path is the trigger
+  useEffect(() => setDrawerOpen(false), [pathname]);
 
   // Notes written with no network are sent when it comes back, and when the app opens —
   // whichever page is showing (Epic 32, AD-48).
@@ -371,27 +383,26 @@ export function App() {
     <QuickAddProvider>
     <EntriesFlusher />
     <div className="shell">
+      {/* Epic 52 (AD-65): every place, grouped, down the left of a desktop. CSS hides it
+          on a phone, where the bottom bar and the More drawer do the same job. */}
+      {/* biome-ignore lint/a11y/useValidAnchor: a skip link is an in-page anchor; the handler
+          only keeps "#main" out of the URL and moves focus to the region */}
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        {t("nav.skip")}
+      </a>
+      {desktop ? <Sidebar model={nav} pathname={pathname} /> : null}
+      {/* The desktop has no top bar: the sidebar carries the name, Settings (with who is
+          signed in) and the theme switch. */}
+      {desktop ? null : (
       <header className="topbar">
         <h1 className="brand">{t("app.name")}</h1>
-        <nav className="nav">
-          {SECTIONS.map((section) => (
-            <NavLink key={section.to} to={section.to} end={section.end} className={extra(section)}>
-              {t(section.label)}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Plan and Grow live here rather than in the bottom bar: a standing budget and an
-            interest projection are consulted now and then, while the bottom bar is for the
-            five things you open at the moment you need them. Its own element, not part of
-            .nav, because .nav is hidden on a phone — which would strand both. */}
-        <nav className="nav-extra" aria-label={t("nav.more")}>
-          {topLinks.map((section) => (
-            <NavLink key={section.to} to={section.to} end={section.end} className={extra(section)}>
-              {t(section.label)}
-            </NavLink>
-          ))}
-        </nav>
         {/* The email is the way into Settings: currency, password, recovery codes and
             sign-out all live there, so the top bar carries one link instead of a button
             for each. Six bottom tabs would not fit a phone; one link here does. */}
@@ -414,8 +425,9 @@ export function App() {
           </NavLink>
         </div>
       </header>
+      )}
 
-      <main>
+      <main id="main" tabIndex={-1}>
         {/* Nothing is drawn while a chunk loads: the bars above and below are already there,
             and a spinner for a fetch that is usually served from the worker's cache would
             flash more than it informs. */}
@@ -474,16 +486,13 @@ export function App() {
 
       {/* Thumb-reachable navigation. This is the single thing that stops an installed PWA
           feeling like a website in a frameless window. */}
-      <nav className="bottom-nav" aria-label={t("nav.sections")}>
-        {SECTIONS.map((section) => (
-          <NavLink key={section.to} to={section.to} end={section.end} className={extra(section)}>
-            <span className="glyph" aria-hidden="true">
-              {section.glyph}
-            </span>
-            {t(section.label)}
-          </NavLink>
-        ))}
-      </nav>
+      <BottomBar
+        model={nav}
+        pathname={pathname}
+        moreOpen={drawerOpen}
+        onMore={() => setDrawerOpen(true)}
+      />
+      <NavDrawer model={nav} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       {/* First sign-in only, or replayed from Settings (Epic 30). */}
       <TutorialModal />

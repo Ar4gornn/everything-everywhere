@@ -1,26 +1,40 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
-import type { CardId, LayoutName, ModuleId, PreferencesPatch, SectionId } from "../api/types";
+import type { CardId, LayoutName, ModuleId, NavItemId, PreferencesPatch } from "../api/types";
 import { useT } from "../i18n";
-import {
-  CARD_LABEL,
-  CARD_MODULE,
-  MODULE_NAME,
-  SECTION_LABEL,
-  SECTION_MODULE,
-} from "../layout/modules";
+import { CARD_LABEL, CARD_MODULE, MODULE_NAME } from "../layout/modules";
 import {
   DEFAULT_PREFERENCES,
   LAYOUTS,
   MODULES,
+  PHONE_PIN_CAP,
+  barCount,
+  defaultItems,
+  itemsOf,
   moveCard,
-  moveTab,
-  normalizeTabs,
-  swapPartner,
-  switchSlot,
+  moveItem,
+  pinItem,
+  unpinItem,
 } from "../layout/preferences";
+import { NAV_DEFS, NAV_GROUPS } from "../nav/model";
 import { usePreferences } from "../layout/useLayout";
 import { Card, ErrorBanner } from "./ui";
+
+/** Pin and Unpin are words, a size smaller than the names so "Épingler" fits beside them. */
+const PIN_STYLE = { padding: "0 8px", fontSize: 13 } as const;
+/** The place rows' arrows, a little narrower than the cards' so name, arrows and a word fit
+ *  one 320px French row (measured: 79 + 33 + 33 + 65 + gaps in 235). */
+const ARROW_STYLE = { padding: "8px 12px" } as const;
+/** A full bar's Pin is not an end stop (↑/↓ at a list's end): it is outlined with a dash
+ *  and keeps its word, so it reads as "not now" rather than "nowhere to go". */
+const PIN_FULL_STYLE = {
+  ...PIN_STYLE,
+  background: "transparent",
+  borderStyle: "dashed",
+  borderColor: "var(--border-strong)",
+  color: "var(--muted)",
+} as const;
 
 /**
  * Settings → Layout (Epic 33): which modules the account uses, and where each section sits
@@ -38,6 +52,18 @@ export function LayoutCard() {
   const [editing, setEditing] = useState<LayoutName>(layout);
   const [confirming, setConfirming] = useState(false);
 
+  // `/settings#layout` (the drawer's "Change what's in the bar", a module's off page): the
+  // page is a lazy chunk, so the browser's own anchor jump has nothing to land on yet.
+  // Keyed on the location too: following the link again from this very page (the drawer is
+  // open over Settings) is a new navigation with the same hash, and must scroll again.
+  const anchor = useRef<HTMLDivElement>(null);
+  const { hash, key } = useLocation();
+  useEffect(() => {
+    if (key && hash === "#layout") anchor.current?.scrollIntoView?.();
+  }, [hash, key]);
+
+  // The new client writes `items` and `cards`, never `tabs` (the server derives those for an
+  // app that has not updated).
   function save(patch: PreferencesPatch) {
     setFailed(false);
     update(patch).catch(() => setFailed(true));
@@ -48,62 +74,101 @@ export function LayoutCard() {
   }
 
   const current = preferences[editing];
-  const tabs = normalizeTabs(current.tabs);
-  const setTabs = (next: typeof tabs) => save({ [editing]: { ...current, tabs: next } });
-  const name = (id: SectionId) => t(SECTION_LABEL[id]);
-  const hidden = (id: SectionId) => {
-    if (id === "habits") return !preferences.modules.habits && !preferences.modules.books;
-    const module = SECTION_MODULE[id];
+  const items = itemsOf(current, editing);
+  const setItems = (next: typeof items) =>
+    save({ [editing]: { cards: current.cards, items: next } });
+  const placeName = (id: NavItemId) => t(NAV_DEFS[id].label);
+  const isOff = (id: NavItemId) => {
+    const module = NAV_DEFS[id].module;
     return module ? !preferences.modules[module] : false;
   };
+  // A pinned place whose module is off is not in the bar, so it takes no slot.
+  const pinnedCount = barCount(items, preferences.modules);
+  const barFull = pinnedCount >= PHONE_PIN_CAP;
+  const onPhone = editing === "phone";
 
-  function row(id: SectionId, index: number, group: typeof tabs) {
-    const slot = group[index]?.slot ?? "bar";
-    const partner = swapPartner(tabs, id, editing);
-    const across = partner
-      ? t(slot === "bar" ? "layout.toTopSwap" : "layout.toBarSwap", {
-          name: name(id),
-          other: name(partner),
-        })
-      : t(slot === "bar" ? "layout.toTop" : "layout.toBar", { name: name(id) });
+  /** A desktop has no bar: order within a group is over every place, pinned or not, so the
+   *  move is made on a copy with nothing pinned and the pins are put back after. */
+  function move(id: NavItemId, step: -1 | 1) {
+    if (onPhone) return setItems(moveItem(items, id, step));
+    const moved = moveItem(
+      items.map((item) => ({ id: item.id, pinned: false })),
+      id,
+      step,
+    );
+    const pinnedBefore = new Map(items.map((item) => [item.id, item.pinned]));
+    setItems(moved.map((item) => ({ id: item.id, pinned: pinnedBefore.get(item.id) ?? false })));
+  }
+
+  /** One place: its name, up and down within its own list, and pin or unpin on a phone. */
+  function placeRow(id: NavItemId, index: number, count: number) {
+    const pinned = items.find((item) => item.id === id)?.pinned ?? false;
+    const name = placeName(id);
     return (
       <li key={id} className="row" style={{ alignItems: "center", gap: 6, margin: "4px 0" }}>
-        <span style={{ flex: "1 1 auto", minWidth: 0 }}>
-          {name(id)}
-          {hidden(id) && <span className="hint"> · {t("layout.hidden")}</span>}
+        <span style={{ flex: "1 1 auto", minWidth: 0 }} className={isOff(id) ? "hint" : undefined}>
+          {name}
+          {isOff(id) && <span> {t("layout.nav.off")}</span>}
         </span>
         <button
           type="button"
           className="quiet"
-          aria-label={t("layout.up", { name: name(id) })}
+          style={ARROW_STYLE}
+          aria-label={t("layout.up", { name })}
           disabled={index === 0}
-          onClick={() => setTabs(moveTab(tabs, id, -1))}
+          onClick={() => move(id, -1)}
         >
           <span aria-hidden="true">↑</span>
         </button>
         <button
           type="button"
           className="quiet"
-          aria-label={t("layout.down", { name: name(id) })}
-          disabled={index === group.length - 1}
-          onClick={() => setTabs(moveTab(tabs, id, 1))}
+          style={ARROW_STYLE}
+          aria-label={t("layout.down", { name })}
+          disabled={index === count - 1}
+          onClick={() => move(id, 1)}
         >
           <span aria-hidden="true">↓</span>
         </button>
-        <button
-          type="button"
-          className="quiet"
-          aria-label={across}
-          data-tip={across}
-          onClick={() => setTabs(switchSlot(tabs, id, editing))}
-        >
-          <span aria-hidden="true">{slot === "bar" ? "⤒" : "⤓"}</span>
-        </button>
+        {/* Words, not arrows: the accessible name still says which place and where. */}
+        {onPhone &&
+          (pinned ? (
+            <button
+              type="button"
+              className="quiet"
+              style={PIN_STYLE}
+              aria-label={t("layout.nav.unpin", { name })}
+              onClick={() => setItems(unpinItem(items, id))}
+            >
+              {t("layout.nav.unpinShort")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={barFull ? "quiet pin-full" : "quiet"}
+              style={barFull ? PIN_FULL_STYLE : PIN_STYLE}
+              aria-label={t("layout.nav.pin", { name })}
+              aria-describedby={barFull ? "layout-nav-full" : undefined}
+              disabled={barFull}
+              onClick={() => setItems(pinItem(items, id, preferences.modules))}
+            >
+              {t("layout.nav.pinShort")}
+            </button>
+          ))}
       </li>
     );
   }
 
-  const setCards = (next: typeof current.cards) => save({ [editing]: { ...current, cards: next } });
+  const bar = items.filter((item) => item.pinned);
+  // A phone's groups hold what is not in the bar; a desktop's hold every place.
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    ids: items
+      .filter((item) => NAV_DEFS[item.id].group === group.id && (!onPhone || !item.pinned))
+      .map((item) => item.id),
+  })).filter((group) => group.ids.length > 0);
+
+  const setCards = (next: typeof current.cards) => save({ [editing]: { cards: next, items } });
   const cardName = (id: CardId) => t(CARD_LABEL[id]);
 
   function cardRow(card: (typeof current.cards)[number], index: number) {
@@ -155,12 +220,10 @@ export function LayoutCard() {
     );
   }
 
-  const bar = tabs.filter((tab) => tab.slot === "bar");
-  const top = tabs.filter((tab) => tab.slot === "top");
-
   return (
-    // The id is where a module's "turned off" page links to.
-    <div id="layout">
+    // The id is where a module's "turned off" page links to. The margin keeps the card off
+    // the window's top edge when that link (or the drawer's) scrolls it into view.
+    <div id="layout" ref={anchor} style={{ scrollMarginTop: 16 }}>
       <Card title={t("layout.title")}>
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
           <legend style={{ fontWeight: 600, marginBottom: 6 }}>{t("layout.modules")}</legend>
@@ -181,8 +244,8 @@ export function LayoutCard() {
           {t("layout.modulesHint")}
         </p>
 
-        <h3 style={{ fontSize: 15, margin: "16px 0 6px" }}>{t("layout.tabs")}</h3>
-        <div className="chips" role="group" aria-label={t("layout.tabs")}>
+        <h3 style={{ fontSize: 15, margin: "16px 0 6px" }}>{t("layout.nav.title")}</h3>
+        <div className="chips" role="group" aria-label={t("layout.nav.title")}>
           {LAYOUTS.map((name) => (
             <button
               key={name}
@@ -198,20 +261,46 @@ export function LayoutCard() {
             </button>
           ))}
         </div>
-        <p className="hint">{t("layout.tabsHint")}</p>
+        <p className="hint">{t(onPhone ? "layout.nav.phoneHint" : "layout.nav.desktopHint")}</p>
 
-        <h4 style={{ margin: "10px 0 2px" }} id="layout-bar">
-          {t("layout.bar")}
-        </h4>
-        <ol aria-labelledby="layout-bar" style={{ margin: 0, paddingLeft: 20 }}>
-          {bar.map((tab, index) => row(tab.id, index, bar))}
-        </ol>
-        <h4 style={{ margin: "10px 0 2px" }} id="layout-top">
-          {t("layout.top")}
-        </h4>
-        <ol aria-labelledby="layout-top" style={{ margin: 0, paddingLeft: 20 }}>
-          {top.map((tab, index) => row(tab.id, index, top))}
-        </ol>
+        {onPhone && (
+          <>
+            <h4 style={{ margin: "10px 0 2px" }} id="layout-bar">
+              {t("layout.nav.bar", { count: pinnedCount, max: PHONE_PIN_CAP })}
+            </h4>
+            {bar.length === 0 ? (
+              <p className="hint" style={{ margin: "0 0 4px" }}>
+                {t("layout.nav.barEmpty")}
+              </p>
+            ) : (
+              <ol aria-labelledby="layout-bar" style={{ margin: 0, paddingLeft: 20 }}>
+                {bar.map((item, index) => placeRow(item.id, index, bar.length))}
+              </ol>
+            )}
+            {barFull && (
+              <p className="hint" id="layout-nav-full" style={{ margin: "4px 0 0" }}>
+                {t("layout.nav.full", { max: PHONE_PIN_CAP })}
+              </p>
+            )}
+          </>
+        )}
+        {groups.map((group) => (
+          <section key={group.id}>
+            <h4 style={{ margin: "10px 0 2px" }} id={`layout-group-${group.id}`}>
+              {t(group.label)}
+            </h4>
+            <ol aria-labelledby={`layout-group-${group.id}`} style={{ margin: 0, paddingLeft: 20 }}>
+              {group.ids.map((id, index) => placeRow(id, index, group.ids.length))}
+            </ol>
+          </section>
+        ))}
+        {onPhone && barFull && groups.length > 0 && (
+          // Again under the groups, where the greyed Pin buttons are; a reader already has
+          // it from each button's description, so it is said once.
+          <p className="hint" aria-hidden="true" style={{ margin: "6px 0 0" }}>
+            {t("layout.nav.full", { max: PHONE_PIN_CAP })}
+          </p>
+        )}
 
         <h4 style={{ margin: "14px 0 2px" }} id="layout-cards">
           {t("layout.cards")}
@@ -233,7 +322,12 @@ export function LayoutCard() {
                 type="button"
                 onClick={() => {
                   setConfirming(false);
-                  save({ [editing]: DEFAULT_PREFERENCES[editing] });
+                  save({
+                    [editing]: {
+                      cards: DEFAULT_PREFERENCES[editing].cards,
+                      items: defaultItems(editing),
+                    },
+                  });
                 }}
               >
                 {t("layout.resetYes")}

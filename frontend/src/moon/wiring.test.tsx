@@ -303,7 +303,8 @@ describe("dashboard title line", () => {
     vi.mocked(useMoonEngine).mockReturnValue(null);
     renderAt("/");
     await screen.findAllByRole("heading", { level: 1 });
-    expect(screen.queryByRole("link", { name: /moon/i })).not.toBeInTheDocument();
+    // The page's own line; the sidebar's Moon entry (Epic 52) is there without the engine.
+    expect(within(screen.getByRole("main")).queryByRole("link", { name: /moon/i })).not.toBeInTheDocument();
   });
 });
 

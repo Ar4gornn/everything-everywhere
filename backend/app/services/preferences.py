@@ -15,7 +15,7 @@ import unicodedata
 import uuid
 import zoneinfo
 
-from sqlalchemy import bindparam, update
+from sqlalchemy import bindparam, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
@@ -120,6 +120,37 @@ PHONE_CAPS = {"bar": 5, "top": 3}
 _SECTION_IDS = tuple(section_id for section_id, _ in SECTIONS)
 _DEFAULT_SLOT = dict(SECTIONS)
 
+#: Epic 52 (AD-65): every place the navigation can show — the eight sections and the five
+#: views that used to hide behind chips and links — in their default order. On a phone the
+#: pinned ones are the bottom bar, in list order, and the rest are in the More drawer; on a
+#: desktop all are in the sidebar. The drawer and sidebar group them (the client's
+#: ``nav/model.ts``) and keep list order within each group, so the default list leads with
+#: the four pinned places in bar order.
+NAV_ITEMS: tuple[str, ...] = (
+    "dashboard", "entries", "habits", "plan",  # the bar
+    "calendar", "books", "notes", "grow",
+    "stock", "recipes", "gym",
+    "clocks", "moon",
+)
+#: A desktop's default order: the sidebar's group order (client ``NAV_DEFS[*].group``), so
+#: a desktop list reads top to bottom as the sidebar draws it. A phone keeps ``NAV_ITEMS``
+#: (the bar first).
+NAV_ITEMS_GROUPED: tuple[str, ...] = (
+    "dashboard", "calendar", "habits", "books", "notes",
+    "entries", "plan", "grow",
+    "stock", "recipes", "gym",
+    "clocks", "moon",
+)
+#: The module that hides a place when it is off; a place not listed here is never hidden.
+NAV_MODULE: dict[str, str] = {
+    "habits": "habits", "books": "books", "notes": "notes", "stock": "stock",
+    "recipes": "recipes", "gym": "gym", "clocks": "clocks", "moon": "moon",
+}
+#: Pinned by default: the daily money-and-habits loop.
+NAV_DEFAULT_PINNED: tuple[str, ...] = ("dashboard", "entries", "habits", "plan")
+#: A phone's bottom bar holds this many pinned places plus More.
+PHONE_PIN_CAP = 4
+
 
 def _merge(stored: list[dict], catalogue: tuple[str, ...], make) -> list[dict]:
     """Stored order, minus ids that no longer exist, plus ids it lacks at their default place.
@@ -150,7 +181,31 @@ def _merge(stored: list[dict], catalogue: tuple[str, ...], make) -> list[dict]:
     return result
 
 
-def _resolve_layout(stored: object) -> dict:
+def _catalogue(name: str) -> tuple[str, ...]:
+    return NAV_ITEMS if name == "phone" else NAV_ITEMS_GROUPED
+
+
+def _place_on(item_id: str, modules: dict[str, bool]) -> bool:
+    """Is this place shown: it has no module, or its module is on."""
+    module = NAV_MODULE.get(item_id)
+    return module is None or modules.get(module, True)
+
+
+def _tabs_from_items(items: list[dict]) -> list[dict]:
+    """The section tabs an installed app that predates Epic 52 should read from ``items``:
+    sections only, the pinned ones first (in list order), then the others in list order; the
+    first five are the bar, the rest the top links. So the old app shows the same first
+    places the new one does."""
+    sections = [item for item in items if item["id"] in _SECTION_IDS]
+    ordered = [i for i in sections if i["pinned"]] + [i for i in sections if not i["pinned"]]
+    return [
+        {"id": item["id"], "slot": "bar" if index < PHONE_CAPS["bar"] else "top"}
+        for index, item in enumerate(ordered)
+    ]
+
+
+def _resolve_layout(name: str, stored: object, modules: dict[str, bool] | None = None) -> dict:
+    modules = modules or {}
     layout = stored if isinstance(stored, dict) else {}
     tabs = _merge(
         [
@@ -172,7 +227,59 @@ def _resolve_layout(stored: object) -> dict:
         CARDS,
         lambda card_id: {"id": card_id, "on": True},
     )
-    return {"tabs": tabs, "cards": cards}
+    items = _resolve_items(name, layout, tabs, modules)
+    if isinstance(layout.get("items"), list):
+        # The new client writes `items` only; the old tabs are derived for old clients.
+        tabs = _tabs_from_items(items)
+    return {"tabs": tabs, "cards": cards, "items": items}
+
+
+def _default_items(name: str = "phone") -> list[dict]:
+    return [
+        {"id": item_id, "pinned": item_id in NAV_DEFAULT_PINNED} for item_id in _catalogue(name)
+    ]
+
+
+def _resolve_items(
+    name: str, layout: dict, tabs: list[dict], modules: dict[str, bool] | None = None
+) -> list[dict]:
+    """The stored ``items`` merged with the catalogue; or, for a layout saved before Epic 52,
+    derived from its ``tabs``: the first four bar tabs (in their order) stay pinned, and
+    everything else follows in the default order. An account that never customised its tabs
+    gets the new default rather than a copy of the old five-tab bar."""
+    stored = layout.get("items")
+    if isinstance(stored, list):
+        clean = [
+            {"id": item["id"], "pinned": item["pinned"]}
+            for item in stored
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+            and isinstance(item.get("pinned"), bool)
+        ]
+        items = _merge(clean, _catalogue(name), lambda item_id: {"id": item_id, "pinned": False})
+        # A phone's stored list that pins more than a bar holds (an older rule, a hand edit)
+        # keeps the first four; reading never refuses. A desktop ignores `pinned`, and the
+        # write path accepts any number there, so it is read back as it was written. Only
+        # places whose module is on take a slot.
+        seen = 0
+        for item in items:
+            if name == "phone" and item["pinned"] and _place_on(item["id"], modules or {}):
+                seen += 1
+                if seen > PHONE_PIN_CAP:
+                    item["pinned"] = False
+        return items
+    raw_tabs = layout.get("tabs")
+    # Only a tab list that held at least one readable tab says anything about the bar; an
+    # empty or unreadable one is "never customised", as if it were absent.
+    readable = isinstance(raw_tabs, list) and any(
+        isinstance(tab, dict) and isinstance(tab.get("id"), str)
+        and tab.get("slot") in ("bar", "top")
+        for tab in raw_tabs
+    )
+    if not readable:
+        return _default_items(name)
+    pinned = [tab["id"] for tab in tabs if tab["slot"] == "bar"][:PHONE_PIN_CAP]
+    rest = [item_id for item_id in _catalogue(name) if item_id not in pinned]
+    return [{"id": i, "pinned": True} for i in pinned] + [{"id": i, "pinned": False} for i in rest]
 
 
 def clean_points_name(raw: str) -> str:
@@ -207,11 +314,12 @@ def resolve(stored: object) -> dict:
     modules = prefs.get("modules") if isinstance(prefs.get("modules"), dict) else {}
     kinds = prefs.get("notifications") if isinstance(prefs.get("notifications"), dict) else {}
     shown = prefs.get("streaks") if isinstance(prefs.get("streaks"), dict) else {}
+    shown_modules = {
+        module: modules[module] if isinstance(modules.get(module), bool) else True
+        for module in MODULES
+    }
     return {
-        "modules": {
-            module: modules[module] if isinstance(modules.get(module), bool) else True
-            for module in MODULES
-        },
+        "modules": shown_modules,
         "notifications": {
             kind: kinds[kind] if isinstance(kinds.get(kind), bool) else default
             for kind, default in NOTIFICATIONS
@@ -231,7 +339,7 @@ def resolve(stored: object) -> dict:
             if isinstance(prefs.get("calendar_zone"), str) and is_zone(prefs["calendar_zone"])
             else None
         ),
-        **{layout: _resolve_layout(prefs.get(layout)) for layout in LAYOUTS},
+        **{layout: _resolve_layout(layout, prefs.get(layout), shown_modules) for layout in LAYOUTS},
     }
 
 
@@ -349,7 +457,23 @@ def _check_streaks(shown: dict[str, bool]) -> None:
             raise Invalid(f"no streak called {streak!r}", "pref_unknown_id")
 
 
-def _check_layout(name: str, layout: dict) -> None:
+def _check_layout(name: str, layout: dict, modules: dict[str, bool] | None = None) -> None:
+    items = layout.get("items")
+    if items is not None:
+        ids = [item["id"] for item in items]
+        for item_id in ids:
+            if item_id not in NAV_ITEMS:
+                raise Invalid(f"no place called {item_id!r}", "pref_unknown_id")
+        _no_duplicates(ids, "place")
+        # Complete for the same reason as the tabs: nowhere to reach a place it left out.
+        if len(ids) != len(NAV_ITEMS):
+            raise Invalid("the list must name every place once", "pref_incomplete")
+        # A pinned place whose module is off is not in the bar, so it takes no slot.
+        on = modules or {}
+        if name == "phone" and sum(
+            item["pinned"] and _place_on(item["id"], on) for item in items
+        ) > PHONE_PIN_CAP:
+            raise Invalid(f"a phone's bar holds at most {PHONE_PIN_CAP}", "pref_slot_full")
     tabs = layout.get("tabs")
     if tabs is not None:
         ids = [tab["id"] for tab in tabs]
@@ -375,9 +499,12 @@ def _check_layout(name: str, layout: dict) -> None:
         _no_duplicates(ids, "card")
 
 
-def validate(patch: dict) -> None:
+def validate(patch: dict, stored_modules: dict[str, bool] | None = None) -> None:
     """Refuse, with a code, anything the catalogue does not allow. ``patch`` holds only
-    the top-level keys the request sent, already shape-checked by the schema."""
+    the top-level keys the request sent, already shape-checked by the schema.
+    ``stored_modules`` are the account's modules, for a patch that carries a layout but not
+    the modules (the phone cap counts only the places whose module is on)."""
+    modules = patch["modules"] if "modules" in patch else (stored_modules or {})
     if "modules" in patch:
         _check_modules(patch["modules"])
     if "notifications" in patch:
@@ -390,7 +517,7 @@ def validate(patch: dict) -> None:
         _check_zone(patch["calendar_zone"])
     for layout in LAYOUTS:
         if layout in patch:
-            _check_layout(layout, patch[layout])
+            _check_layout(layout, patch[layout], modules)
 
 
 def _check_zone(name: str) -> None:
@@ -413,7 +540,13 @@ def update_preferences(session: Session, user_id: uuid.UUID, patch: dict) -> Non
     two tabs saving ``modules`` and ``phone`` at the same moment both land. Refusals are
     raised before anything is written.
     """
-    validate(patch)
+    stored_modules = None
+    if any(layout in patch for layout in LAYOUTS) and "modules" not in patch:
+        stored = session.execute(
+            select(User.preferences).where(User.id == user_id)
+        ).scalar_one_or_none()
+        stored_modules = resolve(stored)["modules"]
+    validate(patch, stored_modules)
     if not patch:
         return
     session.execute(

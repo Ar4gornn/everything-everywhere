@@ -45,5 +45,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // 10s, not 5s: pages that render the whole shell (sidebar, drawer, Settings with its
+    // hundreds of options) ran past 5s on a loaded machine with every assertion passing.
+    testTimeout: 10000,
   },
 });

@@ -127,9 +127,35 @@ export type LayoutName = "phone" | "desktop";
 
 export interface Layout {
   /** Every section once, in order. "bar": the bottom tabs on a phone, the main nav on a
-   *  desktop; "top": the smaller row beside it. A phone holds at most 5 and 3. */
+   *  desktop; "top": the smaller row beside it. A phone holds at most 5 and 3.
+   *  Superseded by `items` since Epic 52; kept for older clients and older servers. */
   tabs: { id: SectionId; slot: "bar" | "top" }[];
   cards: { id: CardId; on: boolean }[];
+  /** Epic 52 (AD-65): every place once, in order; on a phone the pinned ones (at most 4)
+   *  are the bottom bar. Optional: a server older than Epic 52 does not send it, and
+   *  `itemsOf` derives it from `tabs` the same way the server does. */
+  items?: NavItem[];
+}
+
+/** Epic 52 (AD-65): the places the navigation can show. */
+export type NavItemId =
+  | "dashboard"
+  | "entries"
+  | "habits"
+  | "plan"
+  | "calendar"
+  | "books"
+  | "notes"
+  | "grow"
+  | "stock"
+  | "recipes"
+  | "gym"
+  | "clocks"
+  | "moon";
+
+export interface NavItem {
+  id: NavItemId;
+  pinned: boolean;
 }
 
 /** Epic 48 (AD-64): `"HH:MM"` on the 15-minute grid. */
@@ -192,7 +218,14 @@ export interface Preferences {
 }
 
 /** Each key present replaces that subtree on the server; absent keys are untouched. */
-export type PreferencesPatch = Partial<Preferences>;
+export type PreferencesPatch = Partial<Omit<Preferences, LayoutName>> & {
+  phone?: LayoutPatch;
+  desktop?: LayoutPatch;
+};
+
+/** A layout as the client writes it: `items` and `cards`. Epic 52 round 1: the new client
+ *  never writes `tabs`; the server derives them from `items` for an app that has not updated. */
+export type LayoutPatch = Omit<Layout, "tabs"> & { tabs?: Layout["tabs"] };
 
 /** How the guided tour ended. The server keeps the time; the client only says which. */
 export type TutorialOutcome = "completed" | "skipped";

@@ -1,0 +1,312 @@
+/* Epic 52 (AD-65): the desktop sidebar. It is rendered only on a desktop layout (App.tsx), but
+   every rule that places it still lives inside the desktop query. Class names are global in
+   this app, so each selector is qualified by .sidebar or by .shell > … */
+
+.sidebar {
+  display: none;
+}
+
+/* "Skip to content": the first focusable element in the shell, drawn only while focused. */
+.shell > .skip-link {
+  position: fixed;
+  left: 8px;
+  top: -64px;
+  z-index: 60;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--link);
+  border: 1px solid var(--border-strong);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.shell > .skip-link:focus {
+  top: 8px;
+}
+
+@media (min-width: 721px) {
+  /* Two columns: the sidebar, then the page. `:has(> .sidebar)` outranks the plain `.shell`
+     rule in styles.css (which comes later in the bundle and would otherwise win), so the
+     page keeps its old measure (1080px box, 1040px of content) beside the column. The
+     desktop has no top bar: the sidebar carries the name, Settings and who is signed in. */
+  .shell:has(> .sidebar) {
+    --sidebar-w: 232px;
+    --sidebar-gap: 32px;
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    column-gap: var(--sidebar-gap);
+    align-items: start;
+    max-width: calc(1080px + var(--sidebar-w) + var(--sidebar-gap));
+  }
+
+  .shell:has(> .sidebar) > main {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  /* The sidebar is exactly the viewport tall and sticks to its top. The shell's own padding
+     (24px above, 64px below) would push it down and make every page scroll, so the sidebar
+     takes it back with negative margins: a near-empty page is then exactly one viewport. */
+  .sidebar {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+    position: sticky;
+    top: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 100dvh;
+    margin-top: calc(-1 * max(24px, env(safe-area-inset-top)));
+    margin-bottom: calc(-1 * max(64px, env(safe-area-inset-bottom)));
+    padding: max(16px, env(safe-area-inset-top)) 16px 12px 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .sidebar .sidebar-brand {
+    flex: none;
+    padding: 2px 8px 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: var(--fs-body);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .sidebar .sidebar-brand-mark {
+    display: none;
+  }
+
+  /* The groups scroll inside the column only when they truly do not fit (a short window);
+     at 1280x800 all thirteen places, four labels and the foot fit without it. */
+  .sidebar .sidebar-groups {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sidebar .sidebar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .sidebar .sidebar-heading {
+    margin: 0;
+    padding: 0 8px 2px;
+    color: var(--muted);
+    font-size: var(--fs-small);
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  /* glyph | name (keeps its width) | hint (takes what is left, ellipsises). */
+  .sidebar .sidebar-link {
+    display: grid;
+    grid-template-columns: 24px max-content minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+    min-height: 34px;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    font-size: var(--fs-body);
+    line-height: 1.25;
+    text-decoration: none;
+  }
+
+  .sidebar .sidebar-link:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .sidebar .sidebar-link.on {
+    background: var(--primary-soft);
+    color: var(--link);
+    font-weight: 700;
+  }
+
+  .sidebar .sidebar-link .glyph {
+    text-align: center;
+  }
+
+  .sidebar .sidebar-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .sidebar .sidebar-hint {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    min-width: 0;
+    font-size: var(--fs-small);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: inherit;
+  }
+
+  .sidebar .sidebar-hint .moon-glyph {
+    flex: none;
+  }
+
+  .sidebar .sidebar-hint .nav-hint-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A clock hint: the place's name gives way, the time and its day word never do. */
+  .sidebar .sidebar-hint .nav-hint-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar .sidebar-hint .nav-hint-time {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* Settings carries who is signed in under its name (the old top bar's email pill). */
+  .sidebar .sidebar-label .sidebar-email {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-small);
+    font-weight: 400;
+    color: inherit;
+  }
+
+  .sidebar .sidebar-foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar .sidebar-foot .sidebar-link {
+    flex: 1 1 0;
+    min-width: 0;
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .sidebar .sidebar-foot .theme-toggle {
+    align-self: auto;
+    min-height: 34px;
+  }
+
+  /* The tooltip is the rail's name for an icon; the full sidebar already shows names. */
+  .sidebar [data-tip]::after {
+    display: none;
+  }
+}
+
+/* A narrow desktop window (721-960px): an icon rail, so the page keeps its measure. Labels,
+   headings and hints stay in the DOM (visually hidden); each link shows its name as a tooltip
+   (the app's `data-tip`) on hover and on keyboard focus, to the right of the rail. */
+@media (min-width: 721px) and (max-width: 960px) {
+  .shell:has(> .sidebar) {
+    --sidebar-w: 64px;
+    --sidebar-gap: 20px;
+  }
+
+  .sidebar {
+    padding-right: 10px;
+    gap: 8px;
+  }
+
+  .sidebar .sidebar-brand {
+    padding: 2px 0 8px;
+    text-align: center;
+  }
+
+  .sidebar .sidebar-brand-name,
+  .sidebar .sidebar-heading,
+  .sidebar .sidebar-label,
+  .sidebar .sidebar-hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar .sidebar-brand-mark {
+    display: block;
+    font-size: var(--fs-body);
+    letter-spacing: 0.04em;
+  }
+
+  /* A scroll box would clip the tooltips, so the rail scrolls only when the window is short
+     (below), where a clipped tooltip is the lesser evil. */
+  .sidebar .sidebar-groups {
+    overflow: visible;
+    gap: 6px;
+  }
+
+  .sidebar .sidebar-group + .sidebar-group {
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar .sidebar-link,
+  .sidebar .sidebar-foot .sidebar-link {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 4px 0;
+  }
+
+  .sidebar .sidebar-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sidebar .sidebar-foot .sidebar-link {
+    flex: none;
+  }
+
+  .sidebar [data-tip]::after {
+    display: block;
+    top: 50%;
+    right: auto;
+    left: calc(100% + var(--space-2));
+    transform: translateY(-50%);
+  }
+
+  @media (hover: hover) {
+    .sidebar [data-tip]:hover::after {
+      transform: translateY(-50%);
+    }
+  }
+
+  .sidebar [data-tip]:focus-visible::after {
+    transform: translateY(-50%);
+  }
+}
+
+@media (min-width: 721px) and (max-width: 960px) and (max-height: 640px) {
+  .sidebar .sidebar-groups {
+    overflow-y: auto;
+  }
+}

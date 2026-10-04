@@ -3,16 +3,8 @@ import { Link } from "react-router-dom";
 
 import type { ClockHours, WallTime } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
-import {
-  allZones,
-  canonicalZone,
-  findZones,
-  fromMinutes,
-  homeZone,
-  isSearchable,
-  sameName,
-  zoneCity,
-} from "../clocks/time";
+import { allZones, findZones, isSearchable } from "../clocks/search";
+import { canonicalZone, fromMinutes, homeZone, sameName, zoneCity } from "../clocks/time";
 import { useSaveHomeZone } from "../clocks/useHomeZone";
 import { useT } from "../i18n";
 import { clockHoursOf, clocksOf } from "../layout/preferences";

@@ -1,16 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Preferences, PreferencesPatch } from "../api/types";
+import type { Layout, NavItem, NavItemId, Preferences, PreferencesPatch } from "../api/types";
 import {
   DEFAULT_PREFERENCES,
-  PHONE_CAPS,
+  NAV_ITEMS,
+  NAV_ITEMS_GROUPED,
+  PHONE_PIN_CAP,
   PreferenceSaver,
   applyPatch,
-  moveTab,
-  normalizeTabs,
+  barCount,
+  defaultItems,
+  itemsOf,
+  moveItem,
+  pinItem,
   preferencesOf,
-  swapPartner,
-  switchSlot,
+  unpinItem,
 } from "./preferences";
 
 /** A send whose answers the test releases by hand, in whatever order it likes. */
@@ -62,6 +66,16 @@ describe("the defaults", () => {
       "stats", "streaks", "clocks", "gym", "pending", "leftover", "reading", "quote", "restock",
       "budgets", "savings", "trends", "categories",
     ].map((id) => ({ id, on: true }));
+    // Epic 52 (AD-65): every place once, the bar's four pinned; same literal as
+    // DEFAULT_ITEMS in backend/tests/test_preferences.py.
+    const items = [
+      "dashboard", "entries", "habits", "plan", "calendar", "books", "notes", "grow",
+      "stock", "recipes", "gym", "clocks", "moon",
+    ].map((id) => ({ id, pinned: ["dashboard", "entries", "habits", "plan"].includes(id) }));
+    const desktopItems = [
+      "dashboard", "calendar", "habits", "books", "notes", "entries", "plan", "grow",
+      "stock", "recipes", "gym", "clocks", "moon",
+    ].map((id) => ({ id, pinned: ["dashboard", "entries", "habits", "plan"].includes(id) }));
     expect(DEFAULT_PREFERENCES).toEqual({
       modules: { habits: true, books: true, mood: true, stock: true, gym: true, recipes: true, notes: true, moon: true, clocks: true },
       notifications: { stock: true, recurring: true, habits: true, due_tomorrow: false, savings: false, streak: false, moon: false },
@@ -77,8 +91,9 @@ describe("the defaults", () => {
       clocks: [],
       clock_hours: { work: ["09:00", "18:00"], night: ["23:00", "07:00"] },
       calendar_zone: null,
-      phone: { tabs, cards },
-      desktop: { tabs, cards },
+      phone: { tabs, cards, items },
+      // Round 1: a desktop's default list is in the sidebar's group order, the same four pinned.
+      desktop: { tabs, cards, items: desktopItems },
     });
   });
 
@@ -96,6 +111,16 @@ describe("the defaults", () => {
     expect(prefs.notifications).toEqual(DEFAULT_PREFERENCES.notifications);
     // ...and for one older than Epic 41, which has no streak switches either.
     expect(prefs.streaks).toEqual(DEFAULT_PREFERENCES.streaks);
+  });
+
+  it("a layout patch without tabs lays over the layout it replaces, keeping its tabs", () => {
+    const items = DEFAULT_PREFERENCES.phone.items?.slice().reverse() ?? [];
+    const next = applyPatch(DEFAULT_PREFERENCES, {
+      phone: { cards: DEFAULT_PREFERENCES.phone.cards, items },
+    });
+    expect(next.phone.items).toEqual(items);
+    expect(next.phone.tabs).toBe(DEFAULT_PREFERENCES.phone.tabs);
+    expect(next.desktop).toBe(DEFAULT_PREFERENCES.desktop);
   });
 
   it("a patch replaces whole subtrees, like the server", () => {
@@ -196,54 +221,208 @@ describe("PreferenceSaver", () => {
   });
 });
 
-describe("moving tabs", () => {
-  const tabs = DEFAULT_PREFERENCES.phone.tabs;
-  const ids = (list: { id: string }[]) => list.map((t) => t.id);
-  const count = (list: { slot: string }[], slot: string) =>
-    list.filter((t) => t.slot === slot).length;
+/** A list's ids, with an asterisk on each pinned one: the bar reads left to right. */
+const shape = (items: NavItem[]) => items.map((i) => (i.pinned ? `*${i.id}` : i.id));
+/** Every place once, `pinned` first in that order, the rest in default order. */
+const listOf = (...pinned: NavItemId[]): NavItem[] => [
+  ...pinned.map((id) => ({ id, pinned: true })),
+  ...NAV_ITEMS.filter((id) => !pinned.includes(id)).map((id) => ({ id, pinned: false })),
+];
+const base = DEFAULT_PREFERENCES.phone.items ?? [];
 
-  it("moves one place within its own row, and not past either end", () => {
-    expect(ids(moveTab(tabs, "entries", -1)).slice(0, 2)).toEqual(["entries", "dashboard"]);
-    expect(moveTab(tabs, "dashboard", -1)).toEqual(tabs);
-    // Gym is last in the tab bar; down would cross into the top bar, so it stays.
-    expect(moveTab(tabs, "gym", 1)).toEqual(tabs);
-    expect(moveTab(tabs, "plan", -1)).toEqual(tabs);
-    expect(ids(moveTab(tabs, "grow", -1)).slice(5)).toEqual(["grow", "plan", "recipes"]);
-  });
-
-  it("swaps across on a phone, where both rows are full, and names who comes back", () => {
-    expect(swapPartner(tabs, "gym", "phone")).toBe("recipes");
-    expect(swapPartner(tabs, "plan", "phone")).toBe("gym");
-    expect(switchSlot(tabs, "entries", "phone")).toEqual([
-      { id: "dashboard", slot: "bar" },
-      { id: "recipes", slot: "bar" },
-      { id: "habits", slot: "bar" },
-      { id: "stock", slot: "bar" },
-      { id: "gym", slot: "bar" },
-      { id: "plan", slot: "top" },
-      { id: "grow", slot: "top" },
-      { id: "entries", slot: "top" },
+describe("pinItem", () => {
+  it("puts a newly pinned place last in the bar, in the list straight after the last pinned", () => {
+    expect(shape(pinItem(listOf("dashboard", "entries"), "notes"))).toEqual([
+      "*dashboard", "*entries", "*notes", "habits", "plan", "calendar", "books", "grow",
+      "stock", "recipes", "gym", "clocks", "moon",
     ]);
   });
 
-  it("keeps a phone within five and three whatever is moved, and every section once", () => {
-    for (const tab of tabs) {
-      const next = switchSlot(tabs, tab.id, "phone");
-      expect(count(next, "bar")).toBeLessThanOrEqual(PHONE_CAPS.bar);
-      expect(count(next, "top")).toBeLessThanOrEqual(PHONE_CAPS.top);
-      expect(new Set(ids(next)).size).toBe(tabs.length);
+  it("pins first when nothing is pinned, and keeps the rest in order", () => {
+    expect(shape(pinItem(listOf(), "gym")).slice(0, 3)).toEqual(["*gym", "dashboard", "entries"]);
+  });
+
+  it("is refused, unchanged, when the bar is full", () => {
+    expect(base.filter((i) => i.pinned)).toHaveLength(PHONE_PIN_CAP);
+    expect(pinItem(base, "notes")).toBe(base);
+  });
+
+  it("fills the bar to the cap and no further", () => {
+    let items = listOf();
+    for (const id of NAV_ITEMS) items = pinItem(items, id);
+    expect(items.filter((i) => i.pinned).map((i) => i.id)).toEqual(NAV_ITEMS.slice(0, PHONE_PIN_CAP));
+  });
+
+  it("leaves an already pinned or unknown place alone", () => {
+    expect(pinItem(listOf("gym"), "gym")).toEqual(listOf("gym"));
+    // Not moved to the end of the bar by being pinned again.
+    const two = listOf("gym", "notes");
+    expect(pinItem(two, "gym")).toBe(two);
+    expect(pinItem(listOf("gym"), "chess" as NavItemId)).toEqual(listOf("gym"));
+  });
+
+  it("does not count a pinned place whose module is off against the bar", () => {
+    const modules = { ...DEFAULT_PREFERENCES.modules, books: false };
+    // Four pinned, one of them (books) off: a fifth may be pinned, and is last in the bar.
+    const items = listOf("dashboard", "entries", "books", "plan");
+    expect(barCount(items, modules)).toBe(3);
+    expect(pinItem(items, "gym", modules).filter((i) => i.pinned).map((i) => i.id)).toEqual([
+      "dashboard", "entries", "books", "plan", "gym",
+    ]);
+    // With the module on (or no modules given) the same bar is full.
+    expect(pinItem(items, "gym")).toBe(items);
+    expect(pinItem(items, "gym", DEFAULT_PREFERENCES.modules)).toBe(items);
+  });
+
+  it("does not mutate its input", () => {
+    const before = structuredClone(listOf("gym"));
+    const input = listOf("gym");
+    pinItem(input, "notes");
+    expect(input).toEqual(before);
+  });
+});
+
+describe("unpinItem", () => {
+  it("returns a place to its default spot among the unpinned", () => {
+    // Plan was pinned from far down the list; unpinned, it sits before "calendar" again,
+    // which follows it by default.
+    expect(shape(unpinItem(listOf("plan", "gym"), "plan"))).toEqual([
+      "*gym", "dashboard", "entries", "habits", "plan", "calendar", "books", "notes", "grow",
+      "stock", "recipes", "clocks", "moon",
+    ]);
+  });
+
+  it("keeps the order of the other pinned places", () => {
+    expect(shape(unpinItem(listOf("gym", "notes", "moon"), "notes")).slice(0, 2)).toEqual([
+      "*gym",
+      "*moon",
+    ]);
+  });
+
+  it("puts a place that comes after everything at the end", () => {
+    const items = [
+      ...listOf("dashboard").filter((i) => i.id !== "moon"),
+      { id: "moon" as const, pinned: true },
+    ];
+    expect(unpinItem(items, "moon").at(-1)).toEqual({ id: "moon", pinned: false });
+  });
+
+  it("leaves an unpinned or unknown place alone", () => {
+    expect(unpinItem(base, "notes")).toBe(base);
+    expect(unpinItem(base, "chess" as NavItemId)).toBe(base);
+  });
+
+  it("round-trips with pin: pin then unpin is the list it was", () => {
+    const items = listOf("dashboard", "entries");
+    expect(unpinItem(pinItem(items, "stock"), "stock")).toEqual(items);
+  });
+});
+
+describe("moveItem", () => {
+  it("moves a pinned place within the bar, and not past either end", () => {
+    expect(shape(moveItem(base, "entries", -1)).slice(0, 3)).toEqual([
+      "*entries",
+      "*dashboard",
+      "*habits",
+    ]);
+    expect(shape(moveItem(base, "dashboard", 1)).slice(0, 2)).toEqual(["*entries", "*dashboard"]);
+    expect(moveItem(base, "dashboard", -1)).toEqual(base);
+    expect(moveItem(base, "plan", 1)).toEqual(base);
+  });
+
+  it("moves an unpinned place within its own group only", () => {
+    // Daily's unpinned are calendar, books, notes; Money's is grow.
+    expect(shape(moveItem(base, "books", -1)).slice(4, 7)).toEqual(["books", "calendar", "notes"]);
+    expect(shape(moveItem(base, "notes", -1)).slice(4, 7)).toEqual(["calendar", "notes", "books"]);
+    expect(moveItem(base, "calendar", -1)).toEqual(base);
+    expect(moveItem(base, "notes", 1)).toEqual(base);
+    // Grow is alone in Money once the bar holds Entries and Plan: nowhere to go.
+    expect(moveItem(base, "grow", 1)).toEqual(base);
+    expect(moveItem(base, "grow", -1)).toEqual(base);
+  });
+
+  it("steps over another group's place that sits between two of a group", () => {
+    // Daily places with Money's grow between them: calendar, grow, books.
+    const spread: NavItem[] = [
+      ...listOf("dashboard", "entries", "habits", "plan").slice(0, 4),
+      { id: "calendar", pinned: false },
+      { id: "grow", pinned: false },
+      { id: "books", pinned: false },
+      ...NAV_ITEMS.filter((id) => !["dashboard", "entries", "habits", "plan", "calendar", "grow", "books"].includes(id)).map(
+        (id) => ({ id, pinned: false }),
+      ),
+    ];
+    expect(shape(moveItem(spread, "books", -1)).slice(4, 7)).toEqual(["books", "grow", "calendar"]);
+  });
+
+  it("never lets a pinned place trade places with an unpinned one", () => {
+    expect(moveItem(base, "plan", 1)).toEqual(base);
+    expect(shape(moveItem(base, "calendar", -1)).slice(3, 5)).toEqual(["*plan", "calendar"]);
+  });
+
+  it("keeps every place exactly once, and does not mutate", () => {
+    const before = structuredClone(base);
+    for (const item of base) {
+      for (const step of [-1, 1] as const) {
+        const next = moveItem(base, item.id, step);
+        expect(next.map((i) => i.id).sort()).toEqual([...NAV_ITEMS].sort());
+      }
     }
+    expect(base).toEqual(before);
   });
 
-  it("just moves across on a desktop, with no swap", () => {
-    expect(swapPartner(tabs, "gym", "desktop")).toBeNull();
-    const next = switchSlot(tabs, "gym", "desktop");
-    expect(count(next, "bar")).toBe(4);
-    expect(ids(next).at(-1)).toBe("gym");
+  it("ignores an unknown place", () => {
+    expect(moveItem(base, "chess" as NavItemId, 1)).toBe(base);
+  });
+});
+
+describe("itemsOf", () => {
+  const layout = (tabs: Layout["tabs"], items?: NavItem[]): Layout => ({
+    tabs,
+    cards: DEFAULT_PREFERENCES.phone.cards,
+    ...(items ? { items } : {}),
   });
 
-  it("writes tab bar first, then top bar", () => {
-    const mixed = [tabs[5], tabs[0], tabs[6], tabs[1]].filter((t) => t !== undefined);
-    expect(ids(normalizeTabs(mixed))).toEqual(["dashboard", "entries", "plan", "grow"]);
+  it("returns the server's items as they are", () => {
+    const items = listOf("moon", "gym");
+    expect(itemsOf(layout(DEFAULT_PREFERENCES.phone.tabs, items))).toBe(items);
+  });
+
+  it("derives them from tabs for a server older than Epic 52: the first four bar tabs", () => {
+    // The old default bar is dashboard, entries, habits, stock, gym: gym is the fifth.
+    const items = itemsOf(layout(DEFAULT_PREFERENCES.phone.tabs));
+    expect(shape(items).slice(0, 5)).toEqual(["*dashboard", "*entries", "*habits", "*stock", "plan"]);
+    expect(items.map((i) => i.id).sort()).toEqual([...NAV_ITEMS].sort());
+  });
+
+  it("keeps a customised bar's order", () => {
+    const tabs = DEFAULT_PREFERENCES.phone.tabs;
+    const reordered = [tabs[4], tabs[3], tabs[0], tabs[1], tabs[2], ...tabs.slice(5)].filter(
+      (tab): tab is (typeof tabs)[number] => tab !== undefined,
+    );
+    expect(
+      itemsOf(layout(reordered))
+        .filter((i) => i.pinned)
+        .map((i) => i.id),
+    ).toEqual(["gym", "stock", "dashboard", "entries"]);
+  });
+
+  it("lists a desktop's unpinned places in group order, a phone's bar-first", () => {
+    const phone = itemsOf(layout(DEFAULT_PREFERENCES.phone.tabs), "phone");
+    const desktop = itemsOf(layout(DEFAULT_PREFERENCES.phone.tabs), "desktop");
+    expect(desktop.slice(0, 4).map((i) => i.id)).toEqual(["dashboard", "entries", "habits", "stock"]);
+    expect(desktop.slice(4).map((i) => i.id)).toEqual(
+      NAV_ITEMS_GROUPED.filter((id) => !["dashboard", "entries", "habits", "stock"].includes(id)),
+    );
+    expect(phone.slice(4).map((i) => i.id)).toEqual(
+      NAV_ITEMS.filter((id) => !["dashboard", "entries", "habits", "stock"].includes(id)),
+    );
+    expect(defaultItems("desktop").map((i) => i.id)).toEqual(NAV_ITEMS_GROUPED);
+    expect(defaultItems("phone").map((i) => i.id)).toEqual(NAV_ITEMS);
+  });
+
+  it("has nothing pinned when no tab is in the bar", () => {
+    const tabs = DEFAULT_PREFERENCES.phone.tabs.map((tab) => ({ ...tab, slot: "top" as const }));
+    expect(itemsOf(layout(tabs)).some((i) => i.pinned)).toBe(false);
   });
 });

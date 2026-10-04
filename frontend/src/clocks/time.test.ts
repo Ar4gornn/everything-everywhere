@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ClockHours } from "../api/types";
+import { allZones, findZones, placeAliases, searchZones } from "./search";
 import {
-  allZones,
   canonicalZone,
   convertWallTime,
   formatDiff,
@@ -12,9 +14,6 @@ import {
   newPlaceId,
   readClock,
   sameZone,
-  searchZones,
-  findZones,
-  placeAliases,
   shadeAt,
   toMinutes,
   wallDate,
@@ -642,5 +641,22 @@ describe("borough aliases and 'in' ordering (round 5)", () => {
     const id = found.filter((m) => m.alias === "Indonesia").map((m) => m.zone);
     expect(id).toEqual(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]);
     expect(found.slice(indonesia, indonesia + 3).map((m) => m.zone)).toEqual(id);
+  });
+});
+
+describe("the main bundle stays light (Epic 52 round 1)", () => {
+  const source = (file: string) => readFileSync(join(__dirname, file), "utf8");
+
+  it("keeps the alias and country tables out of time.ts, which the navigation hints import", () => {
+    const time = source("time.ts");
+    for (const heavy of ["PLACE_ALIASES", "COUNTRIES", "findZones", "FALLBACK_ZONES", "CITY_NAMES", "Asia/Calcutta"])
+      expect(time).not.toContain(heavy);
+    expect(source("search.ts")).toContain("const PLACE_ALIASES");
+    expect(source("zones.ts")).toContain("LEGACY_ZONES");
+  });
+
+  it("has nothing in the shell import the search", () => {
+    for (const file of ["../nav/hints.ts", "../App.tsx", "../components/nav/Sidebar.tsx"])
+      expect(source(file)).not.toContain("clocks/search");
   });
 });

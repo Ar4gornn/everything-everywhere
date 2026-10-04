@@ -12,18 +12,15 @@ import { ApiError, api } from "../api/client";
 import type { ClockHours, ClockPlace } from "../api/types";
 import { useOptionalAuth } from "../auth/AuthContext";
 import { LABEL_MAX, labelProblem } from "../clocks/label";
+import { allZones, findZones, isSearchable, placeAliases } from "../clocks/search";
 import {
   type ClockReading,
-  allZones,
   canonicalZone,
-  findZones,
   formatDiff,
   fromMinutes,
   homeZone,
   hoursFor,
-  isSearchable,
   newPlaceId,
-  placeAliases,
   readClock,
   sameZone,
   zoneCity,
