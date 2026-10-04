@@ -90,6 +90,8 @@ function sessionLine(
   const order: string[] = [];
   const byName = new Map<string, WorkoutDetail["sets"]>();
   for (const set of workout.sets) {
+    // Warm-ups stay out of what the AI reads as history (the prompt says so).
+    if (set.is_warmup) continue;
     const list = byName.get(set.exercise_name);
     if (list) list.push(set);
     else {

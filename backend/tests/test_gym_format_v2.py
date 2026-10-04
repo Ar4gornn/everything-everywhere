@@ -401,3 +401,56 @@ def test_migration_0038_round_trips(owner_engine):
     finally:
         command.upgrade(cfg, "head")
     assert count() == 6
+
+
+# ------------------------------------------------------------ QA fixes
+
+
+def test_import_keeps_every_new_exercises_video_url(client, user_a):
+    lines = [
+        {"exercise_name": f"Move {i}", "kind": "reps", "video_url": f"https://youtu.be/abcdefghi{i}"}
+        for i in range(3)
+    ]
+    r = client.post("/api/gym/routines/import", json={"name": "Vids", "lines": lines}, headers=user_a[H])
+    assert r.status_code == 201, r.text
+    assert all(line["video_url"] for line in r.json()["lines"])
+    stored = client.get("/api/gym/exercises", headers=user_a[H]).json()["items"]
+    assert sorted(e["name"] for e in stored if e["video_url"]) == ["Move 0", "Move 1", "Move 2"]
+
+
+def _raw(client, user, method, url, body):
+    return client.request(
+        method, url, content=body, headers={**user[H], "content-type": "application/json"}
+    )
+
+
+def test_infinite_rpe_is_a_422_not_a_500(client, user_a):
+    r = _routine(client, user_a)
+    line = _line(client, user_a, r["id"], exercise_name="Bench").json()
+    out = _raw(client, user_a, "PATCH", f"/api/gym/routines/lines/{line['id']}", b'{"target_rpe": 1e999}')
+    assert out.status_code == 422 and out.json()["code"] == "validation"
+    add = _raw(
+        client, user_a, "POST", f"/api/gym/routines/{r['id']}/exercises",
+        b'{"exercise_name": "Squat", "target_rpe": -1e999}',
+    )
+    assert add.status_code == 422
+    imp = _raw(
+        client, user_a, "POST", "/api/gym/routines/import",
+        b'{"name": "X", "lines": [{"exercise_name": "A", "kind": "reps", "target_rpe": 1e999}]}',
+    )
+    assert imp.status_code == 422
+
+
+def test_the_422_handler_survives_a_non_finite_float_in_any_field(client, user_a):
+    # sets is an int field: the echoed input is inf, which must not break the encoder
+    out = _raw(client, user_a, "POST", "/api/gym/workouts/complete", b'{"client_ref": 1e999}')
+    assert out.status_code == 422
+
+
+@pytest.mark.parametrize("field", ["target_rpe", "target_rir", "target_sets", "superset_group"])
+def test_booleans_are_not_numbers(client, user_a, field):
+    r = _routine(client, user_a)
+    line = _line(client, user_a, r["id"], exercise_name="Bench").json()
+    out = client.patch(f"/api/gym/routines/lines/{line['id']}", json={field: True}, headers=user_a[H])
+    assert out.status_code == 422, out.text
+    assert _line(client, user_a, r["id"], exercise_name="Squat", **{field: True}).status_code == 422

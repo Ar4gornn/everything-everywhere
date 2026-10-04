@@ -121,6 +121,9 @@ def get_or_create_exercise(
             raise Conflict("exercise could not be created or found", "exercise_unwritable")
         return existing
 
+    # Pending changes to exercises coined by earlier lines (video_url) must reach the database
+    # before expire_all() throws them away.
+    session.flush()
     session.expire_all()
     exercise = session.get(Exercise, inserted)
     if exercise is None:  # pragma: no cover

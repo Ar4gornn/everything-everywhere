@@ -351,3 +351,13 @@ describe("Format v2 in the live session (Epic 54.4)", () => {
     expect(screen.queryByText("Warm-up")).toBeNull();
   });
 });
+
+describe("RPE in French", () => {
+  it("uses the decimal comma", async () => {
+    window.localStorage.setItem("everything-everywhere.language", "fr");
+    const bench = pushDay.lines[0]!;
+    seedActive({ ...pushDay, lines: [{ ...bench, target_rpe: 7.5 }] });
+    renderGym("/gym/session");
+    expect(await screen.findByText("Effort : RPE 7,5")).toBeInTheDocument();
+  });
+});

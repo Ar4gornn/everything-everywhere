@@ -65,6 +65,7 @@ export const gymPlans = {
     en: "There is no next exercise to pair with.",
     fr: "Il n’y a pas d’exercice suivant à associer.",
   },
+  "gymPlans.superset.leave": { en: "Leave superset", fr: "Quitter le superset" },
   "gymPlans.superset.badge": { en: "Superset {n}", fr: "Superset {n}" },
   "gymPlans.superset.review": {
     en: "Superset with the next exercise in the file",

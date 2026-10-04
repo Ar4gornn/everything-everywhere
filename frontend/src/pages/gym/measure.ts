@@ -65,6 +65,13 @@ export function formatWeight(weight: string, unit: WeightUnit, lang: string): st
 }
 
 /** "4 × 8 · 60 kg", "3 × 45 s", "1 × 2 km", "4 sets", or "" for a line with no target. */
+/** An RPE (7, 7.5) in the reader's decimal separator; the language is passed, never guessed. */
+export function rpeText(value: number, lang: string): string {
+  return new Intl.NumberFormat(lang, { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(
+    value,
+  );
+}
+
 export function formatTarget(line: Targets, unit: WeightUnit, t: Translate): string {
   const measure =
     line.kind === "duration"
@@ -207,7 +214,8 @@ export function summarise(
   let volume = 0;
   const bests: string[] = [];
   for (const exercise of session.exercises) {
-    const sets = session.sets.filter((s) => s.exercise === exercise.key);
+    // Warm-ups are not work: the server leaves them out of volume, sets and records too.
+    const sets = session.sets.filter((s) => s.exercise === exercise.key && !s.is_warmup);
     for (const set of sets) {
       if (set.reps !== null && set.weight !== null) volume += set.reps * Number(set.weight);
     }
@@ -231,7 +239,7 @@ export function summarise(
   }
   return {
     seconds: Math.max(0, Math.round((now.getTime() - Date.parse(session.started_at)) / 1000)),
-    sets: session.sets.length,
+    sets: session.sets.filter((s) => !s.is_warmup).length,
     volume,
     bests,
   };

@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 
 from fastapi import FastAPI, Request, status
@@ -127,6 +128,17 @@ def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
     )
 
 
+def _finite(value):
+    """Non-finite floats (JSON ``1e999`` parses to inf) cannot be encoded as JSON; echo text."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _finite(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_finite(v) for v in value]
+    return value
+
+
 @app.exception_handler(RequestValidationError)
 def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
     """FastAPI's own 422, with a code added beside its list of field errors (AD-44).
@@ -139,7 +151,7 @@ def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
     """
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={"detail": jsonable_encoder(exc.errors()), "code": "validation"},
+        content={"detail": jsonable_encoder(_finite(exc.errors())), "code": "validation"},
     )
 
 

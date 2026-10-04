@@ -93,6 +93,24 @@ describe("the end-of-session summary", () => {
   });
 });
 
+describe("warm-ups in the summary", () => {
+  it("do not count toward sets, volume or a better top weight", () => {
+    let session = startSession(pushDay, new Date("2026-10-02T10:00:00Z"), (() => {
+      let n = 0;
+      return () => `k${++n}`;
+    })());
+    const bench = session.exercises[0]?.key ?? "";
+    const draft = { reps: 8, weight: "62.50", duration_seconds: null, distance_m: null };
+    session = logSet(session, bench, draft, new Date("2026-10-02T10:05:00Z"), () => "s1");
+    session = {
+      ...session,
+      sets: session.sets.map((s) => ({ ...s, is_warmup: true })),
+    };
+    const sum = summarise(session, { e1: lastBench }, new Date("2026-10-02T10:40:00Z"));
+    expect(sum).toEqual({ seconds: 2400, sets: 0, volume: 0, bests: [] });
+  });
+});
+
 describe("sanitise holds the server's bound", () => {
   it("clamps a whole number to the cap", () => {
     expect(sanitise("5000", false, 999)).toBe("999");

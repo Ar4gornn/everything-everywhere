@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/client";
 import { readActive } from "../../gym/store";
 import { USER_ID, mocks } from "./mockkit";
-import { renderGym, resetServer } from "./testkit";
+import { pushDay, renderGym, resetServer } from "./testkit";
 
 vi.mock("../../api/client", async (orig) => (await import("./mockkit")).mockClient(await orig()));
 vi.mock("../../auth/AuthContext", async () => (await import("./mockkit")).authModule());
@@ -275,5 +275,20 @@ describe("Routine editor: format v2 (Epic 54.3)", () => {
       expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l1", { superset_group: 1 });
       expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l2", { superset_group: 1 });
     });
+  });
+});
+
+describe("Removing a superset member", () => {
+  it("clears the group of the partner left alone", async () => {
+    const [l1, l2] = pushDay.lines;
+    resetServer({
+      routines: [
+        { ...pushDay, lines: [{ ...l1!, superset_group: 1 }, { ...l2!, superset_group: 1 }] },
+      ],
+    });
+    renderGym("/gym/routines/r1");
+    await userEvent.click(await screen.findByRole("button", { name: "Remove Plank from the routine" }));
+    await waitFor(() => expect(mocks.removeRoutineLine).toHaveBeenCalledWith("l2"));
+    await waitFor(() => expect(mocks.updateRoutineLine).toHaveBeenCalledWith("l1", { superset_group: null }));
   });
 });

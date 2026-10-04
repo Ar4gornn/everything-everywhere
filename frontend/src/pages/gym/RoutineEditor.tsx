@@ -439,6 +439,22 @@ export function RoutineEditor() {
     }, "gym.couldNotReorder");
   }
 
+  /** Remove a line; its superset partner must not be left alone in a group of one. */
+  function remove(target: RoutineLine) {
+    if (!routine) return;
+    const rest = routine.lines.filter((l) => l.id !== target.id);
+    const groups = groupsFromLinks(linksOf(rest.map((l) => l.superset_group ?? null)));
+    void run(async () => {
+      await api.removeRoutineLine(target.id);
+      for (const [i, other] of rest.entries()) {
+        const group = groups[i] ?? null;
+        if ((other.superset_group ?? null) !== group) {
+          await api.updateRoutineLine(other.id, { superset_group: group });
+        }
+      }
+    }, "gym.couldNotRemove");
+  }
+
   /** Save one line, and renumber the supersets so each group is a run of adjacent lines. */
   function save(line: RoutineLine, patch: Partial<LineTargets>, link: boolean) {
     if (!routine) return;
@@ -559,9 +575,7 @@ export function RoutineEditor() {
                 disabled={disabled}
                 onSave={save}
                 onMove={move}
-                onRemove={(target) =>
-                  void run(() => api.removeRoutineLine(target.id), "gym.couldNotRemove")
-                }
+                onRemove={(target) => remove(target)}
               />
             ))}
           </ul>

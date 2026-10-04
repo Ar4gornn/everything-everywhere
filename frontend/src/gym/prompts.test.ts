@@ -292,3 +292,20 @@ describe("the sections (Epic 54)", () => {
     expect(example.routines[0].exercises[0].sets[0].warmup).toBe(true);
   });
 });
+
+describe("warm-ups in the history", () => {
+  it("are left out of the count and the typical set, and an all-warm-up exercise is dropped", () => {
+    const recent = [
+      session("2031-03-04", {
+        sets: [
+          set("Bench", { weight: "20.00", is_warmup: true }),
+          set("Bench", { weight: "20.00", is_warmup: true }),
+          set("Bench", { weight: "60.00" }),
+          set("Squat", { weight: "30.00", is_warmup: true }),
+        ],
+      }),
+    ];
+    const context = buildPromptContext(EMPTY_CACHE, recent, "kg");
+    expect(context.recent).toEqual(["2031-03-04 free session: Bench 1×8 @ 60 kg"]);
+  });
+});

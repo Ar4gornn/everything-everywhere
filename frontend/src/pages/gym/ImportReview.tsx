@@ -15,7 +15,7 @@ import type { Translate } from "../../i18n";
 import { KINDS } from "./ExerciseAdder";
 import { useGym } from "./GymContext";
 import { Field, MeasureInput } from "./MeasureInput";
-import { formatSet, formatTarget, toWeight } from "./measure";
+import { formatSet, formatTarget, rpeText, toWeight } from "./measure";
 import {
   EffortFields,
   SetRows,
@@ -144,7 +144,13 @@ function relink(lines: DraftLine[], index: number, link: boolean): DraftLine[] {
 }
 
 /** Everything beyond the plain target, as short phrases, for the read-only summary. */
-export function extrasOf(line: DraftLine, unit: WeightUnit, t: Translate): string[] {
+export function extrasOf(
+  line: DraftLine,
+  unit: WeightUnit,
+  t: Translate,
+  /** The routine's lines: a superset label shared by fewer than two of them is not shown. */
+  siblings?: DraftLine[],
+): string[] {
   const parts: string[] = [];
   if (line.setTargets) {
     const list = line.setTargets.map((set) => {
@@ -163,12 +169,13 @@ export function extrasOf(line: DraftLine, unit: WeightUnit, t: Translate): strin
     });
     parts.push(t("gymPlans.summary.setsList", { list: list.join(" · ") }));
   }
-  if (line.rpe !== null) parts.push(t("gymPlans.summary.rpe", { value: String(line.rpe) }));
+  if (line.rpe !== null) parts.push(t("gymPlans.summary.rpe", { value: rpeText(line.rpe, t.lang) }));
   if (line.rir !== null) parts.push(t("gymPlans.summary.rir", { value: String(line.rir) }));
   if (line.tempo.trim() !== "") {
     parts.push(t("gymPlans.summary.tempo", { value: line.tempo.trim().toUpperCase() }));
   }
-  if (line.superset.trim() !== "") {
+  const shared = siblings ? siblings.filter((l) => labelOf(l) === labelOf(line)).length : 2;
+  if (line.superset.trim() !== "" && shared > 1) {
     parts.push(t("gymPlans.summary.superset", { value: line.superset.trim() }));
   }
   return parts;
@@ -251,7 +258,7 @@ export function ImportReview({
                         ? t("gym.existingExercise")
                         : t("gym.newExercise")}
                     </span>
-                    {extrasOf(line, unit, t).map((part) => (
+                    {extrasOf(line, unit, t, kept[ri]).map((part) => (
                       <span key={part} className="hint gym-summary-extra">
                         {" "}
                         · {part}
@@ -355,6 +362,9 @@ export function ImportReview({
         i === ri ? { ...r, lines: relink(r.lines, li, link) } : r,
       ),
     });
+  }
+  function leaveSuperset() {
+    if (line) setLine({ ...line, superset: "" });
   }
   function decide(decision: Decision) {
     onChange({
@@ -553,6 +563,11 @@ export function ImportReview({
             <span className="gym-super-badge">
               {t("gymPlans.superset.badge", { n: line.superset.trim() })}
             </span>
+          )}
+          {line.superset.trim() !== "" && (
+            <button type="button" className="quiet" onClick={leaveSuperset}>
+              {t("gymPlans.superset.leave")}
+            </button>
           )}
         </div>
         <FieldError line={line} field="superset" />

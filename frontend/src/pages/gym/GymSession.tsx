@@ -37,6 +37,7 @@ import {
   formatSet,
   formatTarget,
   formatWeight,
+  rpeText,
   summarise,
   type SessionSummary,
 } from "./measure";
@@ -356,7 +357,7 @@ function Hints({
       {(hasEffort || exercise.tempo) && (
         <ul className="hint gym-hints">
           {exercise.target_rpe != null && (
-            <li title={t("gymSessionV2.rpeHelp")}>{t("gymSessionV2.rpe", { n: exercise.target_rpe })}</li>
+            <li title={t("gymSessionV2.rpeHelp")}>{t("gymSessionV2.rpe", { n: rpeText(exercise.target_rpe, t.lang) })}</li>
           )}
           {exercise.target_rir != null && (
             <li title={t("gymSessionV2.rirHelp")}>{t.n("gymSessionV2.rir", exercise.target_rir)}</li>

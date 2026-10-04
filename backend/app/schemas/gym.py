@@ -1,4 +1,5 @@
 import datetime as dt
+import math
 import re
 import uuid
 from decimal import Decimal
@@ -29,13 +30,25 @@ Weight = Annotated[
 # What a set of an exercise measures (Epic 42).
 ExerciseKind = Literal["reps", "duration", "distance"]
 
-_Sets = Annotated[int, Field(gt=0, le=99)]
-_Reps = Annotated[int, Field(gt=0, le=999)]
-_Seconds = Annotated[int, Field(ge=1, le=86400)]
-_Metres = Annotated[int, Field(ge=1, le=1_000_000)]
-_Rest = Annotated[int, Field(ge=0, le=3600)]
-_Rir = Annotated[int, Field(ge=0, le=10)]
-_Group = Annotated[int, Field(ge=1, le=99)]
+
+
+def _number(value: object) -> object:
+    """A JSON boolean is not a number (pydantic's lax mode would read true as 1), and a
+    non-finite float is not a measurement. Raises ValueError so the answer is a 422."""
+    if isinstance(value, bool):
+        raise ValueError("expected a number, not true/false")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("expected a finite number")
+    return value
+
+
+_Sets = Annotated[int, BeforeValidator(_number), Field(gt=0, le=99)]
+_Reps = Annotated[int, BeforeValidator(_number), Field(gt=0, le=999)]
+_Seconds = Annotated[int, BeforeValidator(_number), Field(ge=1, le=86400)]
+_Metres = Annotated[int, BeforeValidator(_number), Field(ge=1, le=1_000_000)]
+_Rest = Annotated[int, BeforeValidator(_number), Field(ge=0, le=3600)]
+_Rir = Annotated[int, BeforeValidator(_number), Field(ge=0, le=10)]
+_Group = Annotated[int, BeforeValidator(_number), Field(ge=1, le=99)]
 
 _TEMPO = re.compile(r"[0-9X]-[0-9X]-[0-9X]-[0-9X]")
 
@@ -47,7 +60,7 @@ def _half_step(value: float) -> float:
 
 
 # 1-10 in halves. A JSON number on the wire (the column is numeric(3,1)).
-_Rpe = Annotated[float, Field(ge=1, le=10), AfterValidator(_half_step)]
+_Rpe = Annotated[float, BeforeValidator(_number), Field(ge=1, le=10), AfterValidator(_half_step)]
 
 
 def _clean_tempo(value: object) -> str | None:
