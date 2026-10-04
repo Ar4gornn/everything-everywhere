@@ -2708,6 +2708,54 @@ page; streaks in the export; a push other than the daily digest.
 
 - Second-user proof; every new guard mutated red; overflow sweep EN/FR at 375 and 320.
 
+## Epic 47: The moon — phases, rise and set, and your days against them (live 2026-10-03)
+
+**Status:** live in prod 2026-10-03 (`c561999`). Scoped in the interview of 2026-10-03.
+Chosen: phases computed on the device (Meeus), moonrise/moonset from a rough location kept on
+the device only (~10 km, never sent), shown on calendar days, the dashboard title line, a Moon
+page and an opt-in digest line; mood, habits, spending and gym laid against the phases side by
+side with no verdict (says how many cycles the figures cover); hemisphere setting + a Moon
+module (Epic 33). Rejected: phases only; an astronomy API; location on the account; a
+highlighted "difference". Split off: Epics 49-51.
+
+## Epic 48: Time-zone clocks (live 2026-10-03)
+
+**Status:** live in prod 2026-10-03 (`013274b`, AD-64). The options below were the scoping
+interview's input; what was chosen is in `LOG.md`.
+
+What it could be, for the interview to choose from:
+- A world-clock card: the person picks a few places (family abroad, work), each shows the local
+  time and the difference from the account's zone (`users.timezone`, AD-52), updating each minute.
+- "Good time to call": each clock shaded for night/working hours there.
+- Times elsewhere in the app shown in another zone on request (calendar events, reminders).
+
+Open questions: where it lives (dashboard card, its own page, Settings); how places are chosen
+(IANA zone list via `Intl.supportedValuesOf("timeZone")`, city search, or both); stored per
+account (a preferences key, Epic 33) vs per device; DST handled by `Intl` only (no tz data
+shipped); whether it is a module that can be switched off; EN/FR city names.
+
+## Epic 49: Cycle tracking, local-first (proposed, not scoped)
+
+**Status:** backlog, split from Epic 47 on 2026-10-03. Alex's rule: anything shown about a
+menstrual cycle is **on the device only, and only in the installed app** (Safari keeps an
+installed web app's storage; a browser tab's can be evicted after days without a visit); sending
+it to the server only if the person explicitly chooses to. Health data: its own privacy interview
+before any spec. Recommended direction for that interview: opt-in sync encrypted on the device
+under a passphrase the server never sees (the design the password-wallet TODO describes), export
+and delete, nothing in push notifications, nothing in the CSV export unless asked.
+
+## Epic 50: The sky — eclipses, planets, moon sign, lunar calendars (proposed, not scoped)
+
+**Status:** backlog, split from Epic 47 on 2026-10-03. All computable on the device. Moon sign as
+a fact only — no horoscope readings (brief: no advice, no predictions; Alex agreed). Lunar
+calendar dates (Hijri, Chinese) via `Intl.DateTimeFormat` calendars where the browser has them.
+
+## Epic 51: Tides (proposed, not scoped)
+
+**Status:** backlog, split from Epic 47 on 2026-10-03. Tides are not computable from astronomy
+alone: they need a coastal station's harmonic constants or an outside tide service. First
+decision for the interview: which data source, and what it sees.
+
 ## Epic 53: A public front door — the landing page
 
 Scoped 2026-10-03, options and rejections in `LOG.md`; spec, inventory of claimable
