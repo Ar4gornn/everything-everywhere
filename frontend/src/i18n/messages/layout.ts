@@ -40,6 +40,8 @@ export const layout = {
   },
   "layout.nav.pin": { en: "Pin {name} to the bar", fr: "Épingler {name} à la barre" },
   "layout.nav.unpin": { en: "Unpin {name} from the bar", fr: "Retirer {name} de la barre" },
+  "layout.nav.pinShort": { en: "Pin", fr: "Épingler" },
+  "layout.nav.unpinShort": { en: "Unpin", fr: "Retirer" },
   "layout.nav.full": {
     en: "The bar is full ({max} places). Unpin one to pin another.",
     fr: "La barre est pleine ({max} rubriques). Retirez-en une pour en épingler une autre.",

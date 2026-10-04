@@ -21,6 +21,21 @@ import { NAV_DEFS, NAV_GROUPS } from "../nav/model";
 import { usePreferences } from "../layout/useLayout";
 import { Card, ErrorBanner } from "./ui";
 
+/** Pin and Unpin are words, a size smaller than the names so "Épingler" fits beside them. */
+const PIN_STYLE = { padding: "0 8px", fontSize: 13 } as const;
+/** The place rows' arrows, a little narrower than the cards' so name, arrows and a word fit
+ *  one 320px French row (measured: 79 + 33 + 33 + 65 + gaps in 235). */
+const ARROW_STYLE = { padding: "8px 12px" } as const;
+/** A full bar's Pin is not an end stop (↑/↓ at a list's end): it is outlined with a dash
+ *  and keeps its word, so it reads as "not now" rather than "nowhere to go". */
+const PIN_FULL_STYLE = {
+  ...PIN_STYLE,
+  background: "transparent",
+  borderStyle: "dashed",
+  borderColor: "var(--border-strong)",
+  color: "var(--muted)",
+} as const;
+
 /**
  * Settings → Layout (Epic 33): which modules the account uses, and where each section sits
  * in each of its two layouts. Every change applies at once and is saved in the background;
@@ -39,11 +54,13 @@ export function LayoutCard() {
 
   // `/settings#layout` (the drawer's "Change what's in the bar", a module's off page): the
   // page is a lazy chunk, so the browser's own anchor jump has nothing to land on yet.
+  // Keyed on the location too: following the link again from this very page (the drawer is
+  // open over Settings) is a new navigation with the same hash, and must scroll again.
   const anchor = useRef<HTMLDivElement>(null);
-  const { hash } = useLocation();
+  const { hash, key } = useLocation();
   useEffect(() => {
-    if (hash === "#layout") anchor.current?.scrollIntoView?.();
-  }, [hash]);
+    if (key && hash === "#layout") anchor.current?.scrollIntoView?.();
+  }, [hash, key]);
 
   // The new client writes `items` and `cards`, never `tabs` (the server derives those for an
   // app that has not updated).
@@ -96,6 +113,7 @@ export function LayoutCard() {
         <button
           type="button"
           className="quiet"
+          style={ARROW_STYLE}
           aria-label={t("layout.up", { name })}
           disabled={index === 0}
           onClick={() => move(id, -1)}
@@ -105,32 +123,36 @@ export function LayoutCard() {
         <button
           type="button"
           className="quiet"
+          style={ARROW_STYLE}
           aria-label={t("layout.down", { name })}
           disabled={index === count - 1}
           onClick={() => move(id, 1)}
         >
           <span aria-hidden="true">↓</span>
         </button>
+        {/* Words, not arrows: the accessible name still says which place and where. */}
         {onPhone &&
           (pinned ? (
             <button
               type="button"
               className="quiet"
+              style={PIN_STYLE}
               aria-label={t("layout.nav.unpin", { name })}
               onClick={() => setItems(unpinItem(items, id))}
             >
-              <span aria-hidden="true">⤓</span>
+              {t("layout.nav.unpinShort")}
             </button>
           ) : (
             <button
               type="button"
-              className="quiet"
+              className={barFull ? "quiet pin-full" : "quiet"}
+              style={barFull ? PIN_FULL_STYLE : PIN_STYLE}
               aria-label={t("layout.nav.pin", { name })}
               aria-describedby={barFull ? "layout-nav-full" : undefined}
               disabled={barFull}
               onClick={() => setItems(pinItem(items, id, preferences.modules))}
             >
-              <span aria-hidden="true">⤒</span>
+              {t("layout.nav.pinShort")}
             </button>
           ))}
       </li>
@@ -199,8 +221,9 @@ export function LayoutCard() {
   }
 
   return (
-    // The id is where a module's "turned off" page links to.
-    <div id="layout" ref={anchor}>
+    // The id is where a module's "turned off" page links to. The margin keeps the card off
+    // the window's top edge when that link (or the drawer's) scrolls it into view.
+    <div id="layout" ref={anchor} style={{ scrollMarginTop: 16 }}>
       <Card title={t("layout.title")}>
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
           <legend style={{ fontWeight: 600, marginBottom: 6 }}>{t("layout.modules")}</legend>
@@ -271,6 +294,13 @@ export function LayoutCard() {
             </ol>
           </section>
         ))}
+        {onPhone && barFull && groups.length > 0 && (
+          // Again under the groups, where the greyed Pin buttons are; a reader already has
+          // it from each button's description, so it is said once.
+          <p className="hint" aria-hidden="true" style={{ margin: "6px 0 0" }}>
+            {t("layout.nav.full", { max: PHONE_PIN_CAP })}
+          </p>
+        )}
 
         <h4 style={{ margin: "14px 0 2px" }} id="layout-cards">
           {t("layout.cards")}

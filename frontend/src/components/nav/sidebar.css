@@ -169,6 +169,19 @@
     white-space: nowrap;
   }
 
+  /* A clock hint: the place's name gives way, the time and its day word never do. */
+  .sidebar .sidebar-hint .nav-hint-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar .sidebar-hint .nav-hint-time {
+    flex: none;
+    white-space: nowrap;
+  }
+
   /* Settings carries who is signed in under its name (the old top bar's email pill). */
   .sidebar .sidebar-label .sidebar-email {
     display: block;

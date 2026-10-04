@@ -85,11 +85,11 @@ describe("NavDrawer", () => {
     ]);
     // Pinned places are in the bar, not repeated here.
     expect(within(drawer()).queryByRole("link", { name: /Dashboard/ })).toBeNull();
-    // Settings is the last tile; "Change what's in the bar" follows it as a plain link.
+    // Settings is the last tile; "Change what's in the bar" sits by the title, first.
     const links = within(drawer()).getAllByRole("link");
-    expect(links[links.length - 2]?.getAttribute("href")).toBe("/settings");
-    expect(links[links.length - 2]).toHaveTextContent("Settings");
-    expect(links[links.length - 1]?.getAttribute("href")).toBe("/settings#layout");
+    expect(links[links.length - 1]?.getAttribute("href")).toBe("/settings");
+    expect(links[links.length - 1]).toHaveTextContent("Settings");
+    expect(links[0]?.getAttribute("href")).toBe("/settings#layout");
   });
 
   it("shows each tile's hint and asks for the moon only while open", () => {
@@ -175,16 +175,36 @@ describe("NavDrawer", () => {
     expect(within(sheet).getByRole("link", { name: "Modifier la barre" })).toBeTruthy();
   });
 
-  it("ends with a link to the bar's editor, which closes the drawer", () => {
+  it("puts the link to the bar's editor beside its title, and the link closes the drawer", () => {
     renderShell();
     openDrawer();
     const link = within(drawer()).getByRole("link", { name: "Change what's in the bar" });
     expect(link.getAttribute("href")).toBe("/settings#layout");
-    const all = within(drawer()).getAllByRole("link");
-    expect(all[all.length - 1]).toBe(link);
+    // In the head with the title, so a 320px phone sees it without scrolling the sheet.
+    const head = drawer().querySelector(".nav-drawer-head");
+    expect(head?.contains(link)).toBe(true);
+    expect(head?.contains(within(drawer()).getByRole("heading", { name: "All places" }))).toBe(
+      true,
+    );
     fireEvent.click(link);
     expect(screen.getByTestId("where").textContent).toBe("/settings");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("draws a clock hint in parts: the name may be cut, the time and day word may not", () => {
+    hints.value = {
+      clocks: {
+        text: "Nouvelle-Zél\u2026\u00a014:18 hier",
+        clock: { label: "Nouvelle-Zél\u2026", time: "14:18", day: "hier" },
+      },
+    };
+    renderShell();
+    openDrawer();
+    const tile = within(drawer()).getByRole("link", { name: /Clocks/ });
+    const hint = tile.querySelector(".nav-tile-hint");
+    expect(hint?.classList.contains("nav-hint-clock")).toBe(true);
+    expect(hint?.querySelector(".nav-hint-label")?.textContent).toBe("Nouvelle-Zél\u2026");
+    expect(hint?.querySelector(".nav-hint-time")?.textContent).toBe("14:18 hier");
   });
 
   it("draws the moon's hint with the app's glyph", () => {

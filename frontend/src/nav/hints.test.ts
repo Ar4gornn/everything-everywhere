@@ -136,6 +136,8 @@ describe("useNavHints", () => {
     });
     await waitFor(() => expect(result.current.clocks).toBeDefined());
     expect(result.current.clocks?.text).toBe("Aunt Marguer… 06:00");
+    // In parts, so a renderer can cut the name further and never the time.
+    expect(result.current.clocks?.clock).toEqual({ label: "Aunt Marguer…", time: "06:00" });
   });
 
   it("says the day when the first place's day is not yours, in both languages", async () => {
@@ -159,6 +161,11 @@ describe("useNavHints", () => {
     await waitFor(() => expect(yesterday.result.current.clocks).toBeDefined());
     // Pago Pago is UTC-11: 23:00 on the 2nd while Paris is on the 3rd.
     expect(yesterday.result.current.clocks?.text).toBe("Pago 23:00 hier");
+    expect(yesterday.result.current.clocks?.clock).toEqual({
+      label: "Pago",
+      time: "23:00",
+      day: "hier",
+    });
 
     const same = renderHook(() => useNavHints({ moon: false }), {
       wrapper: wrapper({

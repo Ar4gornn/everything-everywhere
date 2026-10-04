@@ -87,7 +87,12 @@ function DrawerBody({ model, onClose }: { model: NavModel; onClose: () => void }
   return (
     <div className="nav-drawer-body">
       <div className="nav-drawer-head">
-        <h2 id="nav-drawer-title">{t("nav.drawer.title")}</h2>
+        <div className="nav-drawer-heading">
+          <h2 id="nav-drawer-title">{t("nav.drawer.title")}</h2>
+          <Link to="/settings#layout" className="nav-drawer-customise" onClick={onClose}>
+            {t("nav.drawer.customise")}
+          </Link>
+        </div>
         <button
           type="button"
           className="quiet nav-close"
@@ -140,10 +145,6 @@ function DrawerBody({ model, onClose }: { model: NavModel; onClose: () => void }
           </Link>
         </li>
       </ul>
-
-      <Link to="/settings#layout" className="nav-drawer-customise" onClick={onClose}>
-        {t("nav.drawer.customise")}
-      </Link>
     </div>
   );
 }

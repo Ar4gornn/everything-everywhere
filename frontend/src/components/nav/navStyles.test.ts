@@ -62,6 +62,16 @@ describe("the sidebar stylesheet", () => {
       expect(text).toContain(line);
   });
 
+  it("cuts a clock hint's place name and never its time or day word", () => {
+    const label = rule(sidebar, "  .sidebar .sidebar-hint .nav-hint-label", desktop);
+    for (const line of ["min-width: 0;", "overflow: hidden;", "text-overflow: ellipsis;", "white-space: nowrap;"])
+      expect(label).toContain(line);
+    const time = rule(sidebar, "  .sidebar .sidebar-hint .nav-hint-time", desktop);
+    expect(time).toContain("flex: none;");
+    expect(time).toContain("white-space: nowrap;");
+    expect(time).not.toContain("overflow: hidden;");
+  });
+
   it("shows the rail's tooltip on hover and keyboard focus, and not in the full sidebar", () => {
     expect(rule(sidebar, "  .sidebar [data-tip]::after", desktop)).toContain("display: none;");
     const shown = rule(sidebar, "  .sidebar [data-tip]::after", rail);
@@ -75,6 +85,35 @@ describe("the sidebar stylesheet", () => {
 });
 
 describe("the drawer stylesheet", () => {
+  it("draws a clock hint as a one-line cut name over a time line that is never cut", () => {
+    expect(rule(drawer, ".nav-drawer .nav-tile .nav-tile-hint.nav-hint-clock")).toContain(
+      "flex-direction: column;",
+    );
+    const label = rule(drawer, ".nav-drawer .nav-tile .nav-hint-clock .nav-hint-label");
+    for (const line of ["overflow: hidden;", "text-overflow: ellipsis;", "white-space: nowrap;"])
+      expect(label).toContain(line);
+    const time = rule(drawer, ".nav-drawer .nav-tile .nav-hint-clock .nav-hint-time");
+    expect(time).toContain("overflow-wrap: normal;");
+    expect(time).not.toContain("overflow: hidden;");
+    expect(time).not.toContain("line-clamp");
+  });
+
+  it("makes every tile in a row the row's height, laid out the same from the top", () => {
+    expect(rule(drawer, ".nav-drawer .nav-tiles")).toContain("align-items: stretch;");
+    expect(rule(drawer, ".nav-drawer .nav-tiles li")).toContain("display: flex;");
+    const tile = rule(drawer, ".nav-drawer .nav-tile");
+    expect(tile).toContain("flex: 1;");
+    expect(tile).toContain("justify-content: flex-start;");
+    expect(tile).toContain("min-height: 84px;");
+    // Small enough for the moon's glyph and "41 % éclairée" on one line at 320.
+    expect(rule(drawer, ".nav-drawer .nav-tile .nav-tile-hint")).toContain("font-size: 11px;");
+  });
+
+  it("puts the link to the bar's editor in the head, beside the title", () => {
+    expect(rule(drawer, ".nav-drawer .nav-drawer-heading")).toContain("min-width: 0;");
+    expect(rule(drawer, ".nav-drawer .nav-drawer-head button.nav-close")).toContain("flex: none;");
+  });
+
   it("cuts a tile's hint to two lines", () => {
     const text = rule(drawer, ".nav-drawer .nav-tile .nav-tile-hint .nav-hint-text");
     expect(text).toContain("-webkit-line-clamp: 2;");

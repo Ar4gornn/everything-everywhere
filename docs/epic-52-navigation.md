@@ -147,3 +147,19 @@ These change §2 and §5 above; where they disagree, this section wins.
 - **Bundle.** The clock search (alias and country tables, `findZones`) moved from
   `clocks/time.ts` to `clocks/search.ts`, imported by the Clocks page and the Settings card
   only; `nav/hints.ts` imports the light `time.ts` alone.
+
+## 7. Round 2 amendments (QA, 2026-10-04)
+
+- **Clock hint in parts.** `NavHint.clock = {label, time, day?}` beside `text`; `HintView` draws
+  the label as its own span, the only one that may be cut (CSS ellipsis on top of the
+  12-character cut). Sidebar: one line, label then time and day. Drawer tile: the label on one
+  line, the time and day word on their own line, never cut.
+- **Drawer.** "Change what's in the bar" sits under the title in the sheet's head, visible
+  without scrolling at 320. Tiles: same layout from the top (glyph, name, hint), 84px
+  minimum, every tile in a row the row's height; hints at 11px so the moon's glyph and
+  "41 % éclairée" stay on one line at 320.
+- **`/settings#layout`** scrolls on every navigation to it (keyed on `location.key`), and the
+  card keeps 16px above it (`scroll-margin-top`; the phone top bar is not sticky).
+- **Layout editor.** Pin and Unpin are words ("Épingler" / "Retirer"); the accessible names
+  still name the place. A full bar's Pin is dashed and muted, unlike a disabled ↑/↓ at a
+  list's end, is described by the reason, and the reason is repeated under the groups.

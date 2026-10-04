@@ -79,17 +79,28 @@ dialog.nav-drawer::backdrop {
 
 .nav-drawer .nav-drawer-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+/* The title, and under it the way into the bar's editor: in the head, so it is on screen
+   the moment the sheet opens, whatever the height of the phone. */
+.nav-drawer .nav-drawer-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .nav-drawer .nav-drawer-head h2 {
   margin: 0;
   font-size: var(--fs-h3);
+  overflow-wrap: anywhere;
 }
 
 .nav-drawer .nav-drawer-head button.nav-close {
+  flex: none;
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -110,9 +121,12 @@ dialog.nav-drawer::backdrop {
   color: var(--muted);
 }
 
+/* Every tile in a row is the row's height (the grid stretches the item, the item stretches
+   the link), and every tile is laid out the same: glyph, name, hint, from the top. */
 .nav-drawer .nav-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  align-items: stretch;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -129,12 +143,12 @@ dialog.nav-drawer::backdrop {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 2px;
   box-sizing: border-box;
   min-width: 0;
-  min-height: 72px;
-  padding: var(--space-2) var(--space-1);
+  min-height: 84px;
+  padding: var(--space-2) 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -154,14 +168,15 @@ dialog.nav-drawer::backdrop {
   line-height: 1.2;
 }
 
-/* A hint never breaks a tile: at most two lines, the rest cut with an ellipsis. */
+/* A hint never breaks a tile: at most two lines, the rest cut with an ellipsis. 11px keeps
+   the moon's glyph and "41 % éclairée" on one line in a 320px French drawer. */
 .nav-drawer .nav-tile .nav-tile-hint {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   max-width: 100%;
-  font-size: var(--fs-small);
+  font-size: 11px;
   line-height: 1.2;
   color: var(--muted);
 }
@@ -180,12 +195,32 @@ dialog.nav-drawer::backdrop {
   overflow-wrap: anywhere;
 }
 
-/* The way into the bar's editor: small, last, and a 44px target. */
+/* A clock hint: the place's name on one line, cut with an ellipsis; the time and its day
+   word on their own line under it, never cut and never split inside a word. */
+.nav-drawer .nav-tile .nav-tile-hint.nav-hint-clock {
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+.nav-drawer .nav-tile .nav-hint-clock .nav-hint-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-drawer .nav-tile .nav-hint-clock .nav-hint-time {
+  max-width: 100%;
+  overflow-wrap: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The way into the bar's editor: small, under the title. */
 .nav-drawer .nav-drawer-customise {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 44px;
+  min-height: 32px;
   font-size: var(--fs-small);
   color: var(--link);
 }

@@ -21,10 +21,20 @@ export interface MoonHint {
   hemisphere: Hemisphere;
 }
 
-/** One live hint: its words, and for the moon the phase to draw before them. */
+/** A clock hint in parts, so a renderer can shorten the place's name and never the time. */
+export interface ClockHint {
+  label: string;
+  time: string;
+  /** "tomorrow" / "yesterday" when the place's day is not yours. */
+  day?: string;
+}
+
+/** One live hint: its words (whole, for a reader), for the moon the phase to draw before
+ *  them, and for a clock the same words in parts. */
 export interface NavHint {
   text: string;
   moon?: MoonHint;
+  clock?: ClockHint;
 }
 
 /** A place name in a hint never runs past this many characters (the full name is one tap
@@ -87,15 +97,18 @@ export function useNavHints(options: { moon?: boolean } = {}): Partial<Record<Na
     try {
       const home = homeZone(user);
       const reading = readClock(first.zone, now, home, hoursFor(first, clockHoursOf(preferences)));
-      // A no-break space keeps the time with the name when the tile wraps.
-      const base = `${hintLabel(first.label)} ${reading.time}`;
+      const label = hintLabel(first.label);
       const day =
         reading.dayShift === 1
           ? t("clocks.tomorrow")
           : reading.dayShift === -1
             ? t("clocks.yesterday")
-            : null;
-      hints.clocks = { text: day ? `${base} ${day}` : base };
+            : undefined;
+      const base = `${label} ${reading.time}`;
+      hints.clocks = {
+        text: day ? `${base} ${day}` : base,
+        clock: day ? { label, time: reading.time, day } : { label, time: reading.time },
+      };
     } catch {
       // An unknown zone is the Clocks page's problem to explain, not a tile's.
     }

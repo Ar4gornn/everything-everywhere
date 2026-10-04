@@ -321,7 +321,8 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
   const names = (list: HTMLElement) =>
     within(list)
       .getAllByRole("listitem")
-      .map((item) => item.textContent?.replace(/[↑↓⤒⤓]/gu, "").trim());
+      // The name is the row's first cell; the buttons after it are Up, Down, Pin/Unpin.
+      .map((item) => item.firstElementChild?.textContent?.trim());
 
   /** A phone whose bar and order are the account's own. */
   function prefsWith(phoneItems: NavItem[]): Preferences {
@@ -365,9 +366,39 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
     await barList();
     const pin = screen.getByRole("button", { name: "Pin Gym to the bar" });
     expect(pin).toBeDisabled();
-    const reason = screen.getByText("The bar is full (4 places). Unpin one to pin another.");
+    const reason = document.getElementById("layout-nav-full");
+    expect(reason).toHaveTextContent("The bar is full (4 places). Unpin one to pin another.");
     expect(reason).toBeVisible();
-    expect(pin).toHaveAttribute("aria-describedby", reason.id);
+    expect(pin).toHaveAttribute("aria-describedby", "layout-nav-full");
+    // Said again under the groups, where the Pin buttons are, and once only to a reader.
+    const shown = screen.getAllByText("The bar is full (4 places). Unpin one to pin another.");
+    expect(shown).toHaveLength(2);
+    expect(shown[1]).toHaveAttribute("aria-hidden", "true");
+    expect(shown[1]?.compareDocumentPosition(group("Tools")) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_PRECEDING,
+    );
+  });
+
+  it("says Pin and Unpin in words, and a full bar's Pin does not look like an end stop", async () => {
+    renderAt("/settings", ALL_ON, echo);
+    const bar = await barList();
+    const unpin = within(bar).getByRole("button", { name: "Unpin Plan from the bar" });
+    expect(unpin).toHaveTextContent(/^Unpin$/);
+    const pin = within(group("Tools")).getByRole("button", { name: "Pin Moon to the bar" });
+    expect(pin).toHaveTextContent(/^Pin$/);
+    expect(pin).toBeDisabled();
+    expect(pin.style.borderStyle).toBe("dashed");
+    // An arrow at the end of its list is disabled too, and keeps the plain disabled look.
+    const stop = within(bar).getByRole("button", { name: "Move Dashboard up" });
+    expect(stop).toBeDisabled();
+    expect(stop.style.borderStyle).toBe("");
+    expect(stop).not.toHaveAttribute("aria-describedby");
+    // With a free slot the Pin is the ordinary outlined button again.
+    await userEvent.click(unpin);
+    const free = within(group("Tools")).getByRole("button", { name: "Pin Moon to the bar" });
+    expect(free).toBeEnabled();
+    expect(free.style.borderStyle).toBe("");
+    expect(free).not.toHaveAttribute("aria-describedby");
   });
 
   it("unpins a place at once, the bar follows, and the whole list is saved", async () => {
@@ -400,7 +431,7 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
     expect(pinnedIn(lastPatch().phone?.items ?? [])).toEqual(["dashboard", "habits", "plan", "gym"]);
     // Entries is back in the group it came from, and the full-bar reason is back.
     expect(names(group("Money"))).toEqual(["Entries", "Grow"]);
-    expect(screen.getByText(/The bar is full/)).toBeInTheDocument();
+    expect(screen.getAllByText(/The bar is full/)[0]).toBeInTheDocument();
   });
 
   it("reorders the bar with up and down, and cannot move past either end", async () => {
@@ -540,6 +571,31 @@ describe("Settings → Layout → places (Epic 52, AD-65)", () => {
       renderAt("/settings#layout", ALL_ON, echo);
       await barList();
       await waitFor(() => expect(scroll).toHaveBeenCalled());
+      expect(scroll.mock.instances[0]).toBe(document.getElementById("layout"));
+      // Off the window's top edge once there.
+      expect(document.getElementById("layout")?.style.scrollMarginTop).toBe("16px");
+    } finally {
+      // @ts-expect-error jsdom has no scrollIntoView; put back what it had.
+      delete Element.prototype.scrollIntoView;
+    }
+  });
+
+  it("scrolls again when the drawer's link is followed from /settings#layout itself", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      renderAt("/settings#layout", ALL_ON, echo);
+      await barList();
+      await waitFor(() => expect(scroll).toHaveBeenCalled());
+      // The person scrolled away; the hash is the same, the navigation is new.
+      scroll.mockClear();
+      await userEvent.click(within(bottomBar()).getByRole("button", { name: "More" }));
+      await userEvent.click(
+        within(screen.getByRole("dialog", { name: "All places" })).getByRole("link", {
+          name: "Change what's in the bar",
+        }),
+      );
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
       expect(scroll.mock.instances[0]).toBe(document.getElementById("layout"));
     } finally {
       // @ts-expect-error jsdom has no scrollIntoView; put back what it had.
